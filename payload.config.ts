@@ -1,0 +1,696 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
+import { postgresAdapter } from "@payloadcms/db-postgres";
+import { lexicalEditor } from "@payloadcms/richtext-lexical";
+import { buildConfig, slugField } from "payload";
+
+const filename = fileURLToPath(import.meta.url);
+const dirname = path.dirname(filename);
+
+const serverURL =
+  process.env.NEXT_PUBLIC_SERVER_URL ??
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
+
+const isAdmin = ({ req }: { req: any }) => req.user?.role === "admin";
+
+const isAdminOrSelf = ({ req }: { req: any }) => {
+  if (!req.user) return false;
+  if (req.user.role === "admin") return true;
+  return { id: { equals: req.user.id } };
+};
+
+const canAccessUserContent = ({ req }: { req: any }) => {
+  if (!req.user) return false;
+  if (req.user.role === "admin") return true;
+  return { user: { equals: req.user.id } };
+};
+
+export default buildConfig({
+  admin: {
+    user: "users",
+    importMap: {
+      baseDir: dirname,
+      importMapFile: path.resolve(dirname, "payload", "importMap.ts"),
+    },
+  },
+  collections: [
+    {
+      slug: "users",
+      auth: true,
+      admin: {
+        useAsTitle: "email",
+      },
+      access: {
+        admin: isAdmin,
+        read: isAdminOrSelf,
+        update: isAdminOrSelf,
+        delete: isAdmin,
+        create: isAdmin,
+      },
+      fields: [
+        {
+          name: "role",
+          type: "select",
+          required: true,
+          defaultValue: "customer",
+          options: [
+            { label: "Admin", value: "admin" },
+            { label: "Customer", value: "customer" },
+          ],
+        },
+        {
+          name: "name",
+          type: "text",
+        },
+        {
+          name: "image",
+          type: "text",
+        },
+        {
+          name: "phone",
+          type: "text",
+        },
+        {
+          name: "emailVerified",
+          type: "date",
+        },
+        {
+          name: "defaultAddress",
+          type: "relationship",
+          relationTo: "addresses",
+        },
+        {
+          name: "addresses",
+          type: "relationship",
+          relationTo: "addresses",
+          hasMany: true,
+        },
+      ],
+    },
+    {
+      slug: "addresses",
+      admin: {
+        useAsTitle: "label",
+      },
+      access: {
+        read: canAccessUserContent,
+        update: canAccessUserContent,
+        delete: canAccessUserContent,
+        create: ({ req }: { req: any }) => Boolean(req.user),
+      },
+      fields: [
+        {
+          name: "user",
+          type: "relationship",
+          relationTo: "users",
+          required: true,
+        },
+        {
+          name: "label",
+          type: "text",
+        },
+        {
+          name: "name",
+          type: "text",
+        },
+        {
+          name: "line1",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "line2",
+          type: "text",
+        },
+        {
+          name: "city",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "state",
+          type: "text",
+        },
+        {
+          name: "postalCode",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "country",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "phone",
+          type: "text",
+        },
+        {
+          name: "isDefault",
+          type: "checkbox",
+          defaultValue: false,
+        },
+      ],
+    },
+    {
+      slug: "auth_accounts",
+      admin: { hidden: true },
+      access: {
+        read: () => false,
+        update: () => false,
+        delete: () => false,
+        create: () => false,
+      },
+      fields: [
+        {
+          name: "user",
+          type: "relationship",
+          relationTo: "users",
+          required: true,
+        },
+        {
+          name: "type",
+          type: "text",
+        },
+        {
+          name: "provider",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "providerAccountId",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "access_token",
+          type: "text",
+        },
+        {
+          name: "refresh_token",
+          type: "text",
+        },
+        {
+          name: "expires_at",
+          type: "number",
+        },
+        {
+          name: "token_type",
+          type: "text",
+        },
+        {
+          name: "scope",
+          type: "text",
+        },
+        {
+          name: "id_token",
+          type: "text",
+        },
+        {
+          name: "session_state",
+          type: "text",
+        },
+      ],
+    },
+    {
+      slug: "auth_sessions",
+      admin: { hidden: true },
+      access: {
+        read: () => false,
+        update: () => false,
+        delete: () => false,
+        create: () => false,
+      },
+      fields: [
+        {
+          name: "sessionToken",
+          type: "text",
+          required: true,
+          unique: true,
+        },
+        {
+          name: "user",
+          type: "relationship",
+          relationTo: "users",
+          required: true,
+        },
+        {
+          name: "expires",
+          type: "date",
+          required: true,
+        },
+      ],
+    },
+    {
+      slug: "auth_verification_tokens",
+      admin: { hidden: true },
+      access: {
+        read: () => false,
+        update: () => false,
+        delete: () => false,
+        create: () => false,
+      },
+      fields: [
+        {
+          name: "identifier",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "token",
+          type: "text",
+          required: true,
+          unique: true,
+        },
+        {
+          name: "expires",
+          type: "date",
+          required: true,
+        },
+      ],
+    },
+    {
+      slug: "products",
+      admin: {
+        useAsTitle: "name",
+      },
+      access: {
+        read: () => true,
+        create: isAdmin,
+        update: isAdmin,
+        delete: isAdmin,
+      },
+      fields: [
+        {
+          name: "name",
+          type: "text",
+          required: true,
+        },
+        slugField({
+          name: "slug",
+          admin: {
+            position: "sidebar",
+          },
+          fieldOverrides: {
+            unique: true,
+            index: true,
+          },
+        }),
+        {
+          name: "price",
+          type: "number",
+          required: true,
+          min: 0,
+        },
+        {
+          name: "originalPrice",
+          type: "number",
+          min: 0,
+        },
+        {
+          name: "featured",
+          type: "checkbox",
+          defaultValue: false,
+        },
+        {
+          name: "images",
+          type: "relationship",
+          relationTo: "media",
+          hasMany: true,
+        },
+        {
+          name: "collection",
+          type: "relationship",
+          relationTo: "collections",
+        },
+        {
+          name: "status",
+          type: "select",
+          defaultValue: "published",
+          options: [
+            { label: "Draft", value: "draft" },
+            { label: "Published", value: "published" },
+          ],
+        },
+        {
+          name: "story",
+          type: "group",
+          fields: [
+            {
+              name: "title",
+              type: "text",
+              required: true,
+            },
+            {
+              name: "narrative",
+              type: "textarea",
+            },
+            {
+              name: "provenance",
+              type: "text",
+            },
+            {
+              name: "era",
+              type: "text",
+            },
+          ],
+        },
+        {
+          name: "details",
+          type: "group",
+          fields: [
+            {
+              name: "fabric",
+              type: "text",
+            },
+            {
+              name: "length",
+              type: "text",
+            },
+            {
+              name: "width",
+              type: "text",
+            },
+            {
+              name: "condition",
+              type: "text",
+            },
+            {
+              name: "designer",
+              type: "text",
+            },
+            {
+              name: "occasion",
+              type: "select",
+              hasMany: true,
+              options: [
+                { label: "Bridal", value: "bridal" },
+                { label: "Cocktail", value: "cocktail" },
+                { label: "Evening", value: "evening" },
+                { label: "Festive", value: "festive" },
+                { label: "Heritage", value: "heritage" },
+                { label: "Reception", value: "reception" },
+                { label: "Soiree", value: "soiree" },
+                { label: "Wedding", value: "wedding" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      slug: "collections",
+      admin: {
+        useAsTitle: "name",
+      },
+      access: {
+        read: () => true,
+        create: isAdmin,
+        update: isAdmin,
+        delete: isAdmin,
+      },
+      fields: [
+        {
+          name: "name",
+          type: "text",
+          required: true,
+        },
+        slugField({
+          name: "slug",
+          admin: {
+            position: "sidebar",
+          },
+          fieldOverrides: {
+            unique: true,
+            index: true,
+          },
+        }),
+        {
+          name: "description",
+          type: "textarea",
+        },
+        {
+          name: "heroImage",
+          type: "upload",
+          relationTo: "media",
+        },
+        {
+          name: "featured",
+          type: "checkbox",
+          defaultValue: false,
+        },
+      ],
+    },
+    {
+      slug: "orders",
+      admin: {
+        useAsTitle: "id",
+      },
+      access: {
+        read: canAccessUserContent,
+        create: ({ req }: { req: any }) => Boolean(req.user),
+        update: isAdmin,
+        delete: isAdmin,
+      },
+      fields: [
+        {
+          name: "user",
+          type: "relationship",
+          relationTo: "users",
+          required: true,
+        },
+        {
+          name: "items",
+          type: "array",
+          required: true,
+          fields: [
+            {
+              name: "product",
+              type: "relationship",
+              relationTo: "products",
+            },
+            {
+              name: "name",
+              type: "text",
+              required: true,
+            },
+            {
+              name: "price",
+              type: "number",
+              required: true,
+            },
+            {
+              name: "quantity",
+              type: "number",
+              required: true,
+              min: 1,
+            },
+            {
+              name: "imageUrl",
+              type: "text",
+            },
+          ],
+        },
+        {
+          name: "subtotal",
+          type: "number",
+          required: true,
+          min: 0,
+        },
+        {
+          name: "status",
+          type: "select",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Shipped", value: "shipped" },
+            { label: "Delivered", value: "delivered" },
+          ],
+        },
+        {
+          name: "shippingAddress",
+          type: "group",
+          fields: [
+            { name: "name", type: "text" },
+            { name: "line1", type: "text" },
+            { name: "line2", type: "text" },
+            { name: "city", type: "text" },
+            { name: "state", type: "text" },
+            { name: "postalCode", type: "text" },
+            { name: "country", type: "text" },
+            { name: "phone", type: "text" },
+            { name: "email", type: "text" },
+          ],
+        },
+        {
+          name: "placedAt",
+          type: "date",
+        },
+      ],
+    },
+    {
+      slug: "media",
+      admin: {
+        useAsTitle: "filename",
+      },
+      access: {
+        read: () => true,
+        create: isAdmin,
+        update: isAdmin,
+        delete: isAdmin,
+      },
+      upload: {
+        staticDir: path.resolve(dirname, "public", "media"),
+        staticURL: "/media",
+        imageSizes: [
+          { name: "thumbnail", width: 400, height: 400 },
+          { name: "card", width: 900, height: 1200 },
+        ],
+      },
+      fields: [
+        {
+          name: "alt",
+          type: "text",
+        },
+      ],
+    },
+  ],
+  db: postgresAdapter({
+    idType: "uuid",
+    pool: {
+      connectionString: process.env.DATABASE_URL || "",
+    },
+  }),
+  editor: lexicalEditor({}),
+  globals: [
+    {
+      slug: "homePage",
+      fields: [
+        {
+          name: "heroEyebrow",
+          type: "text",
+          defaultValue: "From the Trunk",
+        },
+        {
+          name: "heroTitle",
+          type: "text",
+          defaultValue: "Pre-loved luxury sarees with provenance.",
+        },
+        {
+          name: "heroSubtitle",
+          type: "textarea",
+          defaultValue:
+            "Curated heirloom pieces, authenticated and restored with care, each carrying the story that made it timeless.",
+        },
+        {
+          name: "heroImage",
+          type: "upload",
+          relationTo: "media",
+        },
+        {
+          name: "primaryCtaLabel",
+          type: "text",
+          defaultValue: "Explore the Collection",
+        },
+        {
+          name: "primaryCtaHref",
+          type: "text",
+          defaultValue: "/collection",
+        },
+        {
+          name: "secondaryCtaLabel",
+          type: "text",
+          defaultValue: "Read the Story",
+        },
+        {
+          name: "secondaryCtaHref",
+          type: "text",
+          defaultValue: "/our-story",
+        },
+        {
+          name: "heroCardEyebrow",
+          type: "text",
+          defaultValue: "New Arrivals",
+        },
+        {
+          name: "heroCardTitle",
+          type: "text",
+          defaultValue: "Curated designer sarees from the 1980s-2000s.",
+        },
+        {
+          name: "heroCardBody",
+          type: "textarea",
+          defaultValue:
+            "Limited drops every fortnight. Reserve your piece early.",
+        },
+        {
+          name: "featuredEyebrow",
+          type: "text",
+          defaultValue: "Featured Collection",
+        },
+        {
+          name: "featuredTitle",
+          type: "text",
+          defaultValue: "Curated treasures for the season",
+        },
+        {
+          name: "featuredBody",
+          type: "textarea",
+          defaultValue:
+            "Every piece is authenticated and hand-selected from private wardrobes, couture houses, and archive trunks.",
+        },
+        {
+          name: "featuredCtaLabel",
+          type: "text",
+          defaultValue: "View All Sarees",
+        },
+        {
+          name: "featuredCtaHref",
+          type: "text",
+          defaultValue: "/collection",
+        },
+      ],
+    },
+    {
+      slug: "collectionPage",
+      fields: [
+        {
+          name: "eyebrow",
+          type: "text",
+          defaultValue: "The Collection",
+        },
+        {
+          name: "title",
+          type: "text",
+          defaultValue: "Curated pre-loved sarees",
+        },
+        {
+          name: "description",
+          type: "textarea",
+          defaultValue:
+            "Discover heirlooms from private wardrobes, couture archives, and collector trunks. Each piece is authenticated and accompanied by its story.",
+        },
+        {
+          name: "filtersTitle",
+          type: "text",
+          defaultValue: "Refined browsing, coming soon",
+        },
+        {
+          name: "filtersBody",
+          type: "textarea",
+          defaultValue:
+            "We are preparing thoughtful ways to explore the collection by era, fabric, and provenance. Until then, every piece is here for you to discover.",
+        },
+      ],
+    },
+  ],
+  secret: process.env.PAYLOAD_SECRET || "",
+  serverURL,
+  typescript: {
+    outputFile: path.resolve(dirname, "payload-types.ts"),
+  },
+});

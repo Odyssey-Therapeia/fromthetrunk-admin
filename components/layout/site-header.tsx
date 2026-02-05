@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/collection", label: "Collection" },
   { href: "/our-story", label: "Our Story" },
   { href: "/how-it-works", label: "How It Works" },
+  { href: "/account/profile", label: "Account" },
 ];
 
 export function SiteHeader() {
@@ -38,7 +39,7 @@ export function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+              className="text-sm font-medium uppercase tracking-[0.12em] text-muted-foreground transition hover:text-foreground"
             >
               {link.label}
             </Link>

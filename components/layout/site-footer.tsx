@@ -58,7 +58,7 @@ export function SiteFooter() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="transition hover:text-trunk-gold"
+                      className="transition hover:text-foreground hover:underline underline-offset-4"
                     >
                       {link.label}
                     </Link>

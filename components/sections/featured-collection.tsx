@@ -5,8 +5,8 @@ import { Crown, Gem, ShieldCheck, Sparkles } from "lucide-react";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { BentoCard, BentoGrid } from "@/components/ui/bento-grid";
 import { Button } from "@/components/ui/button";
-import { featuredSarees } from "@/lib/data/sarees";
 import { formatCurrency } from "@/lib/formatters";
+import { resolveMediaURL } from "@/lib/payload";
 
 const productLayouts = [
   "lg:col-span-2 lg:row-span-2",
@@ -17,27 +17,44 @@ const productLayouts = [
 
 const productIcons = [Sparkles, Crown, Gem, ShieldCheck];
 
-export function FeaturedCollection() {
-  const productCards = featuredSarees.slice(0, 4).map((saree, index) => ({
-    Icon: productIcons[index % productIcons.length],
-    name: saree.name,
-    description: `${saree.details.fabric} · ${formatCurrency(saree.price)}`,
-    href: `/collection/${saree.slug}`,
-    cta: "View saree",
-    className: "h-full",
-    layoutClassName: productLayouts[index] ?? "lg:col-span-1",
-    background: (
-      <div className="absolute inset-0">
-        <Image
-          src={saree.images[0]}
-          alt={saree.name}
-          fill
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
-      </div>
-    ),
-  }));
+interface FeaturedCollectionProps {
+  products: any[];
+  content?: {
+    featuredEyebrow?: string;
+    featuredTitle?: string;
+    featuredBody?: string;
+    featuredCtaLabel?: string;
+    featuredCtaHref?: string;
+  };
+}
+
+export function FeaturedCollection({ products, content }: FeaturedCollectionProps) {
+  const productCards = products.slice(0, 4).map((product, index) => {
+    const image = resolveMediaURL(product.images?.[0]);
+    return {
+      Icon: productIcons[index % productIcons.length],
+      name: product.name,
+      description: `${product.details?.fabric ?? "Heirloom"} · ${formatCurrency(
+        product.price ?? 0
+      )}`,
+      href: `/collection/${product.slug}`,
+      cta: "View saree",
+      className: "h-full",
+      layoutClassName: productLayouts[index] ?? "lg:col-span-1",
+      background: (
+        <div className="absolute inset-0">
+          {image ? (
+            <Image src={image} alt={product.name} fill className="object-cover" />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
+        </div>
+      ),
+    };
+  });
+
+  const featureCardImage = resolveMediaURL(products[0]?.images?.[1] ?? products[0]?.images?.[0]);
 
   const featureCard = {
     Icon: ShieldCheck,
@@ -50,12 +67,16 @@ export function FeaturedCollection() {
     layoutClassName: "lg:col-span-2 lg:row-span-1",
     background: (
       <div className="absolute inset-0">
-        <Image
-          src={featuredSarees[0]?.images[1] ?? featuredSarees[0]?.images[0]}
-          alt="Heirloom saree detail"
-          fill
-          className="object-cover"
-        />
+        {featureCardImage ? (
+          <Image
+            src={featureCardImage}
+            alt="Heirloom saree detail"
+            fill
+            className="object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/20 to-black/10" />
       </div>
     ),
@@ -68,18 +89,20 @@ export function FeaturedCollection() {
       <ScrollReveal className="flex flex-wrap items-end justify-between gap-6">
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-            Featured Collection
+            {content?.featuredEyebrow ?? "Featured Collection"}
           </p>
           <h2 className="font-serif text-3xl text-foreground md:text-4xl">
-            Curated treasures for the season
+            {content?.featuredTitle ?? "Curated treasures for the season"}
           </h2>
           <p className="max-w-xl text-sm text-muted-foreground">
-            Every piece is authenticated and hand-selected from private
-            wardrobes, couture houses, and archive trunks.
+            {content?.featuredBody ??
+              "Every piece is authenticated and hand-selected from private wardrobes, couture houses, and archive trunks."}
           </p>
         </div>
         <Button asChild variant="outline" className="rounded-full px-6">
-          <Link href="/collection">View All Sarees</Link>
+          <Link href={content?.featuredCtaHref ?? "/collection"}>
+            {content?.featuredCtaLabel ?? "View All Sarees"}
+          </Link>
         </Button>
       </ScrollReveal>
 

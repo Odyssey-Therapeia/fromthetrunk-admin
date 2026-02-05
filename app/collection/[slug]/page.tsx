@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductCard } from "@/components/product/product-card";
@@ -12,52 +14,53 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
-import { sarees, getSareeBySlug } from "@/lib/data/sarees";
 import { formatCurrency } from "@/lib/formatters";
+import { getProductBySlug, getProducts } from "@/lib/data/products";
+import { resolveMediaURL } from "@/lib/payload";
 
-interface SareePageProps {
+interface ProductPageProps {
   params: { slug: string };
 }
 
-export function generateStaticParams() {
-  return sarees.map((saree) => ({ slug: saree.slug }));
-}
-
-export default function SareePage({ params }: SareePageProps) {
+export default async function SareePage({ params }: ProductPageProps) {
   const { slug } = params;
-  const saree = getSareeBySlug(slug);
+  const product = await getProductBySlug(slug);
 
-  if (!saree) {
+  if (!product) {
     notFound();
   }
 
-  const related = sarees.filter((item) => item.slug !== saree.slug).slice(0, 3);
+  const allProducts = await getProducts(12);
+  const related = allProducts.docs.filter((item) => item.slug !== product.slug).slice(0, 3);
+  const images = (product.images ?? [])
+    .map((image: any) => resolveMediaURL(image))
+    .filter(Boolean) as string[];
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-16 px-6 py-16">
       <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         <ScrollReveal>
-          <ProductGallery images={saree.images} alt={saree.name} />
+          <ProductGallery images={images} alt={product.name} />
         </ScrollReveal>
 
         <ScrollReveal delay={0.1} className="space-y-6">
           <div className="space-y-3">
             <Badge className="bg-secondary text-muted-foreground">
-              {saree.story.era ?? "Archive"}
+              {product.story?.era ?? "Archive"}
             </Badge>
             <h1 className="font-serif text-3xl text-foreground md:text-4xl">
-              {saree.name}
+              {product.name}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {saree.story.title}
+              {product.story?.title}
             </p>
             <div className="flex items-center gap-3">
               <span className="text-xl font-semibold text-foreground">
-                {formatCurrency(saree.price)}
+                {formatCurrency(product.price ?? 0)}
               </span>
-              {saree.originalPrice && (
+              {product.originalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
-                  {formatCurrency(saree.originalPrice)}
+                  {formatCurrency(product.originalPrice)}
                 </span>
               )}
             </div>
@@ -67,14 +70,14 @@ export default function SareePage({ params }: SareePageProps) {
 
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {saree.story.narrative}
+              {product.story?.narrative}
             </p>
-            {saree.story.provenance && (
+            {product.story?.provenance && (
               <p className="text-sm text-muted-foreground">
                 <span className="font-semibold text-foreground">
                   Provenance:
                 </span>{" "}
-                {saree.story.provenance}
+                {product.story.provenance}
               </p>
             )}
           </div>
@@ -87,10 +90,10 @@ export default function SareePage({ params }: SareePageProps) {
                 Length
               </p>
               <div className="rounded-2xl border border-border/60 bg-card/70 px-4 py-3 text-sm text-foreground">
-                {saree.details.length}
+                {product.details?.length ?? "Made to drape"}
               </div>
             </div>
-            <AddToCartButton saree={saree} />
+            <AddToCartButton product={product} />
             <p className="text-xs text-muted-foreground">
               Demo checkout only — payment will be simulated.
             </p>
@@ -100,12 +103,12 @@ export default function SareePage({ params }: SareePageProps) {
             <AccordionItem value="details">
               <AccordionTrigger>Product Details</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>Fabric: {saree.details.fabric}</p>
-                <p>Length: {saree.details.length}</p>
-                <p>Width: {saree.details.width}</p>
-                <p>Condition: {saree.details.condition}</p>
-                {saree.details.designer && (
-                  <p>Designer: {saree.details.designer}</p>
+                <p>Fabric: {product.details?.fabric ?? "—"}</p>
+                <p>Length: {product.details?.length ?? "—"}</p>
+                <p>Width: {product.details?.width ?? "—"}</p>
+                <p>Condition: {product.details?.condition ?? "—"}</p>
+                {product.details?.designer && (
+                  <p>Designer: {product.details.designer}</p>
                 )}
               </AccordionContent>
             </AccordionItem>
@@ -134,7 +137,7 @@ export default function SareePage({ params }: SareePageProps) {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {related.map((item, index) => (
             <ScrollReveal key={item.id} delay={index * 0.05}>
-              <ProductCard saree={item} />
+              <ProductCard product={item} />
             </ScrollReveal>
           ))}
         </div>

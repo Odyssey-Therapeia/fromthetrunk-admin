@@ -6,6 +6,7 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function Newsletter() {
   const [submitted, setSubmitted] = useState(false);
@@ -27,6 +28,12 @@ export function Newsletter() {
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto">
+            <Label
+              htmlFor="newsletter-email"
+              className="text-xs uppercase tracking-[0.3em] text-muted-foreground"
+            >
+              Email address
+            </Label>
             <form
               className="flex w-full flex-col gap-3 md:flex-row"
               onSubmit={(event) => {
@@ -35,6 +42,7 @@ export function Newsletter() {
               }}
             >
               <Input
+                id="newsletter-email"
                 type="email"
                 placeholder="Enter your email"
                 className="min-w-[260px] bg-white"

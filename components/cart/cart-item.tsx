@@ -18,7 +18,13 @@ export function CartItem({ item }: CartItemProps) {
   return (
     <div className="flex gap-4 border-b border-border/60 pb-4">
       <div className="relative h-24 w-20 overflow-hidden rounded-2xl bg-muted">
-        <Image src={item.image} alt={item.name} fill className="object-cover" />
+        {item.image ? (
+          <Image src={item.image} alt={item.name} fill className="object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            No image
+          </div>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-2">
         <div className="flex items-start justify-between">

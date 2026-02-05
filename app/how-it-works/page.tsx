@@ -43,22 +43,23 @@ export default function HowItWorksPage() {
 
       <div className="space-y-6">
         {steps.map((step, index) => (
-          <ScrollReveal key={step.title} delay={index * 0.05}>
-            <Card className="border-border/60 bg-card/80 p-6 shadow-soft">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-                    Step {String(index + 1).padStart(2, "0")}
-                  </p>
-                  <h2 className="font-serif text-2xl text-foreground">
-                    {step.title}
-                  </h2>
-                </div>
+          <Card
+            key={step.title}
+            className="border-border/60 bg-card/80 p-6 shadow-soft"
+          >
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                  Step {String(index + 1).padStart(2, "0")}
+                </p>
+                <h2 className="font-serif text-2xl text-foreground">
+                  {step.title}
+                </h2>
               </div>
-              <Separator className="my-4" />
-              <p className="text-sm text-muted-foreground">{step.description}</p>
-            </Card>
-          </ScrollReveal>
+            </div>
+            <Separator className="my-4" />
+            <p className="text-sm text-muted-foreground">{step.description}</p>
+          </Card>
         ))}
       </div>
     </div>

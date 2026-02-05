@@ -1,80 +1,9 @@
-"use client";
+import { CartPageClient } from "@/components/cart/cart-page-client";
+import { getFeaturedProducts, getProducts } from "@/lib/data/products";
 
-import Link from "next/link";
+export default async function CartPage() {
+  const featured = await getFeaturedProducts(3);
+  const featuredPicks = featured.docs.length ? featured.docs : (await getProducts(3)).docs;
 
-import { CartItem } from "@/components/cart/cart-item";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { formatCurrency } from "@/lib/formatters";
-import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
-
-export default function CartPage() {
-  const items = useCartStore((state) => state.items);
-  const hasHydrated = useCartStore((state) => state.hasHydrated);
-  const { subtotal, totalItems } = getCartTotals(items);
-  const canCheckout = hasHydrated && items.length > 0;
-
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-10 px-6 py-16">
-      <div className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-          Shopping Bag
-        </p>
-        <h1 className="font-serif text-4xl text-foreground">Your selection</h1>
-        <p className="text-sm text-muted-foreground">
-          {!hasHydrated
-            ? "Loading your bag..."
-            : totalItems === 0
-            ? "Your bag is currently empty."
-            : `${totalItems} piece${totalItems === 1 ? "" : "s"} in your bag.`}
-        </p>
-      </div>
-
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
-          {!hasHydrated ? (
-            <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
-              Loading your bag...
-            </div>
-          ) : items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
-              Explore the collection to add a treasure.
-            </div>
-          ) : (
-            items.map((item) => <CartItem key={item.id} item={item} />)
-          )}
-        </div>
-
-        <div className="rounded-3xl border border-border/60 bg-card/70 p-6 shadow-soft">
-          <h2 className="font-serif text-2xl text-foreground">Order summary</h2>
-          <Separator className="my-4" />
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span className="font-semibold text-foreground">
-              {hasHydrated ? formatCurrency(subtotal) : "—"}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Shipping and taxes are calculated at checkout.
-          </p>
-          {canCheckout ? (
-            <Button asChild className="mt-6 w-full rounded-full py-6">
-              <Link href="/checkout">Proceed to Checkout</Link>
-            </Button>
-          ) : (
-            <Button className="mt-6 w-full rounded-full py-6" disabled>
-              Proceed to Checkout
-            </Button>
-          )}
-          <Button
-            asChild
-            variant="outline"
-            className="mt-3 w-full rounded-full"
-          >
-            <Link href="/collection">Continue Shopping</Link>
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  return <CartPageClient featuredPicks={featuredPicks} />;
 }

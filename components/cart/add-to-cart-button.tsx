@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Saree } from "@/lib/data/sarees";
+import { resolveMediaURL } from "@/lib/payload";
 import { useCartStore } from "@/lib/store/cart-store";
 
 interface AddToCartButtonProps {
-  saree: Saree;
+  product: any;
 }
 
-export function AddToCartButton({ saree }: AddToCartButtonProps) {
+export function AddToCartButton({ product }: AddToCartButtonProps) {
   const addItem = useCartStore((state) => state.addItem);
   const [added, setAdded] = useState(false);
+  const image = resolveMediaURL(product.images?.[0]) ?? "";
 
   useEffect(() => {
     if (!added) return;
@@ -25,10 +26,10 @@ export function AddToCartButton({ saree }: AddToCartButtonProps) {
       className="w-full rounded-full py-6"
       onClick={() => {
         addItem({
-          id: saree.id,
-          name: saree.name,
-          price: saree.price,
-          image: saree.images[0],
+          id: product.id,
+          name: product.name,
+          price: product.price ?? 0,
+          image,
         });
         setAdded(true);
       }}

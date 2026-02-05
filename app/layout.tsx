@@ -5,6 +5,7 @@ import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { Providers } from "@/components/providers";
 
 const serif = Cormorant_Garamond({
   subsets: ["latin"],
@@ -29,9 +30,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable}`}>
       <body className="bg-background font-sans text-foreground">
-        <SiteHeader />
-        <main className="min-h-[70vh]">{children}</main>
-        <SiteFooter />
+        <Providers>
+          <SiteHeader />
+          <main className="min-h-[70vh]">{children}</main>
+          <SiteFooter />
+        </Providers>
       </body>
     </html>
   );

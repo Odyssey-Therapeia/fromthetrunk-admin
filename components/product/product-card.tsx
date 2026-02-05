@@ -2,18 +2,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
-import { Saree } from "@/lib/data/sarees";
 import { formatCurrency } from "@/lib/formatters";
+import { resolveMediaURL } from "@/lib/payload";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
 interface ProductCardProps {
-  saree: Saree;
+  product: any;
   className?: string;
 }
 
-export function ProductCard({ saree, className }: ProductCardProps) {
+export function ProductCard({ product, className }: ProductCardProps) {
+  const primaryImage = resolveMediaURL(product.images?.[0]);
+
   return (
     <Card
       className={cn(
@@ -21,16 +23,22 @@ export function ProductCard({ saree, className }: ProductCardProps) {
         className
       )}
     >
-      <Link href={`/collection/${saree.slug}`} className="block">
+      <Link href={`/collection/${product.slug}`} className="block">
         <div className="relative aspect-[4/5] overflow-hidden">
-          <Image
-            src={saree.images[0]}
-            alt={saree.name}
-            fill
-            className="object-cover transition duration-700 group-hover:scale-105"
-          />
+          {primaryImage ? (
+            <Image
+              src={primaryImage}
+              alt={product.name}
+              fill
+              className="object-cover transition duration-700 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-muted text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              No image
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-black/0 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
-          {saree.originalPrice && (
+          {product.originalPrice && (
             <Badge className="absolute left-4 top-4 bg-white/85 text-trunk-brown shadow-soft">
               Pre-loved
             </Badge>
@@ -40,26 +48,26 @@ export function ProductCard({ saree, className }: ProductCardProps) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-serif text-lg text-foreground">
-                {saree.name}
+                {product.name}
               </h3>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                {saree.details.fabric}
+                {product.details?.fabric ?? "Heirloom"}
               </p>
             </div>
             <ArrowUpRight className="mt-1 h-5 w-5 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">
-              {formatCurrency(saree.price)}
+              {formatCurrency(product.price ?? 0)}
             </span>
-            {saree.originalPrice && (
+            {product.originalPrice && (
               <span className="text-xs text-muted-foreground line-through">
-                {formatCurrency(saree.originalPrice)}
+                {formatCurrency(product.originalPrice)}
               </span>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            {saree.story.title}
+            {product.story?.title ?? "A story from the trunk"}
           </p>
         </div>
       </Link>

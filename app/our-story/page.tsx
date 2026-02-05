@@ -17,6 +17,7 @@ export default function OurStoryPage() {
           className="object-cover"
         />
         <div className="absolute inset-0 bg-luxury-fade" />
+        <div className="absolute inset-0 bg-black/35" />
         <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 pb-16 pt-32 text-white">
           <ScrollReveal>
             <p className="text-xs uppercase tracking-[0.5em] text-amber-100/70">
@@ -59,16 +60,17 @@ export default function OurStoryPage() {
                 "Pieces are restored with care so they can be cherished again.",
             },
           ].map((item, index) => (
-            <ScrollReveal key={item.title} delay={index * 0.1}>
-              <Card className="h-full border-border/60 bg-card/70 p-6 shadow-soft">
-                <h3 className="font-serif text-xl text-foreground">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {item.description}
-                </p>
-              </Card>
-            </ScrollReveal>
+            <Card
+              key={item.title}
+              className="h-full border-border/60 bg-card/70 p-6 shadow-soft"
+            >
+              <h3 className="font-serif text-xl text-foreground">
+                {item.title}
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {item.description}
+              </p>
+            </Card>
           ))}
         </div>
       </section>
