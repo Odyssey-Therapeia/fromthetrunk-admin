@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { formatCurrency } from "@/lib/formatters";
-import { resolveMediaURL } from "@/lib/payload";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";

@@ -6,7 +6,7 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { BentoCard, BentoGrid } from "@/components/ui/bento-grid";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/formatters";
-import { resolveMediaURL } from "@/lib/payload";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 
 const productLayouts = [
   "lg:col-span-2 lg:row-span-2",

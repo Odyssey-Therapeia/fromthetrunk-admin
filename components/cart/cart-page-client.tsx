@@ -7,7 +7,7 @@ import { CartItem } from "@/components/cart/cart-item";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
-import { resolveMediaURL } from "@/lib/payload";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
 
 interface CartPageClientProps {

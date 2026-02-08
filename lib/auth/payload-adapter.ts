@@ -7,7 +7,7 @@ import type {
 } from "next-auth/adapters";
 import { randomBytes } from "crypto";
 
-import { getPayloadClient } from "@/lib/payload";
+import { getPayloadClient } from "@/lib/payload/server";
 
 const generatePassword = () => randomBytes(32).toString("hex");
 
@@ -21,7 +21,11 @@ const mapUser = (user: any): AdapterUser => ({
 
 export const PayloadAdapter = (): Adapter => {
   return {
-    async createUser(data) {
+    async createUser(data: Omit<AdapterUser, "id">) {
+      if (!data.email) {
+        throw new Error("Email is required to create a user.");
+      }
+
       const payload = await getPayloadClient();
       const user = await payload.create({
         collection: "users",
@@ -37,7 +41,7 @@ export const PayloadAdapter = (): Adapter => {
       });
       return mapUser(user);
     },
-    async getUser(id) {
+    async getUser(id: string) {
       const payload = await getPayloadClient();
       try {
         const user = await payload.findByID({
@@ -50,7 +54,7 @@ export const PayloadAdapter = (): Adapter => {
         return null;
       }
     },
-    async getUserByEmail(email) {
+    async getUserByEmail(email: string) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "users",
@@ -61,7 +65,10 @@ export const PayloadAdapter = (): Adapter => {
       const user = result.docs[0];
       return user ? mapUser(user) : null;
     },
-    async getUserByAccount({ provider, providerAccountId }) {
+    async getUserByAccount({
+      provider,
+      providerAccountId,
+    }: Pick<AdapterAccount, "provider" | "providerAccountId">) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_accounts",
@@ -78,14 +85,19 @@ export const PayloadAdapter = (): Adapter => {
       if (!account) return null;
       const userId = typeof account.user === "object" ? account.user.id : account.user;
       if (!userId) return null;
-      const user = await payload.findByID({
-        collection: "users",
-        id: userId,
-        overrideAccess: true,
-      });
-      return user ? mapUser(user) : null;
+
+      try {
+        const user = await payload.findByID({
+          collection: "users",
+          id: userId,
+          overrideAccess: true,
+        });
+        return user ? mapUser(user) : null;
+      } catch {
+        return null;
+      }
     },
-    async updateUser(data) {
+    async updateUser(data: Partial<AdapterUser> & Pick<AdapterUser, "id">) {
       const payload = await getPayloadClient();
       if (!data.id) throw new Error("User id is required");
       const user = await payload.update({
@@ -101,7 +113,7 @@ export const PayloadAdapter = (): Adapter => {
       });
       return mapUser(user);
     },
-    async deleteUser(id) {
+    async deleteUser(id: string) {
       const payload = await getPayloadClient();
       await payload.delete({
         collection: "users",
@@ -109,25 +121,50 @@ export const PayloadAdapter = (): Adapter => {
         overrideAccess: true,
       });
     },
-    async linkAccount(account) {
+    async linkAccount(account: AdapterAccount) {
       const payload = await getPayloadClient();
-      const created = await payload.create({
+      const existing = await payload.find({
         collection: "auth_accounts",
-        data: {
-          user: account.userId,
-          type: account.type,
-          provider: account.provider,
-          providerAccountId: account.providerAccountId,
-          access_token: account.access_token,
-          refresh_token: account.refresh_token,
-          expires_at: account.expires_at,
-          token_type: account.token_type,
-          scope: account.scope,
-          id_token: account.id_token,
-          session_state: account.session_state,
+        where: {
+          and: [
+            { provider: { equals: account.provider } },
+            { providerAccountId: { equals: account.providerAccountId } },
+          ],
         },
+        limit: 1,
         overrideAccess: true,
       });
+
+      const existingDoc = existing.docs[0];
+      const accountData = {
+        user: account.userId,
+        type: account.type,
+        provider: account.provider,
+        providerAccountId: account.providerAccountId,
+        access_token: account.access_token,
+        refresh_token: account.refresh_token,
+        expires_at: account.expires_at,
+        token_type: account.token_type,
+        scope: account.scope,
+        id_token: account.id_token,
+        session_state: account.session_state,
+      };
+
+      if (existingDoc) {
+        await payload.update({
+          collection: "auth_accounts",
+          id: existingDoc.id,
+          data: accountData,
+          overrideAccess: true,
+        });
+      } else {
+        await payload.create({
+          collection: "auth_accounts",
+          data: accountData,
+          overrideAccess: true,
+        });
+      }
+
       return {
         userId: account.userId,
         type: account.type,
@@ -140,9 +177,12 @@ export const PayloadAdapter = (): Adapter => {
         scope: account.scope,
         id_token: account.id_token,
         session_state: account.session_state,
-      } as AdapterAccount & { id?: string; };
+      } as AdapterAccount;
     },
-    async unlinkAccount({ provider, providerAccountId }) {
+    async unlinkAccount({
+      provider,
+      providerAccountId,
+    }: Pick<AdapterAccount, "provider" | "providerAccountId">) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_accounts",
@@ -163,7 +203,7 @@ export const PayloadAdapter = (): Adapter => {
         overrideAccess: true,
       });
     },
-    async createSession(session) {
+    async createSession(session: AdapterSession) {
       const payload = await getPayloadClient();
       const created = await payload.create({
         collection: "auth_sessions",
@@ -180,7 +220,7 @@ export const PayloadAdapter = (): Adapter => {
         expires: new Date(created.expires),
       } as AdapterSession;
     },
-    async getSessionAndUser(sessionToken) {
+    async getSessionAndUser(sessionToken: string) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_sessions",
@@ -192,11 +232,18 @@ export const PayloadAdapter = (): Adapter => {
       if (!session) return null;
       const userId = typeof session.user === "object" ? session.user.id : session.user;
       if (!userId) return null;
-      const user = await payload.findByID({
-        collection: "users",
-        id: userId,
-        overrideAccess: true,
-      });
+
+      let user: any = null;
+      try {
+        user = await payload.findByID({
+          collection: "users",
+          id: userId,
+          overrideAccess: true,
+        });
+      } catch {
+        return null;
+      }
+
       if (!user) return null;
       return {
         session: {
@@ -207,7 +254,9 @@ export const PayloadAdapter = (): Adapter => {
         user: mapUser(user),
       };
     },
-    async updateSession(data) {
+    async updateSession(
+      data: Partial<AdapterSession> & Pick<AdapterSession, "sessionToken">
+    ) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_sessions",
@@ -232,7 +281,7 @@ export const PayloadAdapter = (): Adapter => {
         expires: new Date(updated.expires),
       } as AdapterSession;
     },
-    async deleteSession(sessionToken) {
+    async deleteSession(sessionToken: string) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_sessions",
@@ -248,7 +297,7 @@ export const PayloadAdapter = (): Adapter => {
         overrideAccess: true,
       });
     },
-    async createVerificationToken(token) {
+    async createVerificationToken(token: VerificationToken) {
       const payload = await getPayloadClient();
       await payload.create({
         collection: "auth_verification_tokens",
@@ -261,7 +310,10 @@ export const PayloadAdapter = (): Adapter => {
       });
       return token;
     },
-    async useVerificationToken({ identifier, token }) {
+    async useVerificationToken({
+      identifier,
+      token,
+    }: Pick<VerificationToken, "identifier" | "token">) {
       const payload = await getPayloadClient();
       const result = await payload.find({
         collection: "auth_verification_tokens",

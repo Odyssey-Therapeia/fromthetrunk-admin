@@ -5,26 +5,42 @@ import TwitterProvider from "next-auth/providers/twitter";
 
 import { PayloadAdapter } from "@/lib/auth/payload-adapter";
 
+const providers: NonNullable<NextAuthOptions["providers"]> = [];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+}
+
+if (process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_CLIENT_SECRET) {
+  providers.push(
+    AzureADProvider({
+      clientId: process.env.AZURE_AD_CLIENT_ID,
+      clientSecret: process.env.AZURE_AD_CLIENT_SECRET,
+      tenantId: process.env.AZURE_AD_TENANT_ID || "common",
+    })
+  );
+}
+
+if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
+  providers.push(
+    TwitterProvider({
+      clientId: process.env.TWITTER_CLIENT_ID,
+      clientSecret: process.env.TWITTER_CLIENT_SECRET,
+    })
+  );
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PayloadAdapter(),
   session: {
     strategy: "database",
   },
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    AzureADProvider({
-      clientId: process.env.AZURE_AD_CLIENT_ID || "",
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET || "",
-      tenantId: process.env.AZURE_AD_TENANT_ID || "common",
-    }),
-    TwitterProvider({
-      clientId: process.env.TWITTER_CLIENT_ID || "",
-      clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
-    }),
-  ],
+  providers,
   callbacks: {
     async session({ session, user }) {
       if (session.user) {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { resolveMediaURL } from "@/lib/payload";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { useCartStore } from "@/lib/store/cart-store";
 
 interface AddToCartButtonProps {

@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import sharp from "sharp";
 
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
@@ -13,6 +14,8 @@ const serverURL =
   (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000");
+const previewSecret = process.env.PAYLOAD_PREVIEW_SECRET || "";
+const payloadSecret = process.env.PAYLOAD_SECRET || "local-dev-payload-secret";
 
 const isAdmin = ({ req }: { req: any }) => req.user?.role === "admin";
 
@@ -28,13 +31,35 @@ const canAccessUserContent = ({ req }: { req: any }) => {
   return { user: { equals: req.user.id } };
 };
 
+const buildPreviewURL = (path: string, token: null | string = null) => {
+  const params = new URLSearchParams();
+  params.set("slug", path);
+
+  if (previewSecret) {
+    params.set("secret", previewSecret);
+  }
+
+  if (token) {
+    params.set("token", token);
+  }
+
+  return `${serverURL}/api/draft/enable?${params.toString()}`;
+};
+
+const toSlug = (value: unknown) =>
+  typeof value === "string" && value.length > 0 ? value : null;
+
 export default buildConfig({
   admin: {
     user: "users",
     importMap: {
+      autoGenerate: false,
       baseDir: dirname,
       importMapFile: path.resolve(dirname, "payload", "importMap.ts"),
     },
+  },
+  routes: {
+    api: "/api/payload",
   },
   collections: [
     {
@@ -164,6 +189,39 @@ export default buildConfig({
         delete: () => false,
         create: () => false,
       },
+      hooks: {
+        beforeValidate: [
+          async ({ data, originalDoc, req }) => {
+            const provider = data?.provider ?? originalDoc?.provider;
+            const providerAccountId =
+              data?.providerAccountId ?? originalDoc?.providerAccountId;
+
+            if (!provider || !providerAccountId || !req?.payload) {
+              return data;
+            }
+
+            const existing = await req.payload.find({
+              collection: "auth_accounts",
+              where: {
+                and: [
+                  { provider: { equals: provider } },
+                  { providerAccountId: { equals: providerAccountId } },
+                ],
+              },
+              limit: 1,
+              overrideAccess: true,
+            });
+
+            const existingDoc = existing.docs[0];
+            const currentId = originalDoc?.id ?? data?.id;
+            if (existingDoc && existingDoc.id !== currentId) {
+              throw new Error("Provider account is already linked.");
+            }
+
+            return data;
+          },
+        ],
+      },
       fields: [
         {
           name: "user",
@@ -276,12 +334,28 @@ export default buildConfig({
       slug: "products",
       admin: {
         useAsTitle: "name",
+        preview: (doc, { token }) => {
+          const slug = toSlug(doc?.slug);
+          return buildPreviewURL(slug ? `/collection/${slug}` : "/collection", token);
+        },
+        livePreview: {
+          url: ({ data }) => {
+            const slug = toSlug(data?.slug);
+            return slug ? `${serverURL}/collection/${slug}` : `${serverURL}/collection`;
+          },
+        },
       },
       access: {
-        read: () => true,
+        read: ({ req }: { req: any }) => {
+          if (req.user?.role === "admin") return true;
+          return { status: { equals: "published" } };
+        },
         create: isAdmin,
         update: isAdmin,
         delete: isAdmin,
+      },
+      versions: {
+        drafts: true,
       },
       fields: [
         {
@@ -291,13 +365,7 @@ export default buildConfig({
         },
         slugField({
           name: "slug",
-          admin: {
-            position: "sidebar",
-          },
-          fieldOverrides: {
-            unique: true,
-            index: true,
-          },
+          position: "sidebar",
         }),
         {
           name: "price",
@@ -405,12 +473,30 @@ export default buildConfig({
       slug: "collections",
       admin: {
         useAsTitle: "name",
+        preview: (doc, { token }) => {
+          const slug = toSlug(doc?.slug);
+          return buildPreviewURL(
+            slug ? `/collection?collection=${encodeURIComponent(slug)}` : "/collection",
+            token
+          );
+        },
+        livePreview: {
+          url: ({ data }) => {
+            const slug = toSlug(data?.slug);
+            return slug
+              ? `${serverURL}/collection?collection=${encodeURIComponent(slug)}`
+              : `${serverURL}/collection`;
+          },
+        },
       },
       access: {
         read: () => true,
         create: isAdmin,
         update: isAdmin,
         delete: isAdmin,
+      },
+      versions: {
+        drafts: true,
       },
       fields: [
         {
@@ -420,13 +506,7 @@ export default buildConfig({
         },
         slugField({
           name: "slug",
-          admin: {
-            position: "sidebar",
-          },
-          fieldOverrides: {
-            unique: true,
-            index: true,
-          },
+          position: "sidebar",
         }),
         {
           name: "description",
@@ -545,7 +625,6 @@ export default buildConfig({
       },
       upload: {
         staticDir: path.resolve(dirname, "public", "media"),
-        staticURL: "/media",
         imageSizes: [
           { name: "thumbnail", width: 400, height: 400 },
           { name: "card", width: 900, height: 1200 },
@@ -569,6 +648,19 @@ export default buildConfig({
   globals: [
     {
       slug: "homePage",
+      admin: {
+        preview: (_doc, { token }) => buildPreviewURL("/", token),
+        livePreview: {
+          url: () => `${serverURL}/`,
+        },
+      },
+      access: {
+        read: () => true,
+        update: isAdmin,
+      },
+      versions: {
+        drafts: true,
+      },
       fields: [
         {
           name: "heroEyebrow",
@@ -657,6 +749,19 @@ export default buildConfig({
     },
     {
       slug: "collectionPage",
+      admin: {
+        preview: (_doc, { token }) => buildPreviewURL("/collection", token),
+        livePreview: {
+          url: () => `${serverURL}/collection`,
+        },
+      },
+      access: {
+        read: () => true,
+        update: isAdmin,
+      },
+      versions: {
+        drafts: true,
+      },
       fields: [
         {
           name: "eyebrow",
@@ -687,9 +792,165 @@ export default buildConfig({
         },
       ],
     },
+    {
+      slug: "ourStoryPage",
+      admin: {
+        preview: (_doc, { token }) => buildPreviewURL("/our-story", token),
+        livePreview: {
+          url: () => `${serverURL}/our-story`,
+        },
+      },
+      access: {
+        read: () => true,
+        update: isAdmin,
+      },
+      versions: {
+        drafts: true,
+      },
+      fields: [
+        {
+          name: "heroEyebrow",
+          type: "text",
+          defaultValue: "Our Story",
+        },
+        {
+          name: "heroTitle",
+          type: "text",
+          defaultValue: "A trunk of memories, reopened",
+        },
+        {
+          name: "heroImage",
+          type: "upload",
+          relationTo: "media",
+        },
+        {
+          name: "sectionTitle",
+          type: "text",
+          defaultValue: "From keepsake to collection",
+        },
+        {
+          name: "sectionBody",
+          type: "textarea",
+          defaultValue:
+            "The first trunk belonged to a grandmother who kept every saree she wore for milestones, festivals, and family weddings. We realized each piece carried a story worth preserving and sharing.",
+        },
+        {
+          name: "cardOneTitle",
+          type: "text",
+          defaultValue: "Curated Heritage",
+        },
+        {
+          name: "cardOneBody",
+          type: "textarea",
+          defaultValue:
+            "Every saree is sourced from trusted collectors and family archives.",
+        },
+        {
+          name: "cardTwoTitle",
+          type: "text",
+          defaultValue: "Authenticated Craft",
+        },
+        {
+          name: "cardTwoBody",
+          type: "textarea",
+          defaultValue:
+            "We verify weave, zari, and provenance before adding any piece.",
+        },
+        {
+          name: "cardThreeTitle",
+          type: "text",
+          defaultValue: "Modern Heirlooms",
+        },
+        {
+          name: "cardThreeBody",
+          type: "textarea",
+          defaultValue:
+            "Pieces are restored with care so they can be cherished again.",
+        },
+      ],
+    },
+    {
+      slug: "howItWorksPage",
+      admin: {
+        preview: (_doc, { token }) => buildPreviewURL("/how-it-works", token),
+        livePreview: {
+          url: () => `${serverURL}/how-it-works`,
+        },
+      },
+      access: {
+        read: () => true,
+        update: isAdmin,
+      },
+      versions: {
+        drafts: true,
+      },
+      fields: [
+        {
+          name: "eyebrow",
+          type: "text",
+          defaultValue: "How It Works",
+        },
+        {
+          name: "title",
+          type: "text",
+          defaultValue: "The journey of every saree",
+        },
+        {
+          name: "description",
+          type: "textarea",
+          defaultValue:
+            "From sourcing to storytelling, every piece is cared for with respect to its heritage.",
+        },
+        {
+          name: "stepOneTitle",
+          type: "text",
+          defaultValue: "Sourcing & Curation",
+        },
+        {
+          name: "stepOneBody",
+          type: "textarea",
+          defaultValue:
+            "We partner with collectors, couture archives, and legacy wardrobes to source heirloom sarees.",
+        },
+        {
+          name: "stepTwoTitle",
+          type: "text",
+          defaultValue: "Authentication",
+        },
+        {
+          name: "stepTwoBody",
+          type: "textarea",
+          defaultValue:
+            "Our specialists verify weave, fabric, zari, and craftsmanship. Every piece is documented with provenance.",
+        },
+        {
+          name: "stepThreeTitle",
+          type: "text",
+          defaultValue: "Restoration",
+        },
+        {
+          name: "stepThreeBody",
+          type: "textarea",
+          defaultValue:
+            "Gentle cleaning, steaming, and preservation ensures each saree is ready to wear again.",
+        },
+        {
+          name: "stepFourTitle",
+          type: "text",
+          defaultValue: "Delivery",
+        },
+        {
+          name: "stepFourBody",
+          type: "textarea",
+          defaultValue:
+            "Your saree arrives in a protective muslin wrap with a story card and care notes.",
+        },
+      ],
+    },
   ],
-  secret: process.env.PAYLOAD_SECRET || "",
+  secret: payloadSecret,
   serverURL,
+  sharp,
   typescript: {
     outputFile: path.resolve(dirname, "payload-types.ts"),
   },

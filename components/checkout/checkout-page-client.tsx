@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
-import { resolveMediaURL } from "@/lib/payload";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
 
 interface CheckoutPageClientProps {
@@ -53,12 +53,8 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
     return {
       items: items.map((item) => ({
         productId: item.id,
-        name: item.name,
-        price: item.price,
         quantity: item.quantity,
-        imageUrl: item.image,
       })),
-      subtotal,
       shippingAddress: {
         name: `${form.firstName} ${form.lastName}`.trim(),
         line1: form.address,
@@ -70,7 +66,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         email: form.email,
       },
     };
-  }, [form, items, subtotal]);
+  }, [form, items]);
 
   const handleSubmit = async () => {
     if (!canCheckout || !hasItems) return;
