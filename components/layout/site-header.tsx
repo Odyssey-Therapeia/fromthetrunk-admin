@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { SearchBar } from "@/components/layout/search-bar";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -56,6 +57,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-1">
           <SearchBar />
+          <ThemeToggle />
 
           {/* Account button */}
           <Button
