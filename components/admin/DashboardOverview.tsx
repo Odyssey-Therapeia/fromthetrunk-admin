@@ -508,6 +508,7 @@ export const DashboardOverview = async () => {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5e4d3f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           Quick Actions
         </div>
+        {/* eslint-disable @next/next/no-html-link-for-pages -- Payload admin links are outside Next.js routing */}
         <div style={quickActionsBar}>
           <a href="/admin/collections/products/create" style={quickActionBtn}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b1d1d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
