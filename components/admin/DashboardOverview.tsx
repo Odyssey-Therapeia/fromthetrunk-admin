@@ -7,9 +7,9 @@ import config from "@/payload.config";
 /* ------------------------------------------------------------------ */
 
 const currency = (n: number) =>
-  new Intl.NumberFormat("en-US", {
+  new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
+    currency: "INR",
     maximumFractionDigits: 0,
   }).format(n);
 
@@ -36,7 +36,7 @@ export const DashboardOverview = async () => {
   const payload = await getPayload({ config });
 
   /* Fetch everything in parallel */
-  const [ordersResult, productsResult, collectionsResult, mediaResult] =
+  const [ordersResult, productsResult, collectionsResult, mediaResult, allProductsForCounts] =
     await Promise.all([
       payload.find({
         collection: "orders",
@@ -59,7 +59,22 @@ export const DashboardOverview = async () => {
         limit: 0,
         overrideAccess: true,
       }),
+      payload.find({
+        collection: "products",
+        limit: 1000,
+        overrideAccess: true,
+      }),
     ]);
+
+  // Build a real product-count-per-collection map
+  const productCountByCollection = new Map<string, number>();
+  for (const product of allProductsForCounts.docs) {
+    const colRef = (product as any).collection;
+    const colId = typeof colRef === "object" && colRef !== null ? colRef.id : colRef;
+    if (colId) {
+      productCountByCollection.set(colId, (productCountByCollection.get(colId) ?? 0) + 1);
+    }
+  }
 
   /* Derive stats */
   const totalOrders = ordersResult.totalDocs;
@@ -418,13 +433,10 @@ export const DashboardOverview = async () => {
           ) : (
             <div>
               {collectionsResult.docs.map((col: any, i: number) => {
-                /* Rough "progress" based on how many products use this collection,
-                   capped at 100 for visual bar. We can't join here efficiently so
-                   we show the collection metadata instead. */
-                const pct = Math.min(
-                  ((i + 1) / collectionsResult.docs.length) * 100,
-                  100
-                );
+                const productCount = productCountByCollection.get(col.id) ?? 0;
+                const pct = totalProducts > 0
+                  ? Math.min((productCount / totalProducts) * 100, 100)
+                  : 0;
                 return (
                   <div
                     key={col.id}
@@ -453,7 +465,7 @@ export const DashboardOverview = async () => {
                           marginTop: "0.1rem",
                         }}
                       >
-                        {col.featured ? "Featured" : "Standard"}
+                        {productCount} product{productCount !== 1 ? "s" : ""} · {col.featured ? "Featured" : "Standard"}
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -469,7 +481,7 @@ export const DashboardOverview = async () => {
                           textAlign: "right",
                         }}
                       >
-                        {col.featured ? "Active" : "—"}
+                        {productCount}
                       </span>
                     </div>
                   </div>
