@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
@@ -6,6 +7,12 @@ import { Separator } from "@/components/ui/separator";
 import { getGlobals } from "@/lib/data/products";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "How It Works",
+  description:
+    "From sourcing to storytelling — learn how every heirloom saree is curated, authenticated, restored, and delivered with care.",
+};
 
 export default async function HowItWorksPage() {
   const { isEnabled: includeDrafts } = await draftMode();

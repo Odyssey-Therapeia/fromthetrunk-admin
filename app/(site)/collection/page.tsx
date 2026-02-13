@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { draftMode } from "next/headers";
 
@@ -12,6 +13,12 @@ import {
 import type { Collection as CollectionDoc, CollectionPageGlobal, Product } from "@/types/payload-types";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Collection",
+  description:
+    "Discover curated, authenticated pre-loved luxury sarees from private wardrobes, couture archives, and collector trunks.",
+};
 
 type CollectionPageProps = {
   searchParams:

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import Image from "next/image";
 
@@ -10,6 +11,12 @@ const storyHero =
   "https://images.unsplash.com/photo-1727430228383-aa1fb59db8bf?q=80&w=2200&auto=format&fit=crop";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Our Story",
+  description:
+    "From the Trunk began with a single cedar chest filled with heirloom sarees. Each piece whispered stories of celebrations, journeys, and women who wore them before.",
+};
 
 export default function OurStoryPage() {
   return <OurStoryPageContent />;

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import { notFound } from "next/navigation";
 
@@ -18,10 +19,39 @@ import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getProductBySlug, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
+import { productJsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import type { Product } from "@/types/payload-types";
 
 interface ProductPageProps {
   params: { slug: string };
+}
+
+export async function generateMetadata({
+  params,
+}: ProductPageProps): Promise<Metadata> {
+  const { slug } = params;
+  const product = await getProductBySlug(slug);
+
+  if (!product) {
+    return { title: "Product Not Found" };
+  }
+
+  const image = resolveMediaURL(product.images?.[0]);
+
+  return {
+    title: product.name,
+    description:
+      product.story?.narrative ??
+      `${product.name} — ${product.details?.fabric ?? "Heirloom"} saree from the trunk. ${formatCurrency(product.price)}.`,
+    openGraph: {
+      title: product.name,
+      description:
+        product.story?.narrative ??
+        `One-of-a-kind ${product.details?.fabric ?? ""} saree. ${formatCurrency(product.price)}.`,
+      type: "website",
+      ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
+    },
+  };
 }
 
 export default async function SareePage({ params }: ProductPageProps) {
@@ -39,8 +69,24 @@ export default async function SareePage({ params }: ProductPageProps) {
     .map((image) => resolveMediaURL(image))
     .filter(Boolean) as string[];
 
+  const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
+  const jsonLd = productJsonLd(product as Product);
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: "Home", url: baseUrl },
+    { name: "Collection", url: `${baseUrl}/collection` },
+    { name: product.name, url: `${baseUrl}/collection/${product.slug}` },
+  ]);
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-16 px-6 py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
+      />
       <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         <ScrollReveal>
           <ProductGallery images={images} alt={product.name} />
