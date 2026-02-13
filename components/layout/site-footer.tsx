@@ -14,17 +14,17 @@ const footerLinks = [
   {
     title: "Customer Care",
     links: [
+      { href: "/shipping-policy", label: "Shipping" },
+      { href: "/return-policy", label: "Returns & Refunds" },
       { href: "/how-it-works", label: "Authentication" },
-      { href: "/how-it-works", label: "Shipping" },
-      { href: "/how-it-works", label: "Returns" },
     ],
   },
   {
-    title: "Connect",
+    title: "Legal",
     links: [
-      { href: "mailto:hello@fromthetrunk.com", label: "hello@fromthetrunk.com" },
-      { href: "https://instagram.com", label: "Instagram" },
-      { href: "https://pinterest.com", label: "Pinterest" },
+      { href: "/privacy-policy", label: "Privacy Policy" },
+      { href: "/terms-of-service", label: "Terms of Service" },
+      { href: "/return-policy", label: "Return Policy" },
     ],
   },
 ];
@@ -45,6 +45,14 @@ export function SiteFooter() {
             A curated collection of pre-loved luxury sarees. Each piece is
             authenticated, cherished, and ready for a new story.
           </p>
+          <div className="flex items-center gap-4 pt-2">
+            <a
+              href="mailto:hello@fromthetrunk.com"
+              className="text-sm text-muted-foreground transition hover:text-foreground"
+            >
+              hello@fromthetrunk.com
+            </a>
+          </div>
         </div>
 
         <div className="grid gap-8 sm:grid-cols-3">
@@ -55,7 +63,7 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-sm text-foreground">
                 {section.links.map((link) => (
-                  <li key={link.label}>
+                  <li key={`${section.title}-${link.label}`}>
                     <Link
                       href={link.href}
                       className="transition hover:text-foreground hover:underline underline-offset-4"
