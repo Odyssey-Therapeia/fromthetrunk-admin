@@ -1,0 +1,76 @@
+/**
+ * Simple in-memory rate limiter for API routes.
+ *
+ * For production at scale, replace with Upstash Redis or similar distributed
+ * rate limiting. This implementation works well for single-instance deployments.
+ */
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const store = new Map<string, RateLimitEntry>();
+
+// Clean up expired entries every 60 seconds
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (entry.resetAt <= now) {
+        store.delete(key);
+      }
+    }
+  }, 60_000);
+}
+
+interface RateLimitOptions {
+  /** Maximum number of requests in the window. */
+  limit: number;
+  /** Window duration in seconds. */
+  windowSeconds: number;
+}
+
+interface RateLimitResult {
+  success: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
+/**
+ * Check rate limit for a given key (e.g., user ID, IP address).
+ */
+export function checkRateLimit(
+  key: string,
+  options: RateLimitOptions
+): RateLimitResult {
+  const now = Date.now();
+  const windowMs = options.windowSeconds * 1000;
+
+  let entry = store.get(key);
+
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + windowMs };
+    store.set(key, entry);
+  }
+
+  entry.count += 1;
+
+  const remaining = Math.max(0, options.limit - entry.count);
+  const success = entry.count <= options.limit;
+
+  return { success, remaining, resetAt: entry.resetAt };
+}
+
+/**
+ * Extract a rate-limit key from a request.
+ * Uses user ID if available (from headers set by middleware), otherwise IP.
+ */
+export function getRateLimitKey(
+  request: Request,
+  prefix: string
+): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "unknown";
+  return `${prefix}:${ip}`;
+}
