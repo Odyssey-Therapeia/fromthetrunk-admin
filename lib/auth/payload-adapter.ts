@@ -7,6 +7,8 @@ import type {
 } from "next-auth/adapters";
 import { randomBytes } from "crypto";
 
+import { sendEmail } from "@/lib/email/send";
+import { welcomeEmail } from "@/lib/email/templates";
 import { getPayloadClient } from "@/lib/payload/server";
 
 const generatePassword = () => randomBytes(32).toString("hex");
@@ -39,7 +41,16 @@ export const PayloadAdapter = (): Adapter => {
         },
         overrideAccess: true,
       });
-      return mapUser(user);
+
+      // Send welcome email (non-blocking)
+      if (data.email) {
+        const email = welcomeEmail((data.name as string) ?? "");
+        sendEmail({ to: data.email, subject: email.subject, html: email.html }).catch(() => {
+          console.error("[AUTH] Failed to send welcome email to", data.email);
+        });
+      }
+
+      return mapUser(user as Record<string, unknown>);
     },
     async getUser(id: string) {
       const payload = await getPayloadClient();
@@ -49,7 +60,7 @@ export const PayloadAdapter = (): Adapter => {
           id,
           overrideAccess: true,
         });
-        return user ? mapUser(user) : null;
+        return user ? mapUser(user as Record<string, unknown>) : null;
       } catch {
         return null;
       }
@@ -63,7 +74,7 @@ export const PayloadAdapter = (): Adapter => {
         overrideAccess: true,
       });
       const user = result.docs[0];
-      return user ? mapUser(user) : null;
+      return user ? mapUser(user as Record<string, unknown>) : null;
     },
     async getUserByAccount({
       provider,
@@ -92,7 +103,7 @@ export const PayloadAdapter = (): Adapter => {
           id: userId,
           overrideAccess: true,
         });
-        return user ? mapUser(user) : null;
+        return user ? mapUser(user as Record<string, unknown>) : null;
       } catch {
         return null;
       }
@@ -111,7 +122,7 @@ export const PayloadAdapter = (): Adapter => {
         },
         overrideAccess: true,
       });
-      return mapUser(user);
+      return mapUser(user as Record<string, unknown>);
     },
     async deleteUser(id: string) {
       const payload = await getPayloadClient();
@@ -251,7 +262,7 @@ export const PayloadAdapter = (): Adapter => {
           userId: userId,
           expires: new Date(session.expires),
         },
-        user: mapUser(user),
+        user: mapUser(user as Record<string, unknown>),
       };
     },
     async updateSession(
