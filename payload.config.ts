@@ -716,6 +716,45 @@ export default buildConfig({
       ],
     },
     {
+      slug: "newsletter_subscribers",
+      admin: {
+        useAsTitle: "email",
+      },
+      access: {
+        read: isAdmin,
+        create: () => true,
+        update: isAdmin,
+        delete: isAdmin,
+      },
+      fields: [
+        {
+          name: "email",
+          type: "email",
+          required: true,
+          unique: true,
+        },
+        {
+          name: "status",
+          type: "select",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending Confirmation", value: "pending" },
+            { label: "Confirmed", value: "confirmed" },
+            { label: "Unsubscribed", value: "unsubscribed" },
+          ],
+        },
+        {
+          name: "confirmToken",
+          type: "text",
+          admin: { hidden: true },
+        },
+        {
+          name: "confirmedAt",
+          type: "date",
+        },
+      ],
+    },
+    {
       slug: "media",
       admin: {
         useAsTitle: "filename",

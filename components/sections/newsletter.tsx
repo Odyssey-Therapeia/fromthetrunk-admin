@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function Newsletter() {
+  const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email.trim() || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.message || "Unable to subscribe. Please try again.");
+        return;
+      }
+
+      setSubmitted(true);
+      toast.success(data.message || "Check your email to confirm your subscription.");
+    } catch {
+      toast.error("Unable to subscribe. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <section className="mx-auto w-full max-w-6xl px-6">
@@ -36,26 +67,33 @@ export function Newsletter() {
             </Label>
             <form
               className="flex w-full flex-col gap-3 md:flex-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSubmitted(true);
-              }}
+              onSubmit={handleSubmit}
             >
               <Input
                 id="newsletter-email"
                 type="email"
                 placeholder="Enter your email"
                 className="min-w-[260px] bg-white"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={submitted}
-                aria-disabled={submitted}
+                required
               />
-              <Button type="submit" className="rounded-full px-6" disabled={submitted}>
-                {submitted ? "You're on the list" : "Join the list"}
+              <Button
+                type="submit"
+                className="rounded-full px-6"
+                disabled={submitted || isLoading}
+              >
+                {isLoading
+                  ? "Subscribing..."
+                  : submitted
+                  ? "Check your email"
+                  : "Join the list"}
               </Button>
             </form>
             {submitted && (
               <p className="text-xs text-muted-foreground">
-                Thanks! We&apos;ll email you the next curated drop.
+                We&apos;ve sent a confirmation link to your email. Click it to complete your subscription.
               </p>
             )}
           </div>
