@@ -5,16 +5,31 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
-import type { Product } from "@/types/payload-types";
+import type { Address, Product } from "@/types/payload-types";
+
+const fetchAddresses = async (): Promise<Address[]> => {
+  const response = await fetch("/api/account/addresses");
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.addresses ?? [];
+};
 
 interface CheckoutPageClientProps {
   featuredPicks: Product[];
@@ -53,6 +68,30 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
+
+  // Fetch saved addresses for pre-fill
+  const { data: savedAddresses } = useQuery({
+    queryKey: ["checkout-addresses"],
+    queryFn: fetchAddresses,
+    enabled: Boolean(session?.user?.id),
+  });
+
+  const handleAddressSelect = (addressId: string) => {
+    const address = savedAddresses?.find((a) => a.id === addressId);
+    if (!address) return;
+    setForm((prev) => ({
+      ...prev,
+      firstName: (address.name ?? "").split(" ")[0] ?? "",
+      lastName: (address.name ?? "").split(" ").slice(1).join(" ") ?? "",
+      phone: address.phone ?? "",
+      address: address.line1 ?? "",
+      city: address.city ?? "",
+      state: address.state ?? "",
+      postal: address.postalCode ?? "",
+      country: address.country ?? "",
+    }));
+    toast("Address pre-filled from your saved addresses.");
+  };
 
   const [form, setForm] = useState({
     firstName: "",
@@ -273,6 +312,28 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                 <Button asChild variant="link" className="px-0">
                   <Link href="/account/sign-in">Sign in</Link>
                 </Button>
+              </div>
+            )}
+
+            {/* Saved address selector */}
+            {savedAddresses && savedAddresses.length > 0 && (
+              <div className="rounded-xl border border-trunk-gold/30 bg-trunk-gold/5 p-4">
+                <Label className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  Pre-fill from saved address
+                </Label>
+                <Select onValueChange={handleAddressSelect}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Choose a saved address..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedAddresses.map((addr) => (
+                      <SelectItem key={addr.id} value={addr.id}>
+                        {addr.label || addr.name || addr.line1} — {addr.city}
+                        {addr.isDefault ? " (Default)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
