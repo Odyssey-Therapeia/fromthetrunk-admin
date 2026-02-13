@@ -1,14 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Menu, Search, User } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { SearchBar } from "@/components/layout/search-bar";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -24,6 +27,8 @@ const navLinks = [
 
 export function SiteHeader() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const [mobileSearch, setMobileSearch] = useState("");
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur">
@@ -92,6 +97,27 @@ export function SiteHeader() {
             </SheetTrigger>
             <SheetContent className="bg-background">
               <div className="flex h-full flex-col gap-6 pt-8">
+                {/* Mobile search */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (mobileSearch.trim().length >= 2) {
+                      router.push(`/search?q=${encodeURIComponent(mobileSearch.trim())}`);
+                      setMobileSearch("");
+                    }
+                  }}
+                  className="relative"
+                >
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={mobileSearch}
+                    onChange={(e) => setMobileSearch(e.target.value)}
+                    placeholder="Search sarees..."
+                    className="pl-9"
+                    aria-label="Search products"
+                  />
+                </form>
+
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
