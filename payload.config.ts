@@ -647,6 +647,69 @@ export default buildConfig({
           ],
         },
         {
+          name: "shippingCost",
+          type: "number",
+          min: 0,
+          defaultValue: 0,
+        },
+        {
+          name: "shippingMethod",
+          type: "select",
+          options: [
+            { label: "Standard", value: "standard" },
+            { label: "Express", value: "express" },
+          ],
+        },
+        {
+          name: "taxRate",
+          type: "number",
+          min: 0,
+          admin: { readOnly: true },
+        },
+        {
+          name: "taxAmount",
+          type: "number",
+          min: 0,
+          admin: { readOnly: true },
+        },
+        {
+          name: "total",
+          type: "number",
+          min: 0,
+          admin: { readOnly: true },
+        },
+        {
+          name: "paymentGateway",
+          type: "text",
+          admin: { readOnly: true },
+        },
+        {
+          name: "razorpayOrderId",
+          type: "text",
+          admin: { readOnly: true },
+        },
+        {
+          name: "paymentId",
+          type: "text",
+          admin: { readOnly: true },
+        },
+        {
+          name: "paymentStatus",
+          type: "select",
+          defaultValue: "pending",
+          options: [
+            { label: "Pending", value: "pending" },
+            { label: "Paid", value: "paid" },
+            { label: "Failed", value: "failed" },
+            { label: "Refunded", value: "refunded" },
+          ],
+        },
+        {
+          name: "paymentMethod",
+          type: "text",
+          admin: { readOnly: true },
+        },
+        {
           name: "placedAt",
           type: "date",
         },
