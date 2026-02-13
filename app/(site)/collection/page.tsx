@@ -11,7 +11,7 @@ import {
   getProducts,
   getProductsByCollection,
 } from "@/lib/data/products";
-import type { Collection as CollectionDoc, Product } from "@/types/payload-types";
+import type { Collection as CollectionDoc, CollectionPageGlobal, Product } from "@/types/payload-types";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +46,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
       : getProducts(ITEMS_PER_PAGE, { includeDrafts }),
   ]);
 
+  const cms = collectionPage as CollectionPageGlobal | null;
   const items = (productsResult?.docs ?? []) as Product[];
   const collections = (collectionsResult?.docs ?? []) as CollectionDoc[];
   const activeCollection = collections.find(
@@ -67,13 +68,13 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
     <div className="mx-auto w-full max-w-6xl space-y-12 px-6 py-16">
       <ScrollReveal className="space-y-4">
         <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-          {(collectionPage as Record<string, unknown>)?.eyebrow as string ?? "The Collection"}
+          {cms?.eyebrow ?? "The Collection"}
         </p>
         <h1 className="font-serif text-4xl text-foreground md:text-5xl">
-          {(collectionPage as Record<string, unknown>)?.title as string ?? "Curated pre-loved sarees"}
+          {cms?.title ?? "Curated pre-loved sarees"}
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          {(collectionPage as Record<string, unknown>)?.description as string ??
+          {cms?.description ??
             "Discover heirlooms from private wardrobes, couture archives, and collector trunks. Each piece is authenticated and accompanied by its story."}
         </p>
       </ScrollReveal>
@@ -86,7 +87,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
             </p>
             <h2 className="font-serif text-2xl text-foreground">
               {activeCollection?.name ??
-                ((collectionPage as Record<string, unknown>)?.filtersTitle as string) ??
+                cms?.filtersTitle ??
                 "Browse by collection"}
             </h2>
             {activeCollection?.description && (
