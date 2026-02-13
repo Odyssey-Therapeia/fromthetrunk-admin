@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -9,6 +10,11 @@ import { getPayloadClient } from "@/lib/payload/server";
 import type { Order, OrderItem } from "@/types/payload-types";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Order Confirmed",
+  robots: { index: false, follow: false },
+};
 
 type ConfirmationPageProps = {
   searchParams: Promise<{ orderId?: string }> | { orderId?: string };

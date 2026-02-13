@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 
 import { BrandStoryTeaser } from "@/components/sections/brand-story-teaser";
@@ -9,6 +10,12 @@ import { getFeaturedProducts, getGlobals, getProducts } from "@/lib/data/product
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 
 export const revalidate = 300; // ISR: revalidate every 5 minutes
+
+export const metadata: Metadata = {
+  title: "From the Trunk | Pre-Loved Luxury Sarees with Provenance",
+  description:
+    "Curated collection of authenticated, pre-loved luxury sarees. Each one-of-a-kind piece comes with provenance, a story woven in silk, and careful restoration.",
+};
 
 export default async function Home() {
   const { isEnabled: includeDrafts } = await draftMode();

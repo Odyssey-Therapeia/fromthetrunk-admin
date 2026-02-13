@@ -8,6 +8,8 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductCard } from "@/components/product/product-card";
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { ProductViewTracker } from "@/components/product/product-view-tracker";
+import { RecentlyViewed } from "@/components/product/recently-viewed";
 import { WishlistButton } from "@/components/product/wishlist-button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -87,6 +89,13 @@ export default async function SareePage({ params }: ProductPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
+      />
+      <ProductViewTracker
+        id={product.id}
+        slug={product.slug}
+        name={product.name}
+        price={product.price}
+        image={images[0] ?? ""}
       />
       <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         <ScrollReveal>
@@ -203,6 +212,8 @@ export default async function SareePage({ params }: ProductPageProps) {
           ))}
         </div>
       </section>
+
+      <RecentlyViewed excludeId={product.id} limit={6} />
     </div>
   );
 }
