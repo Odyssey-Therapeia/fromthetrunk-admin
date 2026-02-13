@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/formatters";
@@ -40,7 +41,10 @@ export function CartItem({ item }: CartItemProps) {
             variant="ghost"
             size="icon"
             className="text-muted-foreground"
-            onClick={() => removeItem(item.id)}
+            onClick={() => {
+              removeItem(item.id);
+              toast(`${item.name} removed from your bag`);
+            }}
             aria-label={`Remove ${item.name}`}
             title={`Remove ${item.name}`}
           >

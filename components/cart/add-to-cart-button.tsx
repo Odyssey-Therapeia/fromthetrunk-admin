@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
@@ -69,6 +70,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
           image,
         });
         setAdded(true);
+        toast.success(`${product.name} added to your bag`);
       }}
     >
       {added ? "Added to Bag" : stockLabels[stockStatus]}
