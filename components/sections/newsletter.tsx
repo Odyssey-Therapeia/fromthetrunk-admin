@@ -13,6 +13,8 @@ export function Newsletter() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] =
+    useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -33,8 +35,15 @@ export function Newsletter() {
         return;
       }
 
+      const needsConfirmation = Boolean(data.requiresEmailConfirmation);
       setSubmitted(true);
-      toast.success(data.message || "Check your email to confirm your subscription.");
+      setRequiresEmailConfirmation(needsConfirmation);
+      toast.success(
+        data.message ||
+          (needsConfirmation
+            ? "Check your email to confirm your subscription."
+            : "You're subscribed to private drops.")
+      );
     } catch {
       toast.error("Unable to subscribe. Please try again.");
     } finally {
@@ -87,13 +96,17 @@ export function Newsletter() {
                 {isLoading
                   ? "Subscribing..."
                   : submitted
-                  ? "Check your email"
+                  ? requiresEmailConfirmation
+                    ? "Check your email"
+                    : "You're on the list"
                   : "Join the list"}
               </Button>
             </form>
             {submitted && (
               <p className="text-xs text-muted-foreground">
-                We&apos;ve sent a confirmation link to your email. Click it to complete your subscription.
+                {requiresEmailConfirmation
+                  ? "We've sent a confirmation link to your email. Click it to complete your subscription."
+                  : "You're all set. We'll share curated arrivals and stories with you shortly."}
               </p>
             )}
           </div>
