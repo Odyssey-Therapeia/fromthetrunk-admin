@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { RootLayout, metadata } from "@payloadcms/next/layouts";
 
-import config from "@/payload.config";
+import config from "@payload-config";
 import { importMap } from "@/payload/importMap";
 import { payloadAdminServerFunction } from "./payload-admin-server-function";
 

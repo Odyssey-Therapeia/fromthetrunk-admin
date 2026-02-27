@@ -26,13 +26,13 @@ import { productJsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import type { Product } from "@/types/payload-types";
 
 interface ProductPageProps {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const { slug } = params;
+  const { slug } = await params;
   const rawProduct = await getProductBySlug(slug);
 
   if (!rawProduct) {
@@ -60,7 +60,7 @@ export async function generateMetadata({
 
 export default async function SareePage({ params }: ProductPageProps) {
   const { isEnabled: includeDrafts } = await draftMode();
-  const { slug } = params;
+  const { slug } = await params;
   const rawProduct = await getProductBySlug(slug, { includeDrafts });
 
   if (!rawProduct) {

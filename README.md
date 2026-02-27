@@ -10,9 +10,9 @@ A full-stack e-commerce platform built with **Next.js 16**, **Payload CMS 3**, *
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 16 (App Router, Turbopack) |
+| Framework | Next.js 16 (App Router with Promise-based params, Turbopack) |
 | CMS | Payload CMS 3.75 (PostgreSQL adapter) |
-| Database | PostgreSQL (Neon/Supabase compatible) |
+| Database | PostgreSQL (Neon/Supabase compatible, with connection pooling) |
 | Auth | NextAuth v4 (Google, Azure AD, Twitter OAuth) |
 | Payments | Razorpay (INR, test + live modes) |
 | Email | Resend (transactional + newsletter) |
@@ -161,6 +161,7 @@ lib/
 
 ## Documentation
 
+- [`docs/architecture.md`](docs/architecture.md) — System architecture, routing, and data models
 - [`docs/manual-acceptance-checklist.md`](docs/manual-acceptance-checklist.md) — 52-item QA checklist
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Database schema changes
 - [`docs/payload-setup.md`](docs/payload-setup.md) — CMS setup and seeding

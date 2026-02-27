@@ -1,37 +1,25 @@
-import { RootPage } from "@payloadcms/next/views";
+import type { Metadata } from "next";
+import { RootPage, generatePageMetadata } from "@payloadcms/next/views";
 
-import config from "@/payload.config";
+import config from "@payload-config";
 import { importMap } from "@/payload/importMap";
 
-export default function AdminPage({
+type Args = {
+  params: Promise<{
+    segments: string[];
+  }>;
+  searchParams: Promise<{
+    [key: string]: string | string[];
+  }>;
+};
+
+export const generateMetadata = ({
   params,
   searchParams,
-}: {
-  params: Promise<{ segments?: string[] }> | { segments?: string[] };
-  searchParams:
-    | Promise<Record<string, string | string[] | undefined>>
-    | Record<string, string | string[] | undefined>;
-}) {
-  const resolvedParams = Promise.resolve(params).then((p) => ({
-    segments: ("segments" in p ? p.segments : undefined) ?? [],
-  }));
+}: Args): Promise<Metadata> =>
+  generatePageMetadata({ config, params, searchParams });
 
-  const resolvedSearchParams = Promise.resolve(searchParams).then((sp) => {
-    const cleaned: Record<string, string | string[]> = {};
-    for (const [key, value] of Object.entries(sp)) {
-      if (value !== undefined) {
-        cleaned[key] = value;
-      }
-    }
-    return cleaned;
-  });
+const Page = ({ params, searchParams }: Args) =>
+  RootPage({ config, params, searchParams, importMap });
 
-  return (
-    <RootPage
-      config={config}
-      importMap={importMap}
-      params={resolvedParams}
-      searchParams={resolvedSearchParams}
-    />
-  );
-}
+export default Page;

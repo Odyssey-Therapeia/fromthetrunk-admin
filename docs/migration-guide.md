@@ -66,3 +66,14 @@ npm run seed:payload
 If you need to rollback, the Payload migration system tracks applied
 migrations. Run `npm run payload:migrate -- --rollback` to undo the
 last migration.
+
+## Recent Framework and Configuration Updates
+
+### Next.js 15/16 Dynamic Routing
+All dynamic routes and search parameters have been updated to utilize Next.js 15+ Promise-based asynchronous APIs. Pages and server components accessing `params` or `searchParams` now explicitly await them to align with the latest Next.js conventions.
+
+### Database Connection Pooling
+The `payload.config.ts` has been updated to include connection pooling settings for the PostgreSQL adapter to ensure stable database performance under load.
+- **Max pool size**: `5`
+- **Connection Timeout**: `15000ms`
+- **Idle Timeout**: `30000ms`
