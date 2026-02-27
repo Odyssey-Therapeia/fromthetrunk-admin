@@ -162,6 +162,9 @@ lib/
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — System architecture, routing, and data models
+- [`docs/branch-policy.md`](docs/branch-policy.md) — PR-only promotion policy across branches
+- [`docs/ai-branch-triage.md`](docs/ai-branch-triage.md) — Intake strategy for AI-generated side branches
+- [`docs/cloud-agent-handoff.md`](docs/cloud-agent-handoff.md) — Cloud agent execution baseline
 - [`docs/manual-acceptance-checklist.md`](docs/manual-acceptance-checklist.md) — 52-item QA checklist
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Database schema changes
 - [`docs/payload-setup.md`](docs/payload-setup.md) — CMS setup and seeding
