@@ -69,7 +69,70 @@ export default async function SareePage({ params }: ProductPageProps) {
 
   const product = rawProduct as unknown as Product;
   const allProducts = await getProducts(12, { includeDrafts });
-  const related = (allProducts.docs as unknown as Product[]).filter((item) => item.slug !== product.slug).slice(0, 3);
+  const relatedPool = (allProducts.docs as unknown as Product[]).filter(
+    (item) => item.slug !== product.slug
+  );
+  const productOccasions = new Set((product.details?.occasion ?? []) as string[]);
+  const normalizedFabric = product.details?.fabric?.toLowerCase() ?? "";
+  const normalizedEra = product.story?.era?.toLowerCase() ?? "";
+
+  const rankedRelated = relatedPool
+    .map((candidate) => {
+      const candidateOccasions = new Set(
+        (candidate.details?.occasion ?? []) as string[]
+      );
+      let score = 0;
+
+      if (
+        normalizedEra &&
+        candidate.story?.era &&
+        candidate.story.era.toLowerCase() === normalizedEra
+      ) {
+        score += 3;
+      }
+
+      if (
+        normalizedFabric &&
+        candidate.details?.fabric &&
+        candidate.details.fabric.toLowerCase() === normalizedFabric
+      ) {
+        score += 2;
+      }
+
+      for (const occasion of productOccasions) {
+        if (candidateOccasions.has(occasion)) {
+          score += 1;
+          break;
+        }
+      }
+
+      return { candidate, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const related = rankedRelated.slice(0, 3).map((item) => item.candidate);
+  const topRecommendation = rankedRelated[0];
+  const sameEraMatch = Boolean(
+    topRecommendation &&
+      normalizedEra &&
+      topRecommendation.candidate.story?.era?.toLowerCase() === normalizedEra
+  );
+  const sameFabricMatch = Boolean(
+    topRecommendation &&
+      normalizedFabric &&
+      topRecommendation.candidate.details?.fabric?.toLowerCase() ===
+        normalizedFabric
+  );
+  const recommendationEyebrow = sameEraMatch
+    ? "From the same era"
+    : sameFabricMatch
+      ? `Similar ${product.details?.fabric ?? "weaves"}`
+      : "You May Also Love";
+  const recommendationTitle = sameEraMatch
+    ? "Curated pieces from the same chapter"
+    : sameFabricMatch
+      ? "More treasures in a similar weave"
+      : "More treasures from the trunk";
   const images = (product.images ?? [])
     .map((img) => resolveMediaURL(img as unknown))
     .filter(Boolean) as string[];
@@ -195,25 +258,27 @@ export default async function SareePage({ params }: ProductPageProps) {
         </ScrollReveal>
       </div>
 
-      <section className="space-y-6">
-        <ScrollReveal className="flex items-end justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-              You May Also Love
-            </p>
-            <h2 className="font-serif text-2xl text-foreground">
-              More treasures from the trunk
-            </h2>
+      {related.length > 0 && (
+        <section className="space-y-6">
+          <ScrollReveal className="flex items-end justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                {recommendationEyebrow}
+              </p>
+              <h2 className="font-serif text-2xl text-foreground">
+                {recommendationTitle}
+              </h2>
+            </div>
+          </ScrollReveal>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {related.map((item, index) => (
+              <ScrollReveal key={item.id} delay={index * 0.05}>
+                <ProductCard product={item} />
+              </ScrollReveal>
+            ))}
           </div>
-        </ScrollReveal>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {related.map((item, index) => (
-            <ScrollReveal key={item.id} delay={index * 0.05}>
-              <ProductCard product={item} />
-            </ScrollReveal>
-          ))}
-        </div>
-      </section>
+        </section>
+      )}
 
       <RecentlyViewed excludeId={product.id} limit={6} />
     </div>

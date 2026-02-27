@@ -128,8 +128,17 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
-          The collection is being prepared. Check back soon for new arrivals.
+        <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center">
+          <p className="font-serif text-2xl text-foreground">
+            The next curated drop is being prepared
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Our team is authenticating fresh heirloom pieces right now. Return
+            shortly or explore the featured collection in the meantime.
+          </p>
+          <Button asChild variant="outline" className="mt-6 rounded-full px-7">
+            <Link href="/">View featured pieces</Link>
+          </Button>
         </div>
       ) : (
         <>
