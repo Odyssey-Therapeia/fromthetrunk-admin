@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Instagram, MessageCircle } from "lucide-react";
 import logoMark from "@/logos/image 8 [Vectorized].png";
 
 const footerLinks = [
@@ -51,6 +52,28 @@ export function SiteFooter() {
               className="text-sm text-muted-foreground transition hover:text-foreground"
             >
               hello@fromthetrunk.com
+            </a>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <a
+              href="https://instagram.com/fromthetrunk"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-muted-foreground transition hover:border-trunk-gold/50 hover:text-foreground"
+              aria-label="Follow From the Trunk on Instagram"
+            >
+              <Instagram className="h-3.5 w-3.5" />
+              Instagram
+            </a>
+            <a
+              href="https://wa.me/910000000000"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-muted-foreground transition hover:border-trunk-gold/50 hover:text-foreground"
+              aria-label="Chat with From the Trunk on WhatsApp"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              WhatsApp
             </a>
           </div>
         </div>

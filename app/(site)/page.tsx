@@ -6,6 +6,7 @@ import { FeaturedCollection } from "@/components/sections/featured-collection";
 import { HeroSection } from "@/components/sections/hero-section";
 import { HowItWorks } from "@/components/sections/how-it-works";
 import { Newsletter } from "@/components/sections/newsletter";
+import { TrustSignals } from "@/components/sections/trust-signals";
 import { getFeaturedProducts, getGlobals, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import type { HomePageGlobal, Product } from "@/types/payload-types";
@@ -41,6 +42,7 @@ export default async function Home() {
   return (
     <div className="flex flex-col gap-20 pb-24">
       <HeroSection content={heroContent} />
+      <TrustSignals />
       <FeaturedCollection products={featuredDocs} content={cms} />
       <BrandStoryTeaser />
       <HowItWorks products={productFallback} />

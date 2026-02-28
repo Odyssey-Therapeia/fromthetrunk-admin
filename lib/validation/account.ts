@@ -29,6 +29,20 @@ const addressBaseSchema = z
 
 export const addressCreateSchema = addressBaseSchema;
 
+export const customerSignUpSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    name: z.string().trim().min(1).max(120),
+    password: z
+      .string()
+      .min(8)
+      .max(128)
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
+      .regex(/[a-z]/, "Password must contain at least one lowercase letter.")
+      .regex(/[0-9]/, "Password must contain at least one number."),
+  })
+  .strict();
+
 export const addressUpdateSchema = z
   .object({
     city: z.string().trim().min(1).max(120).optional(),
@@ -49,4 +63,5 @@ export const addressUpdateSchema = z
 
 export type AddressCreateInput = z.infer<typeof addressCreateSchema>;
 export type AddressUpdateInput = z.infer<typeof addressUpdateSchema>;
+export type CustomerSignUpInput = z.infer<typeof customerSignUpSchema>;
 export type ProfilePatchInput = z.infer<typeof profilePatchSchema>;

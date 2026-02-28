@@ -168,6 +168,7 @@ lib/
 - [`docs/manual-acceptance-checklist.md`](docs/manual-acceptance-checklist.md) — 52-item QA checklist
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Database schema changes
 - [`docs/payload-setup.md`](docs/payload-setup.md) — CMS setup and seeding
+- [`docs/cxo-demo-runbook.md`](docs/cxo-demo-runbook.md) — Final pre-demo checklist and walkthrough flow
 
 ## Testing
 
@@ -184,12 +185,12 @@ Tests cover: validation schemas, cart store logic, payment calculations, rate li
 
 1. Connect your GitHub repository to Vercel
 2. Set all environment variables from `.env.production.example`
-3. Deploy — Vercel auto-detects Next.js and runs the build
+3. Deploy — Vercel auto-detects Next.js and runs the build (standalone output is not forced for Vercel)
 4. Enable Vercel Cron for `/api/cron/release-reservations` (every 10 min)
 
 ### Docker
 
-A `Dockerfile` can be added for self-hosted deployments. The app requires:
+The included `Dockerfile` enables standalone output only for Docker builds. The app requires:
 - Node.js 20+ runtime
 - PostgreSQL database access
 - Environment variables configured

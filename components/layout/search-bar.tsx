@@ -146,9 +146,14 @@ export function SearchBar() {
               Searching...
             </p>
           ) : results.length === 0 ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">
-              No results for &ldquo;{query}&rdquo;
-            </p>
+            <div className="space-y-2 p-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                No results for &ldquo;{query}&rdquo;
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Try Banarasi, Kanjeevaram, Silk, or a designer name.
+              </p>
+            </div>
           ) : (
             <div className="space-y-1">
               {results.map((product) => {

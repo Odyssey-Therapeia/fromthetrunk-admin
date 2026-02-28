@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductCard } from "@/components/product/product-card";
+import { Button } from "@/components/ui/button";
 import { getPayloadClient } from "@/lib/payload/server";
 import type { Product } from "@/types/payload-types";
 
@@ -86,10 +88,27 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
       {query && results.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Try searching for &ldquo;silk&rdquo;, &ldquo;banarasi&rdquo;,
-            &ldquo;bridal&rdquo;, or a designer name.
+          <p className="font-serif text-2xl text-foreground">
+            No curated pieces matched this search
           </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Try keywords like &ldquo;Banarasi&rdquo;, &ldquo;Kanjeevaram&rdquo;,
+            &ldquo;Silk&rdquo;, or an era such as &ldquo;1990s&rdquo;.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {["Banarasi", "Kanjeevaram", "Silk", "Bridal"].map((term) => (
+              <Link
+                key={term}
+                href={`/search?q=${encodeURIComponent(term)}`}
+                className="rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+              >
+                {term}
+              </Link>
+            ))}
+          </div>
+          <Button asChild variant="outline" className="mt-6 rounded-full px-7">
+            <Link href="/collection">Browse the full collection</Link>
+          </Button>
         </div>
       )}
     </div>
