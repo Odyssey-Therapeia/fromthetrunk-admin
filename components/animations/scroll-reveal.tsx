@@ -30,11 +30,11 @@ export function ScrollReveal({ children, className, delay = 0 }: ScrollRevealPro
       if (!elementRef.current) return;
       gsap.fromTo(
         elementRef.current,
-        { autoAlpha: 0, y: 24 },
+        { autoAlpha: 0, y: 12 },
         {
           autoAlpha: 1,
           y: 0,
-          duration: 1,
+          duration: 0.6,
           ease: "power2.out",
           delay,
           scrollTrigger: {

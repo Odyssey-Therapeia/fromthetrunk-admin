@@ -1,9 +1,56 @@
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
+
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function Newsletter() {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] =
+    useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email.trim() || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.message || "Unable to subscribe. Please try again.");
+        return;
+      }
+
+      const needsConfirmation = Boolean(data.requiresEmailConfirmation);
+      setSubmitted(true);
+      setRequiresEmailConfirmation(needsConfirmation);
+      toast.success(
+        data.message ||
+          (needsConfirmation
+            ? "Check your email to confirm your subscription."
+            : "You're subscribed to private drops.")
+      );
+    } catch {
+      toast.error("Unable to subscribe. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <section className="mx-auto w-full max-w-6xl px-6">
       <ScrollReveal>
@@ -20,16 +67,49 @@ export function Newsletter() {
               fortnight.
             </p>
           </div>
-          <form className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
-            <Input
-              type="email"
-              placeholder="Enter your email"
-              className="min-w-[260px] bg-white"
-            />
-            <Button type="submit" className="rounded-full px-6">
-              Join the list
-            </Button>
-          </form>
+          <div className="flex w-full flex-col gap-2 md:w-auto">
+            <Label
+              htmlFor="newsletter-email"
+              className="text-xs uppercase tracking-[0.3em] text-muted-foreground"
+            >
+              Email address
+            </Label>
+            <form
+              className="flex w-full flex-col gap-3 md:flex-row"
+              onSubmit={handleSubmit}
+            >
+              <Input
+                id="newsletter-email"
+                type="email"
+                placeholder="Enter your email"
+                className="min-w-[260px] bg-white"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={submitted}
+                required
+              />
+              <Button
+                type="submit"
+                className="rounded-full px-6"
+                disabled={submitted || isLoading}
+              >
+                {isLoading
+                  ? "Subscribing..."
+                  : submitted
+                  ? requiresEmailConfirmation
+                    ? "Check your email"
+                    : "You're on the list"
+                  : "Join the list"}
+              </Button>
+            </form>
+            {submitted && (
+              <p className="text-xs text-muted-foreground">
+                {requiresEmailConfirmation
+                  ? "We've sent a confirmation link to your email. Click it to complete your subscription."
+                  : "You're all set. We'll share curated arrivals and stories with you shortly."}
+              </p>
+            )}
+          </div>
         </Card>
       </ScrollReveal>
     </section>

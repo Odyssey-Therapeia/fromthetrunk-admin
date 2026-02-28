@@ -30,6 +30,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# lock files (optional - keep one)
+# lock files (keep package-lock.json for reproducible builds)
 bun.lock
-package-lock.json
