@@ -1,0 +1,10 @@
+{
+  "$schema": "https://www.cursor.com/schemas/environment.schema.json",
+  "install": "npm ci --legacy-peer-deps",
+  "terminals": [
+    {
+      "name": "next-dev",
+      "command": "npm run dev"
+    }
+  ]
+}

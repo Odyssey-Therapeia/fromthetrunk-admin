@@ -1,4 +1,5 @@
 import { ComponentPropsWithoutRef, ReactNode } from "react"
+import Link from "next/link"
 import { ArrowRightIcon } from "@radix-ui/react-icons"
 
 import { cn } from "@/lib/utils"
@@ -9,9 +10,9 @@ interface BentoGridProps extends ComponentPropsWithoutRef<"div"> {
   className?: string
 }
 
-interface BentoCardProps extends ComponentPropsWithoutRef<"div"> {
+interface BentoCardProps {
   name: string
-  className: string
+  className?: string
   background: ReactNode
   Icon: React.ElementType
   description: string
@@ -41,7 +42,6 @@ const BentoCard = ({
   description,
   href,
   cta,
-  ...props
 }: BentoCardProps) => (
   <div
     key={name}
@@ -53,7 +53,6 @@ const BentoCard = ({
       "dark:bg-background transform-gpu dark:[box-shadow:0_-20px_80px_-20px_#ffffff1f_inset] dark:[border:1px_solid_rgba(255,255,255,.1)]",
       className
     )}
-    {...props}
   >
     <div>{background}</div>
     <div className="p-4">
@@ -76,10 +75,10 @@ const BentoCard = ({
           size="sm"
           className="pointer-events-auto p-0 text-white/90 hover:text-white"
         >
-          <a href={href}>
+          <Link href={href}>
             {cta}
             <ArrowRightIcon className="ms-2 h-4 w-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" />
-          </a>
+          </Link>
         </Button>
       </div>
     </div>
@@ -95,10 +94,10 @@ const BentoCard = ({
         size="sm"
         className="pointer-events-auto p-0 text-white/90 hover:text-white"
       >
-        <a href={href}>
+        <Link href={href}>
           {cta}
           <ArrowRightIcon className="ms-2 h-4 w-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" />
-        </a>
+        </Link>
       </Button>
     </div>
 
