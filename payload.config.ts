@@ -384,6 +384,7 @@ export default buildConfig({
         slugField({
           name: "slug",
           position: "sidebar",
+          useAsSlug: "name",
         }),
         {
           name: "price",
@@ -556,6 +557,7 @@ export default buildConfig({
         slugField({
           name: "slug",
           position: "sidebar",
+          useAsSlug: "name",
         }),
         {
           name: "description",
