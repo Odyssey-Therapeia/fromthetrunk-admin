@@ -1165,7 +1165,6 @@ export default buildConfig({
               media: { prefix: "media" },
             },
             token: process.env.BLOB_READ_WRITE_TOKEN,
-            clientUploads: true,
           }),
         ]
       : []),
