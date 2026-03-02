@@ -49,6 +49,49 @@ const buildPreviewURL = (path: string, token: null | string = null) => {
 const toSlug = (value: unknown) =>
   typeof value === "string" && value.length > 0 ? value : null;
 
+const normalizeSlug = (value: string) =>
+  value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .toLowerCase();
+
+const ensureSlugBeforeValidate = ({
+  data,
+  operation,
+  originalDoc,
+}: {
+  data: any;
+  operation: "create" | "update";
+  originalDoc?: any;
+}) => {
+  if (!data) {
+    return data;
+  }
+
+  const incomingSlug = toSlug(data.slug);
+  if (incomingSlug) {
+    data.slug = normalizeSlug(incomingSlug);
+    return data;
+  }
+
+  const nextStatus = data._status ?? originalDoc?._status;
+  if (operation === "update" && nextStatus === "published") {
+    const existingSlug = toSlug(originalDoc?.slug);
+    if (existingSlug) {
+      data.slug = existingSlug;
+      return data;
+    }
+  }
+
+  const fallbackName = toSlug(data.name) ?? toSlug(originalDoc?.name);
+  if (fallbackName) {
+    data.slug = normalizeSlug(fallbackName);
+  }
+
+  return data;
+};
+
 export default buildConfig({
   admin: {
     user: "users",
@@ -350,6 +393,9 @@ export default buildConfig({
     },
     {
       slug: "products",
+      hooks: {
+        beforeValidate: [ensureSlugBeforeValidate],
+      },
       admin: {
         useAsTitle: "name",
         preview: (doc, { token }) => {
@@ -521,6 +567,9 @@ export default buildConfig({
     },
     {
       slug: "collections",
+      hooks: {
+        beforeValidate: [ensureSlugBeforeValidate],
+      },
       admin: {
         useAsTitle: "name",
         preview: (doc, { token }) => {

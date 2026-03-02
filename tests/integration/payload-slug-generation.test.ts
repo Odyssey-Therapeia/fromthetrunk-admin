@@ -45,6 +45,17 @@ const getSlugHook = async (collectionSlug: string) => {
   return { collection, hook, slugField };
 };
 
+const getBeforeValidateHook = async (collectionSlug: string) => {
+  const collection = await getCollectionConfig(collectionSlug);
+  const hook = collection.hooks?.beforeValidate?.[0];
+
+  if (!hook) {
+    throw new Error(`beforeValidate hook missing for "${collectionSlug}".`);
+  }
+
+  return { collection, hook };
+};
+
 describe("Payload slug generation", () => {
   it("generates product slug from name on create", async () => {
     const { collection, hook, slugField } = await getSlugHook("products");
@@ -91,5 +102,39 @@ describe("Payload slug generation", () => {
     });
 
     expect(data).toMatchObject({ slug: "custom-product-slug" });
+  });
+
+  it("keeps existing product slug when publishing partial updates", async () => {
+    const { hook } = await getBeforeValidateHook("products");
+    const data = { _status: "published" };
+
+    await hook({
+      data,
+      operation: "update",
+      originalDoc: {
+        _status: "draft",
+        name: "Legacy Product Name",
+        slug: "legacy-product-slug",
+      },
+    });
+
+    expect(data).toMatchObject({ slug: "legacy-product-slug" });
+  });
+
+  it("keeps existing collection slug when publishing partial updates", async () => {
+    const { hook } = await getBeforeValidateHook("collections");
+    const data = { _status: "published" };
+
+    await hook({
+      data,
+      operation: "update",
+      originalDoc: {
+        _status: "draft",
+        name: "Legacy Collection Name",
+        slug: "legacy-collection-slug",
+      },
+    });
+
+    expect(data).toMatchObject({ slug: "legacy-collection-slug" });
   });
 });
