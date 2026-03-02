@@ -4,6 +4,7 @@ import sharp from "sharp";
 
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
+import { vercelBlobStorage } from "@payloadcms/storage-vercel-blob";
 import { buildConfig, slugField } from "payload";
 import type { CollectionBeforeValidateHook } from "payload";
 
@@ -1154,6 +1155,16 @@ export default buildConfig({
         },
       ],
     },
+  ],
+  plugins: [
+    ...(process.env.BLOB_READ_WRITE_TOKEN
+      ? [
+          vercelBlobStorage({
+            collections: { media: true },
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+          }),
+        ]
+      : []),
   ],
   secret: payloadSecret,
   serverURL,
