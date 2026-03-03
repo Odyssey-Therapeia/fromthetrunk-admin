@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
-import { getPayloadClient } from "@/lib/payload/server";
+import { searchProducts } from "@/lib/data/products";
 import type { Product } from "@/types/payload-types";
 
 export const dynamic = "force-dynamic";
@@ -25,29 +25,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   let results: Product[] = [];
 
   if (query.length >= 2) {
-    const payload = await getPayloadClient();
-    const result = await payload.find({
-      collection: "products",
-      depth: 2,
-      limit: 48,
-      where: {
-        and: [
-          { status: { equals: "published" } },
-          {
-            or: [
-              { name: { contains: query } },
-              { "details.fabric": { contains: query } },
-              { "details.designer": { contains: query } },
-              { "story.era": { contains: query } },
-              { "story.provenance": { contains: query } },
-            ],
-          },
-        ],
-      },
-      sort: "-createdAt",
-      overrideAccess: true,
-    });
-    results = result.docs as unknown as Product[];
+    const result = await searchProducts(query, 48);
+    results = result.docs as Product[];
   }
 
   return (

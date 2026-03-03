@@ -20,30 +20,40 @@ export const metadata: Metadata = {
 export default async function HowItWorksPage() {
   const { isEnabled: includeDrafts } = await draftMode();
   const howItWorksPage = await getGlobals("howItWorksPage", { includeDrafts });
+  const textOrFallback = (value: unknown, fallback: string) =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
   const steps = [
     {
-      title: howItWorksPage?.stepOneTitle ?? "Sourcing & Curation",
+      title: textOrFallback(howItWorksPage?.stepOneTitle, "Sourcing & Curation"),
       description:
-        howItWorksPage?.stepOneBody ??
-        "We partner with collectors, couture archives, and legacy wardrobes to source heirloom sarees.",
+        textOrFallback(
+          howItWorksPage?.stepOneBody,
+          "We partner with collectors, couture archives, and legacy wardrobes to source heirloom sarees."
+        ),
     },
     {
-      title: howItWorksPage?.stepTwoTitle ?? "Authentication",
+      title: textOrFallback(howItWorksPage?.stepTwoTitle, "Authentication"),
       description:
-        howItWorksPage?.stepTwoBody ??
-        "Our specialists verify weave, fabric, zari, and craftsmanship. Every piece is documented with provenance.",
+        textOrFallback(
+          howItWorksPage?.stepTwoBody,
+          "Our specialists verify weave, fabric, zari, and craftsmanship. Every piece is documented with provenance."
+        ),
     },
     {
-      title: howItWorksPage?.stepThreeTitle ?? "Restoration",
+      title: textOrFallback(howItWorksPage?.stepThreeTitle, "Restoration"),
       description:
-        howItWorksPage?.stepThreeBody ??
-        "Gentle cleaning, steaming, and preservation ensures each saree is ready to wear again.",
+        textOrFallback(
+          howItWorksPage?.stepThreeBody,
+          "Gentle cleaning, steaming, and preservation ensures each saree is ready to wear again."
+        ),
     },
     {
-      title: howItWorksPage?.stepFourTitle ?? "Delivery",
+      title: textOrFallback(howItWorksPage?.stepFourTitle, "Delivery"),
       description:
-        howItWorksPage?.stepFourBody ??
-        "Your saree arrives in a protective muslin wrap with a story card and care notes.",
+        textOrFallback(
+          howItWorksPage?.stepFourBody,
+          "Your saree arrives in a protective muslin wrap with a story card and care notes."
+        ),
     },
   ];
 
@@ -51,14 +61,16 @@ export default async function HowItWorksPage() {
     <div className="mx-auto w-full max-w-5xl space-y-12 px-6 py-16">
       <ScrollReveal className="space-y-3">
         <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-          {howItWorksPage?.eyebrow ?? "How It Works"}
+          {textOrFallback(howItWorksPage?.eyebrow, "How It Works")}
         </p>
         <h1 className="font-serif text-4xl text-foreground">
-          {howItWorksPage?.title ?? "The journey of every saree"}
+          {textOrFallback(howItWorksPage?.title, "The journey of every saree")}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {howItWorksPage?.description ??
-            "From sourcing to storytelling, every piece is cared for with respect to its heritage."}
+          {textOrFallback(
+            howItWorksPage?.description,
+            "From sourcing to storytelling, every piece is cared for with respect to its heritage."
+          )}
         </p>
       </ScrollReveal>
 

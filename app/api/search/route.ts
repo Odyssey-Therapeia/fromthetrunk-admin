@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { searchProducts } from "@/lib/data/products";
 import { errorResponse } from "@/lib/http/error-response";
-import { getPayloadClient } from "@/lib/payload/server";
 
 /**
  * GET /api/search?q=silk&limit=12
@@ -20,30 +20,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ docs: [], query: query ?? "" });
     }
 
-    const payload = await getPayloadClient();
-
-    const result = await payload.find({
-      collection: "products",
-      depth: 2,
-      limit,
-      where: {
-        and: [
-          { status: { equals: "published" } },
-          {
-            or: [
-              { name: { contains: query } },
-              { "details.fabric": { contains: query } },
-              { "details.designer": { contains: query } },
-              { "story.era": { contains: query } },
-              { "story.provenance": { contains: query } },
-            ],
-          },
-        ],
-      },
-      sort: "-createdAt",
-      overrideAccess: true,
-    });
-
+    const result = await searchProducts(query, limit);
     return NextResponse.json({
       docs: result.docs,
       totalDocs: result.totalDocs,

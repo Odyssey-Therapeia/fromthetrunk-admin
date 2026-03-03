@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, SQL } from "drizzle-orm";
 import { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -202,6 +202,33 @@ export const getFeaturedProducts = async (
     .orderBy(desc(products.createdAt))
     .limit(limit)
     .offset(offset);
+
+  return hydrateProducts(rows);
+};
+
+export const searchProducts = async (
+  query: string,
+  limit = 48,
+  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+): Promise<ProductWithRelations[]> => {
+  const keyword = `%${query}%`;
+  const whereClause = buildWhere([
+    or(
+      ilike(products.name, keyword),
+      ilike(products.detailsFabric, keyword),
+      ilike(products.detailsDesigner, keyword),
+      ilike(products.storyEra, keyword),
+      ilike(products.storyProvenance, keyword)
+    ) as SQL<unknown>,
+    ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
+  ]);
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(whereClause)
+    .orderBy(desc(products.createdAt))
+    .limit(limit);
 
   return hydrateProducts(rows);
 };

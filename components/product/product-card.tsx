@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
@@ -5,6 +7,7 @@ import { ArrowUpRight } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { cn } from "@/lib/utils";
+import { useLiveProductStock } from "@/lib/realtime/use-live-product-stock";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { WishlistButton } from "@/components/product/wishlist-button";
@@ -17,7 +20,11 @@ interface ProductCardProps {
 
 export function ProductCard({ product, className }: ProductCardProps) {
   const primaryImage = resolveMediaURL(product.images?.[0]);
-  const stockStatus: StockStatus = product.stockStatus ?? "available";
+  const { stockStatus } = useLiveProductStock({
+    initialStatus: (product.stockStatus ?? "available") as StockStatus,
+    productId: product.id,
+    productSlug: product.slug,
+  });
   const isSold = stockStatus === "sold";
   const isReserved = stockStatus === "reserved";
 

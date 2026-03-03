@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getServerAuthSession } from "@/lib/auth/get-session";
-import { getPayloadClient } from "@/lib/payload/server";
-import type { Order, OrderItem } from "@/types/payload-types";
+import { getOrder } from "@/db/queries/orders";
+import type { Order, OrderItem, ShippingAddress } from "@/types/payload-types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,16 +37,52 @@ export default async function ConfirmationPage({
       redirect("/account/sign-in");
     }
 
-    const payload = await getPayloadClient();
-    const order = (await payload.findByID({
-      collection: "orders",
-      id: orderId,
-      overrideAccess: true,
-    })) as unknown as Order;
+    const rawOrder = await getOrder(orderId);
+    if (!rawOrder) {
+      return <GenericConfirmation />;
+    }
+
+    const order: Order = {
+      createdAt: rawOrder.createdAt.toISOString(),
+      id: rawOrder.id,
+      items: rawOrder.items.map((item) => ({
+        id: item.id,
+        imageUrl: item.imageUrl,
+        name: item.name,
+        price: item.pricePaise / 100,
+        product: item.productId ?? null,
+        quantity: item.quantity,
+      })),
+      paymentGateway: rawOrder.paymentGateway ?? null,
+      paymentId: rawOrder.paymentId ?? null,
+      paymentMethod: rawOrder.paymentMethod ?? null,
+      paymentStatus: rawOrder.paymentStatus ?? null,
+      placedAt: rawOrder.placedAt ? rawOrder.placedAt.toISOString() : null,
+      razorpayOrderId: rawOrder.razorpayOrderId ?? null,
+      shippingAddress: {
+        city: rawOrder.shippingCity,
+        country: rawOrder.shippingCountry,
+        email: rawOrder.shippingEmail,
+        line1: rawOrder.shippingLine1,
+        line2: rawOrder.shippingLine2,
+        name: rawOrder.shippingName,
+        phone: rawOrder.shippingPhone,
+        postalCode: rawOrder.shippingPostalCode,
+        state: rawOrder.shippingState,
+      } satisfies ShippingAddress,
+      shippingCost: rawOrder.shippingCostPaise / 100,
+      shippingMethod: rawOrder.shippingMethod ?? null,
+      status: rawOrder.status,
+      subtotal: rawOrder.subtotalPaise / 100,
+      taxAmount: rawOrder.taxAmountPaise / 100,
+      taxRate: Number(rawOrder.taxRate ?? 0),
+      total: rawOrder.totalPaise / 100,
+      updatedAt: rawOrder.updatedAt.toISOString(),
+      user: rawOrder.userId,
+    };
 
     // Verify the order belongs to the current user
-    const orderUserId =
-      typeof order.user === "object" ? order.user.id : order.user;
+    const orderUserId = typeof order.user === "object" ? order.user.id : order.user;
     if (orderUserId !== session.user.id) {
       return <GenericConfirmation />;
     }
