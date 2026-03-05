@@ -23,7 +23,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { getProductBySlug, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { productJsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -39,19 +39,19 @@ export async function generateMetadata({
     return { title: "Product Not Found" };
   }
 
-  const product = rawProduct as unknown as Product;
+  const product = rawProduct as Product;
   const image = resolveMediaURL(product.images?.[0]);
 
   return {
     title: product.name,
     description:
-      product.story?.narrative ??
-      `${product.name} — ${product.details?.fabric ?? "Heirloom"} saree from the trunk. ${formatCurrency(product.price)}.`,
+      product.storyNarrative ??
+      `${product.name} — ${product.detailsFabric ?? "Heirloom"} saree from the trunk. ${formatCurrency(product.pricePaise / 100)}.`,
     openGraph: {
       title: product.name,
       description:
-        product.story?.narrative ??
-        `One-of-a-kind ${product.details?.fabric ?? ""} saree. ${formatCurrency(product.price)}.`,
+        product.storyNarrative ??
+        `One-of-a-kind ${product.detailsFabric ?? ""} saree. ${formatCurrency(product.pricePaise / 100)}.`,
       type: "website",
       ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
     },
@@ -67,34 +67,32 @@ export default async function SareePage({ params }: ProductPageProps) {
     notFound();
   }
 
-  const product = rawProduct as unknown as Product;
+  const product = rawProduct as Product;
   const allProducts = await getProducts(12, { includeDrafts });
-  const relatedPool = (allProducts.docs as unknown as Product[]).filter(
+  const relatedPool = (allProducts.docs as Product[]).filter(
     (item) => item.slug !== product.slug
   );
-  const productOccasions = new Set((product.details?.occasion ?? []) as string[]);
-  const normalizedFabric = product.details?.fabric?.toLowerCase() ?? "";
-  const normalizedEra = product.story?.era?.toLowerCase() ?? "";
+  const productOccasions = new Set(product.tags.map((tag) => tag.name));
+  const normalizedFabric = product.detailsFabric?.toLowerCase() ?? "";
+  const normalizedEra = product.storyEra?.toLowerCase() ?? "";
 
   const rankedRelated = relatedPool
     .map((candidate) => {
-      const candidateOccasions = new Set(
-        (candidate.details?.occasion ?? []) as string[]
-      );
+      const candidateOccasions = new Set(candidate.tags.map((tag) => tag.name));
       let score = 0;
 
       if (
         normalizedEra &&
-        candidate.story?.era &&
-        candidate.story.era.toLowerCase() === normalizedEra
+        candidate.storyEra &&
+        candidate.storyEra.toLowerCase() === normalizedEra
       ) {
         score += 3;
       }
 
       if (
         normalizedFabric &&
-        candidate.details?.fabric &&
-        candidate.details.fabric.toLowerCase() === normalizedFabric
+        candidate.detailsFabric &&
+        candidate.detailsFabric.toLowerCase() === normalizedFabric
       ) {
         score += 2;
       }
@@ -115,18 +113,18 @@ export default async function SareePage({ params }: ProductPageProps) {
   const sameEraMatch = Boolean(
     topRecommendation &&
       normalizedEra &&
-      topRecommendation.candidate.story?.era?.toLowerCase() === normalizedEra
+      topRecommendation.candidate.storyEra?.toLowerCase() === normalizedEra
   );
   const sameFabricMatch = Boolean(
     topRecommendation &&
       normalizedFabric &&
-      topRecommendation.candidate.details?.fabric?.toLowerCase() ===
+      topRecommendation.candidate.detailsFabric?.toLowerCase() ===
         normalizedFabric
   );
   const recommendationEyebrow = sameEraMatch
     ? "From the same era"
     : sameFabricMatch
-      ? `Similar ${product.details?.fabric ?? "weaves"}`
+      ? `Similar ${product.detailsFabric ?? "weaves"}`
       : "You May Also Love";
   const recommendationTitle = sameEraMatch
     ? "Curated pieces from the same chapter"
@@ -159,7 +157,7 @@ export default async function SareePage({ params }: ProductPageProps) {
         id={product.id}
         slug={product.slug}
         name={product.name}
-        price={product.price}
+        price={product.pricePaise / 100}
         image={images[0] ?? ""}
       />
       <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
@@ -170,21 +168,21 @@ export default async function SareePage({ params }: ProductPageProps) {
         <ScrollReveal delay={0.1} className="space-y-6">
           <div className="space-y-3">
             <Badge className="bg-secondary text-muted-foreground">
-              {product.story?.era ?? "Archive"}
+              {product.storyEra ?? "Archive"}
             </Badge>
             <h1 className="font-serif text-3xl text-foreground md:text-4xl">
               {product.name}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {product.story?.title}
+              {product.storyTitle}
             </p>
             <div className="flex items-center gap-3">
               <span className="text-xl font-semibold text-foreground">
-                {formatCurrency(product.price ?? 0)}
+                {formatCurrency(product.pricePaise / 100)}
               </span>
-              {product.originalPrice && (
+              {product.originalPricePaise && (
                 <span className="text-sm text-muted-foreground line-through">
-                  {formatCurrency(product.originalPrice)}
+                  {formatCurrency(product.originalPricePaise / 100)}
                 </span>
               )}
               <WishlistButton
@@ -198,14 +196,14 @@ export default async function SareePage({ params }: ProductPageProps) {
 
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {product.story?.narrative}
+              {product.storyNarrative}
             </p>
-            {product.story?.provenance && (
+            {product.storyProvenance && (
               <p className="text-sm text-muted-foreground">
                 <span className="font-semibold text-foreground">
                   Provenance:
                 </span>{" "}
-                {product.story.provenance}
+                {product.storyProvenance}
               </p>
             )}
           </div>
@@ -218,7 +216,7 @@ export default async function SareePage({ params }: ProductPageProps) {
                 Length
               </p>
               <div className="rounded-2xl border border-border/60 bg-card/70 px-4 py-3 text-sm text-foreground">
-                {product.details?.length ?? "Made to drape"}
+                {product.detailsLength ?? "Made to drape"}
               </div>
             </div>
             <AddToCartButton product={product} />
@@ -238,12 +236,12 @@ export default async function SareePage({ params }: ProductPageProps) {
             <AccordionItem value="details">
               <AccordionTrigger>Product Details</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>Fabric: {product.details?.fabric ?? "—"}</p>
-                <p>Length: {product.details?.length ?? "—"}</p>
-                <p>Width: {product.details?.width ?? "—"}</p>
-                <p>Condition: {product.details?.condition ?? "—"}</p>
-                {product.details?.designer && (
-                  <p>Designer: {product.details.designer}</p>
+                <p>Fabric: {product.detailsFabric ?? "—"}</p>
+                <p>Length: {product.detailsLength ?? "—"}</p>
+                <p>Width: {product.detailsWidth ?? "—"}</p>
+                <p>Condition: {product.detailsCondition ?? "—"}</p>
+                {product.detailsDesigner && (
+                  <p>Designer: {product.detailsDesigner}</p>
                 )}
               </AccordionContent>
             </AccordionItem>

@@ -6,16 +6,22 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 
 const fetchWishlist = async (): Promise<Product[]> => {
-  const res = await fetch("/api/account/wishlist");
-  if (!res.ok) return [];
-  const data = await res.json();
-  // API returns full product objects when depth >= 2
-  return (data.wishlist ?? []).filter(
-    (item: unknown) => typeof item === "object" && item !== null && "id" in (item as Record<string, unknown>)
-  ) as Product[];
+  const wishlistResponse = await fetch("/api/v2/wishlist");
+  if (!wishlistResponse.ok) return [];
+  const wishlistIds = (await wishlistResponse.json()) as string[];
+  if (wishlistIds.length === 0) return [];
+
+  const productsResponse = await fetch("/api/v2/products?includeDrafts=true&limit=500");
+  if (!productsResponse.ok) return [];
+  const products = (await productsResponse.json()) as Product[];
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  return wishlistIds
+    .map((id) => productById.get(id) ?? null)
+    .filter((product): product is Product => Boolean(product));
 };
 
 export default function WishlistPage() {

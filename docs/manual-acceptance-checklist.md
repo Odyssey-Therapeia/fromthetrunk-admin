@@ -36,7 +36,7 @@
 12. Open `/`.
     Expected: homepage copy comes from `homePage` global. Recently viewed section hidden (no history).
 13. Open `/collection`.
-    Expected: products render from Payload. Pagination shows 12 per page.
+    Expected: products render from Drizzle-backed queries. Pagination shows 12 per page.
 14. Open `/collection?collection=<slug>`.
     Expected: listing is filtered to that collection.
 15. Open `/collection?page=2`.
@@ -127,9 +127,9 @@
 
 ## Security
 
-45. Hit `/api/payments/create-order` more than 5 times in 60 seconds.
+45. Hit `/api/v2/payments/create-order` more than 5 times in 60 seconds.
     Expected: 429 Too Many Requests with Retry-After header.
-46. Hit `/api/newsletter/subscribe` more than 3 times in 60 seconds.
+46. Hit `/api/v2/newsletter/subscribe` more than 3 times in 60 seconds.
     Expected: 429 Too Many Requests.
 47. Check response headers.
     Expected: X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy present.

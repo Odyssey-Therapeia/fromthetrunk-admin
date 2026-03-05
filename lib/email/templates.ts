@@ -1,9 +1,35 @@
-import type { Order, OrderItem } from "@/types/payload-types";
-
 /**
  * Brand-consistent email templates for From the Trunk.
  * Uses inline styles for maximum email client compatibility.
  */
+
+type EmailOrderItem = {
+  name: string;
+  price: number;
+  quantity: number;
+};
+
+type EmailShippingAddress = {
+  city?: null | string;
+  country?: null | string;
+  email?: null | string;
+  line1?: null | string;
+  line2?: null | string;
+  name?: null | string;
+  phone?: null | string;
+  postalCode?: null | string;
+  state?: null | string;
+};
+
+type EmailOrder = {
+  id: string;
+  items: EmailOrderItem[];
+  shippingAddress?: EmailShippingAddress | null;
+  shippingCost?: number | null;
+  subtotal: number;
+  taxAmount?: number | null;
+  total?: number | null;
+};
 
 const brandStyles = {
   bg: "#f5f0e8",
@@ -48,7 +74,7 @@ const wrapper = (content: string) => `
 </html>
 `;
 
-export function orderConfirmationEmail(order: Order): {
+export function orderConfirmationEmail(order: EmailOrder): {
   subject: string;
   html: string;
 } {
@@ -57,7 +83,7 @@ export function orderConfirmationEmail(order: Order): {
 
   const itemRows = items
     .map(
-      (item: OrderItem) => `
+      (item: EmailOrderItem) => `
     <tr>
       <td style="padding:8px 0;border-bottom:1px solid ${brandStyles.border};font-size:14px;color:${brandStyles.text};">
         ${item.name}<br>
@@ -135,7 +161,7 @@ export function orderConfirmationEmail(order: Order): {
 }
 
 export function orderShippedEmail(
-  order: Order,
+  order: Pick<EmailOrder, "id">,
   trackingNumber?: string
 ): { subject: string; html: string } {
   const orderId = order.id.slice(0, 8).toUpperCase();

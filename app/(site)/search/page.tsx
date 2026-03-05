@@ -5,7 +5,7 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
 import { searchProducts } from "@/lib/data/products";
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 

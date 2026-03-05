@@ -1,72 +1,45 @@
 # CXO Demo Runbook
 
-Use this runbook in the final hours before the demo to confirm From the Trunk is production-ready and polished.
+Use this runbook before a stakeholder demo.
 
-## 1) Pre-demo setup (10-15 minutes)
-
-Run these commands from the repository root:
+## 1) Pre-demo setup
 
 ```bash
 npm run generate:icons
 npm run demo:check
 ```
 
-If the database is empty, seed products and rerun checks:
+If validating migration/imported environments, also run:
 
 ```bash
-npm run seed:payload
+npm run migrate:payload-to-drizzle
 npm run demo:check
 ```
 
-> Tip: If you need to validate env/assets only without DB access, run:
->
-> `DEMO_CHECK_SKIP_DB=true npm run demo:check`
-
-## 2) Environment variables to confirm in Vercel
+## 2) Environment variables to confirm
 
 - `DATABASE_URL`
-- `PAYLOAD_SECRET`
-- `NEXTAUTH_SECRET`
-- `NEXTAUTH_URL`
-- `NEXT_PUBLIC_SERVER_URL`
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (or another complete OAuth pair)
-- `RAZORPAY_KEY_ID`
-- `RAZORPAY_KEY_SECRET`
-- `RAZORPAY_WEBHOOK_SECRET`
+- `NEXTAUTH_SECRET`, `NEXTAUTH_URL`
+- OAuth keys (at least one provider)
+- `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
 - `NEXT_PUBLIC_RAZORPAY_KEY_ID`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
 - `CRON_SECRET`
 - `ADMIN_API_SECRET`
 
-## 3) Demo flow (happy path)
+## 3) Demo flow
 
-1. **Homepage**
-   - Show announcement bar and hero
-   - Call out trust strip metrics and featured collection
-2. **Collection**
-   - Open “Explore the Collection”
-   - Use filters and open a product
-3. **Product detail**
-   - Explain story + provenance
-   - Show curated “same era / similar weave” recommendations
-4. **Cart and checkout**
-   - Add to bag, open cart drawer, proceed to checkout
-   - Stop at Razorpay step (no live payment needed)
-5. **Account experience**
-   - Show wishlist/orders areas
-6. **Admin/CMS**
-   - Open Payload admin and show content editability
+1. Homepage and collection UX
+2. Product detail page, story and recommendations
+3. Cart + checkout flow (through payment initiation)
+4. Account area (orders, wishlist, addresses)
+5. Admin console (`/admin`) for products/orders/media/globals/settings
+6. API docs (`/api/v2/docs`) and OpenAPI spec
 
-## 4) Suggested CXO talking points
+## 4) Talking points
 
-- **Luxury + sustainability**: provenance-verified pre-loved sarees
-- **Commerce maturity**: reservation flow, taxation, shipping tiers, payment integration
-- **Operational readiness**: seed scripts, readiness checks, CMS-driven content updates
-- **Scalability**: Next.js + Payload + PostgreSQL architecture with deployment flexibility
-
-## 5) Fast fallback plan
-
-- If newsletter provider is unavailable, subscription still succeeds with graceful UX.
-- If a product search is too narrow, use suggested query chips (`Banarasi`, `Silk`, etc.).
-- If asked about deployment confidence, run `npm run demo:check` and share pass/fail output.
+- One-of-a-kind inventory controls
+- Server-side canonical pricing and tax/shipping
+- Custom admin experience on Next.js
+- Documented API surface with OpenAPI
+- PostgreSQL + Drizzle architecture for maintainability

@@ -1,6 +1,11 @@
 export const resolveMediaURL = (media: unknown): string | null => {
   if (!media) return null;
 
+  if (typeof media === "object" && media !== null && "media" in media) {
+    const relation = media as { media?: unknown };
+    return resolveMediaURL(relation.media ?? null);
+  }
+
   if (typeof media === "string") {
     if (
       media.startsWith("http://") ||

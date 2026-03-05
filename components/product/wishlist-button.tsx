@@ -15,11 +15,10 @@ interface WishlistButtonProps {
   className?: string;
 }
 
-const fetchWishlist = async (): Promise<Array<string | { id: string }>> => {
-  const res = await fetch("/api/account/wishlist");
+const fetchWishlist = async (): Promise<string[]> => {
+  const res = await fetch("/api/v2/wishlist");
   if (!res.ok) return [];
-  const data = await res.json();
-  return data.wishlist ?? [];
+  return (await res.json()) as string[];
 };
 
 export function WishlistButton({
@@ -40,13 +39,11 @@ export function WishlistButton({
 
   const isInWishlist =
     optimisticWished ??
-    (wishlist ?? []).some((item) =>
-      typeof item === "string" ? item === productId : item.id === productId
-    );
+    (wishlist ?? []).some((item) => item === productId);
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/account/wishlist", {
+      const res = await fetch("/api/v2/wishlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId }),
@@ -68,7 +65,7 @@ export function WishlistButton({
 
   const removeMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/account/wishlist", {
+      const res = await fetch("/api/v2/wishlist", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId }),

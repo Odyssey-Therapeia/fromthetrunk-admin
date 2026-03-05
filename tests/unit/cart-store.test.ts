@@ -21,7 +21,7 @@ interface CartItem {
 
 async function releaseReservation(productId: string): Promise<void> {
   try {
-    await fetch("/api/cart/release", {
+    await fetch("/api/v2/cart/release", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId }),
@@ -102,7 +102,7 @@ describe("cart store", () => {
     expect(store.getItems()).toHaveLength(1);
     expect(store.getItems()[0].id).toBe("p2");
     // Should have called release API
-    expect(fetchMock).toHaveBeenCalledWith("/api/cart/release", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith("/api/v2/cart/release", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ productId: "p1" }),
     }));

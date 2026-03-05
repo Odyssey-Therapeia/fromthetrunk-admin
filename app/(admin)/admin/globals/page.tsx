@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,23 +11,25 @@ const globalSlugs = ["homePage", "collectionPage", "ourStoryPage", "howItWorksPa
 
 export default function AdminGlobalsPage() {
   const [activeSlug, setActiveSlug] = useState<(typeof globalSlugs)[number]>("homePage");
-  const [content, setContent] = useState("{}");
+  const [contentBySlug, setContentBySlug] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadGlobal = async (slug: (typeof globalSlugs)[number]) => {
+  const loadGlobal = async (slug: (typeof globalSlugs)[number]): Promise<string> => {
     const response = await fetch(`/api/v2/globals/${slug}`);
     if (!response.ok) {
-      setContent("{}");
-      return;
+      return "{}";
     }
 
     const data = (await response.json()) as { content: Record<string, unknown> };
-    setContent(JSON.stringify(data.content ?? {}, null, 2));
+    return JSON.stringify(data.content ?? {}, null, 2);
   };
 
-  useEffect(() => {
-    void loadGlobal(activeSlug);
-  }, [activeSlug]);
+  const { data: fetchedContent = "{}" } = useQuery({
+    queryKey: ["admin-global", activeSlug],
+    queryFn: async () => await loadGlobal(activeSlug),
+  });
+
+  const content = contentBySlug[activeSlug] ?? fetchedContent;
 
   return (
     <div className="space-y-4">
@@ -47,7 +50,12 @@ export default function AdminGlobalsPage() {
 
       <Textarea
         className="min-h-[360px] font-mono text-xs"
-        onChange={(event) => setContent(event.target.value)}
+        onChange={(event) =>
+          setContentBySlug((prev) => ({
+            ...prev,
+            [activeSlug]: event.target.value,
+          }))
+        }
         value={content}
       />
 

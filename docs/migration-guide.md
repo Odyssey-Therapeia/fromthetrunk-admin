@@ -1,79 +1,42 @@
-# Schema Migration Guide
+# Schema and Data Migration Guide
 
-This document lists all schema changes introduced during production finalization.
-Before deploying, run `npm run payload:migrate:create` to generate the migration
-file, then `npm run payload:migrate` to apply it.
+This project now uses Drizzle-managed schema + query modules.
 
-## New Fields on Existing Collections
+## 1) Current migration path
 
-### Products Collection
-
-| Field | Type | Default | Notes |
-|-------|------|---------|-------|
-| `stockStatus` | select (available/reserved/sold) | `available` | Inventory tracking for 1-of-1 items |
-| `reservedUntil` | date | null | Auto-set by cart reservation API |
-| `soldAt` | date | null | Auto-set by payment verification |
-
-### Orders Collection
-
-| Field | Type | Default | Notes |
-|-------|------|---------|-------|
-| `shippingCost` | number | 0 | Calculated server-side |
-| `shippingMethod` | select (standard/express) | null | Selected at checkout |
-| `taxRate` | number | null | Currently 0.12 (12% GST) |
-| `taxAmount` | number | null | subtotal × taxRate |
-| `total` | number | null | subtotal + shippingCost + taxAmount |
-| `paymentGateway` | text | null | "razorpay" |
-| `razorpayOrderId` | text | null | Razorpay order reference |
-| `paymentId` | text | null | Razorpay payment reference |
-| `paymentStatus` | select (pending/paid/failed/refunded) | `pending` | Payment lifecycle |
-| `paymentMethod` | text | null | e.g. "card", "upi" |
-
-### Users Collection
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `wishlist` | relationship (products, hasMany) | User's saved/favorited products |
-
-## New Collections
-
-### `newsletter_subscribers`
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `email` | email (required, unique) | Subscriber email |
-| `status` | select (pending/confirmed/unsubscribed) | Double opt-in state |
-| `confirmToken` | text (hidden) | One-time confirmation token |
-| `confirmedAt` | date | When email was confirmed |
-
-## Migration Steps
+For legacy data import from the old platform schema into the current Drizzle schema, use:
 
 ```bash
-# 1. Generate migration for all changes
-npm run payload:migrate:create -- production-finalization
-
-# 2. Review the generated migration file in /migrations/
-
-# 3. Apply migration
-npm run payload:migrate
-
-# 4. Re-seed products with stock_status column
-npm run seed:payload
+npm run migrate:payload-to-drizzle
 ```
 
-## Rollback
+See full details in:
+- [`docs/rebuild-data-migration.md`](./rebuild-data-migration.md)
 
-If you need to rollback, the Payload migration system tracks applied
-migrations. Run `npm run payload:migrate -- --rollback` to undo the
-last migration.
+## 2) Safe execution checklist
 
-## Recent Framework and Configuration Updates
+1. Run against staging first.
+2. Keep source/target databases different.
+3. Start with dry-run mode when available.
+4. Validate row counts for high-value tables:
+   - products
+   - orders/order_items
+   - users
+   - collections
+   - media_assets
+5. Run app smoke tests after import.
 
-### Next.js 15/16 Dynamic Routing
-All dynamic routes and search parameters have been updated to utilize Next.js 15+ Promise-based asynchronous APIs. Pages and server components accessing `params` or `searchParams` now explicitly await them to align with the latest Next.js conventions.
+## 3) Post-migration verification
 
-### Database Connection Pooling
-The `payload.config.ts` has been updated to include connection pooling settings for the PostgreSQL adapter to ensure stable database performance under load.
-- **Max pool size**: `5`
-- **Connection Timeout**: `15000ms`
-- **Idle Timeout**: `30000ms`
+- Open `/admin/products` and `/admin/orders`
+- Verify storefront product listing and detail pages
+- Verify account pages (orders, addresses, wishlist)
+- Validate checkout creates + verifies payment order
+- Confirm cron endpoint path is configured as:
+  - `/api/v2/cron/release-reservations`
+
+## 4) Rollback strategy
+
+- Keep pre-migration backups/snapshots
+- Restore DB snapshot if critical issues are detected
+- Re-run migration only after fixing source mapping issues

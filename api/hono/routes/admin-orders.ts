@@ -62,7 +62,7 @@ export const registerAdminOrderRoutes = (app: OpenAPIHono<HonoBindings>) => {
         const email = orderShippedEmail(
           {
             id: order.id,
-          } as never,
+          },
           undefined
         );
         sendEmail({

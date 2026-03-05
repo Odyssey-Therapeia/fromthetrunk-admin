@@ -1,6 +1,6 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 
-import { idParamSchema, slugParamSchema } from "@/api/hono/schemas/common";
+import { errorSchema, idParamSchema, slugParamSchema } from "@/api/hono/schemas/common";
 import {
   listProductsQuerySchema,
   recommendationQuerySchema,
@@ -31,229 +31,247 @@ const parseDate = (value: null | string | undefined) => {
 };
 
 export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
-  app.get("/", async (c) => {
-    const queryResult = listProductsQuerySchema.safeParse(c.req.query());
-    if (!queryResult.success) {
-      return c.json(
-        {
-          code: "INVALID_QUERY",
-          details: queryResult.error.flatten(),
-          message: "Invalid product query params.",
-        },
-        400
-      );
-    }
-
-    const query = queryResult.data;
-    const products = await listProducts({
-      includeDrafts: Boolean(query.includeDrafts),
-      limit: query.limit ?? 200,
-      offset: query.offset ?? 0,
-    });
-    return c.json(products, 200);
-  });
-
-  app.post("/tag-suggestions", async (c) => {
-    const adminOrResponse = requireAdmin(c);
-    if (adminOrResponse instanceof Response) return adminOrResponse;
-
-    const rawBody = await c.req.json().catch(() => null);
-    const body = tagSuggestionSchema.safeParse(rawBody);
-    if (!body.success) {
-      return c.json(
-        {
-          code: "INVALID_BODY",
-          details: body.error.flatten(),
-          message: "Invalid tag suggestion payload.",
-        },
-        400
-      );
-    }
-
-    const suggestions = await suggestTagIds(body.data, 8);
-    return c.json(
-      {
-        suggestions,
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/",
+      request: {
+        query: listProductsQuerySchema,
       },
-      200
-    );
-  });
-
-  app.get("/:id/recommendations", async (c) => {
-    const params = idParamSchema.safeParse(c.req.param());
-    if (!params.success) {
-      return c.json(
-        {
-          code: "INVALID_PARAMS",
-          details: params.error.flatten(),
-          message: "Invalid route params.",
-        },
-        400
-      );
-    }
-
-    const query = recommendationQuerySchema.safeParse(c.req.query());
-    if (!query.success) {
-      return c.json(
-        {
-          code: "INVALID_QUERY",
-          details: query.error.flatten(),
-          message: "Invalid recommendation query params.",
-        },
-        400
-      );
-    }
-
-    const recommendations = await recommendProducts(
-      params.data.id,
-      Math.min(Math.max(query.data.limit ?? 6, 1), 12)
-    );
-
-    return c.json(
-      {
-        recommendations,
+      responses: {
+        200: { description: "Products list" },
       },
-      200
-    );
-  });
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const query = c.req.valid("query");
+      const products = await listProducts({
+        includeDrafts: Boolean(query.includeDrafts),
+        limit: query.limit ?? 200,
+        offset: query.offset ?? 0,
+      });
+      return c.json(products, 200);
+    }
+  );
 
-  app.get("/:slug", async (c) => {
-    const params = slugParamSchema.safeParse(c.req.param());
-    if (!params.success) {
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/tag-suggestions",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: tagSuggestionSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "Tag suggestions generated" },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const body = c.req.valid("json");
+      const suggestions = await suggestTagIds(body, 8);
       return c.json(
         {
-          code: "INVALID_PARAMS",
-          details: params.error.flatten(),
-          message: "Invalid route params.",
+          suggestions,
         },
-        400
+        200
       );
     }
+  );
 
-    const product = await getProductBySlug(params.data.slug, { includeDrafts: true });
-    if (!product) {
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/{id}/recommendations",
+      request: {
+        params: idParamSchema,
+        query: recommendationQuerySchema,
+      },
+      responses: {
+        200: { description: "Product recommendations" },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const params = c.req.valid("param");
+      const query = c.req.valid("query");
+
+      const recommendations = await recommendProducts(
+        params.id,
+        Math.min(Math.max(query.limit ?? 6, 1), 12)
+      );
+
       return c.json(
         {
-          code: "PRODUCT_NOT_FOUND",
-          message: "Product not found.",
+          recommendations,
         },
-        404
+        200
       );
     }
+  );
 
-    return c.json(product, 200);
-  });
-
-  app.post("/", async (c) => {
-    const adminOrResponse = requireAdmin(c);
-    if (adminOrResponse instanceof Response) return adminOrResponse;
-
-    const rawBody = await c.req.json().catch(() => null);
-    const bodyResult = productInputSchema.safeParse(rawBody);
-    if (!bodyResult.success) {
-      return c.json(
-        {
-          code: "INVALID_BODY",
-          details: bodyResult.error.flatten(),
-          message: "Invalid product payload.",
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/{slug}",
+      request: {
+        params: slugParamSchema,
+      },
+      responses: {
+        200: { description: "Product by slug" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Product not found",
         },
-        400
-      );
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const params = c.req.valid("param");
+
+      const product = await getProductBySlug(params.slug, { includeDrafts: true });
+      if (!product) {
+        return c.json(
+          {
+            code: "PRODUCT_NOT_FOUND",
+            message: "Product not found.",
+          },
+          404
+        );
+      }
+
+      return c.json(product, 200);
     }
+  );
 
-    const body = bodyResult.data;
-    void ensureProductEmbeddingsTable().catch(() => undefined);
-    const created = await createProduct({
-      ...body,
-      imageMediaIds: body.imageMediaIds ?? [],
-      reservedUntil: parseDate(body.reservedUntil),
-      soldAt: parseDate(body.soldAt),
-      tagIds: body.tagIds ?? [],
-    });
-    void refreshProductEmbedding(created.id).catch(() => undefined);
-    return c.json(created, 201);
-  });
-
-  app.patch("/:id", async (c) => {
-    const adminOrResponse = requireAdmin(c);
-    if (adminOrResponse instanceof Response) return adminOrResponse;
-
-    const params = idParamSchema.safeParse(c.req.param());
-    if (!params.success) {
-      return c.json(
-        {
-          code: "INVALID_PARAMS",
-          details: params.error.flatten(),
-          message: "Invalid route params.",
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: productInputSchema },
+          },
+          required: true,
         },
-        400
-      );
-    }
+      },
+      responses: {
+        201: { description: "Product created" },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
 
-    const rawBody = await c.req.json().catch(() => null);
-    const bodyResult = productPatchSchema.safeParse(rawBody);
-    if (!bodyResult.success) {
-      return c.json(
-        {
-          code: "INVALID_BODY",
-          details: bodyResult.error.flatten(),
-          message: "Invalid product patch payload.",
+      const body = c.req.valid("json");
+      void ensureProductEmbeddingsTable().catch(() => undefined);
+      const created = await createProduct({
+        ...body,
+        imageMediaIds: body.imageMediaIds ?? [],
+        reservedUntil: parseDate(body.reservedUntil),
+        soldAt: parseDate(body.soldAt),
+        tagIds: body.tagIds ?? [],
+      });
+      void refreshProductEmbedding(created.id).catch(() => undefined);
+      return c.json(created, 201);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/{id}",
+      request: {
+        params: idParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: productPatchSchema },
+          },
+          required: true,
         },
-        400
-      );
-    }
-
-    const existing = await getProduct(params.data.id);
-    if (!existing) {
-      return c.json(
-        {
-          code: "PRODUCT_NOT_FOUND",
-          message: "Product not found.",
+      },
+      responses: {
+        200: { description: "Product updated" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Product not found",
         },
-        404
-      );
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const params = c.req.valid("param");
+      const body = c.req.valid("json");
+
+      const existing = await getProduct(params.id);
+      if (!existing) {
+        return c.json(
+          {
+            code: "PRODUCT_NOT_FOUND",
+            message: "Product not found.",
+          },
+          404
+        );
+      }
+
+      void ensureProductEmbeddingsTable().catch(() => undefined);
+      const updated = await updateProduct(params.id, {
+        ...body,
+        reservedUntil: parseDate(body.reservedUntil),
+        soldAt: parseDate(body.soldAt),
+      });
+      if (updated) {
+        void refreshProductEmbedding(updated.id).catch(() => undefined);
+      }
+      return c.json(updated, 200);
     }
+  );
 
-    const body = bodyResult.data;
-    void ensureProductEmbeddingsTable().catch(() => undefined);
-    const updated = await updateProduct(params.data.id, {
-      ...body,
-      reservedUntil: parseDate(body.reservedUntil),
-      soldAt: parseDate(body.soldAt),
-    });
-    if (updated) {
-      void refreshProductEmbedding(updated.id).catch(() => undefined);
-    }
-    return c.json(updated, 200);
-  });
-
-  app.delete("/:id", async (c) => {
-    const adminOrResponse = requireAdmin(c);
-    if (adminOrResponse instanceof Response) return adminOrResponse;
-
-    const params = idParamSchema.safeParse(c.req.param());
-    if (!params.success) {
-      return c.json(
-        {
-          code: "INVALID_PARAMS",
-          details: params.error.flatten(),
-          message: "Invalid route params.",
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/{id}",
+      request: {
+        params: idParamSchema,
+      },
+      responses: {
+        200: { description: "Product deleted" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Product not found",
         },
-        400
-      );
-    }
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
 
-    const deleted = await deleteProduct(params.data.id);
-    if (!deleted) {
-      return c.json(
-        {
-          code: "PRODUCT_NOT_FOUND",
-          message: "Product not found.",
-        },
-        404
-      );
-    }
+      const params = c.req.valid("param");
+      const deleted = await deleteProduct(params.id);
+      if (!deleted) {
+        return c.json(
+          {
+            code: "PRODUCT_NOT_FOUND",
+            message: "Product not found.",
+          },
+          404
+        );
+      }
 
-    return c.json({ success: true }, 200);
-  });
+      return c.json({ success: true }, 200);
+    }
+  );
 };

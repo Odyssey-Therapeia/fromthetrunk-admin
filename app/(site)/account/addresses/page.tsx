@@ -8,14 +8,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Address } from "@/types/payload-types";
+import type { Address } from "@/types/domain";
 
 const fetchAddresses = async () => {
-  const response = await fetch("/api/account/addresses");
+  const response = await fetch("/api/v2/addresses");
   if (!response.ok) {
     throw new Error("Unable to load addresses.");
   }
-  return response.json();
+  return (await response.json()) as Address[];
 };
 
 const emptyForm = {
@@ -58,7 +58,7 @@ export default function AddressesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: typeof form) => {
-      const response = await fetch("/api/account/addresses", {
+      const response = await fetch("/api/v2/addresses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -82,7 +82,7 @@ export default function AddressesPage() {
       id: string;
       payload: Partial<typeof form>;
     }) => {
-      const response = await fetch(`/api/account/addresses/${id}`, {
+      const response = await fetch(`/api/v2/addresses/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -101,7 +101,7 @@ export default function AddressesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/account/addresses/${id}`, {
+      const response = await fetch(`/api/v2/addresses/${id}`, {
         method: "DELETE",
       });
       if (!response.ok) {
@@ -128,7 +128,7 @@ export default function AddressesPage() {
     );
   }
 
-  const addresses = (data?.addresses ?? []) as Address[];
+  const addresses = data ?? [];
 
   return (
     <div className="space-y-6">

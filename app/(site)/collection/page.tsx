@@ -11,7 +11,8 @@ import {
   getProducts,
   getProductsByCollection,
 } from "@/lib/data/products";
-import type { Collection as CollectionDoc, CollectionPageGlobal, Product } from "@/types/payload-types";
+import type { Collection, Product } from "@/types/domain";
+import type { CollectionPageContent } from "@/types/site-content";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +47,9 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
       : getProducts(ITEMS_PER_PAGE, { includeDrafts, page: currentPage }),
   ]);
 
-  const cms = collectionPage as CollectionPageGlobal | null;
+  const cms = collectionPage as CollectionPageContent | null;
   const items = (productsResult?.docs ?? []) as Product[];
-  const collections = (collectionsResult?.docs ?? []) as CollectionDoc[];
+  const collections = (collectionsResult?.docs ?? []) as Collection[];
   const activeCollection = collections.find(
     (collection) => collection.slug === activeCollectionSlug
   );

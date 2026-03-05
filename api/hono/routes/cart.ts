@@ -7,6 +7,7 @@ import { errorSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { products } from "@/db/schema";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 
 const RESERVATION_MINUTES = 30;
 
@@ -41,6 +42,12 @@ export const registerCartRoutes = (app: OpenAPIHono<HonoBindings>) => {
       tags: ["Cart"],
     }),
     async (c) => {
+      const rateLimited = rateLimitResponse(c.req.raw, "cart:reserve", {
+        limit: 10,
+        windowSeconds: 60,
+      });
+      if (rateLimited) return rateLimited;
+
       const authUserOrResponse = requireAuth(c);
       if (authUserOrResponse instanceof Response) return authUserOrResponse;
 

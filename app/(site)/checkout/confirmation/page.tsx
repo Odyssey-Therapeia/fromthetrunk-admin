@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getServerAuthSession } from "@/lib/auth/get-session";
 import { getOrder } from "@/db/queries/orders";
-import type { Order, OrderItem, ShippingAddress } from "@/types/payload-types";
+import type { Order, OrderItem } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -42,47 +42,10 @@ export default async function ConfirmationPage({
       return <GenericConfirmation />;
     }
 
-    const order: Order = {
-      createdAt: rawOrder.createdAt.toISOString(),
-      id: rawOrder.id,
-      items: rawOrder.items.map((item) => ({
-        id: item.id,
-        imageUrl: item.imageUrl,
-        name: item.name,
-        price: item.pricePaise / 100,
-        product: item.productId ?? null,
-        quantity: item.quantity,
-      })),
-      paymentGateway: rawOrder.paymentGateway ?? null,
-      paymentId: rawOrder.paymentId ?? null,
-      paymentMethod: rawOrder.paymentMethod ?? null,
-      paymentStatus: rawOrder.paymentStatus ?? null,
-      placedAt: rawOrder.placedAt ? rawOrder.placedAt.toISOString() : null,
-      razorpayOrderId: rawOrder.razorpayOrderId ?? null,
-      shippingAddress: {
-        city: rawOrder.shippingCity,
-        country: rawOrder.shippingCountry,
-        email: rawOrder.shippingEmail,
-        line1: rawOrder.shippingLine1,
-        line2: rawOrder.shippingLine2,
-        name: rawOrder.shippingName,
-        phone: rawOrder.shippingPhone,
-        postalCode: rawOrder.shippingPostalCode,
-        state: rawOrder.shippingState,
-      } satisfies ShippingAddress,
-      shippingCost: rawOrder.shippingCostPaise / 100,
-      shippingMethod: rawOrder.shippingMethod ?? null,
-      status: rawOrder.status,
-      subtotal: rawOrder.subtotalPaise / 100,
-      taxAmount: rawOrder.taxAmountPaise / 100,
-      taxRate: Number(rawOrder.taxRate ?? 0),
-      total: rawOrder.totalPaise / 100,
-      updatedAt: rawOrder.updatedAt.toISOString(),
-      user: rawOrder.userId,
-    };
+    const order: Order = rawOrder;
 
     // Verify the order belongs to the current user
-    const orderUserId = typeof order.user === "object" ? order.user.id : order.user;
+    const orderUserId = order.userId;
     if (orderUserId !== session.user.id) {
       return <GenericConfirmation />;
     }
@@ -129,7 +92,7 @@ export default async function ConfirmationPage({
                   <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                 </div>
                 <p className="font-semibold text-foreground">
-                  {formatCurrency(item.price * item.quantity)}
+                  {formatCurrency((item.pricePaise * item.quantity) / 100)}
                 </p>
               </div>
             ))}
@@ -140,41 +103,41 @@ export default async function ConfirmationPage({
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Subtotal</span>
-              <span>{formatCurrency(order.subtotal)}</span>
+              <span>{formatCurrency(order.subtotalPaise / 100)}</span>
             </div>
-            {(order.shippingCost ?? 0) > 0 && (
+            {order.shippingCostPaise > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Shipping</span>
-                <span>{formatCurrency(order.shippingCost ?? 0)}</span>
+                <span>{formatCurrency(order.shippingCostPaise / 100)}</span>
               </div>
             )}
-            {(order.taxAmount ?? 0) > 0 && (
+            {order.taxAmountPaise > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>GST</span>
-                <span>{formatCurrency(order.taxAmount ?? 0)}</span>
+                <span>{formatCurrency(order.taxAmountPaise / 100)}</span>
               </div>
             )}
             <Separator className="my-2" />
             <div className="flex justify-between text-base font-semibold text-foreground">
               <span>Total</span>
-              <span>{formatCurrency(order.total ?? order.subtotal)}</span>
+              <span>{formatCurrency(order.totalPaise / 100)}</span>
             </div>
           </div>
 
-          {order.shippingAddress && (
+          {order.shippingLine1 && (
             <>
               <Separator className="my-4" />
               <div className="text-sm text-muted-foreground">
                 <p className="font-semibold text-foreground">Shipping to</p>
-                <p className="mt-1">{order.shippingAddress.name}</p>
-                <p>{order.shippingAddress.line1}</p>
-                {order.shippingAddress.line2 && <p>{order.shippingAddress.line2}</p>}
+                <p className="mt-1">{order.shippingName}</p>
+                <p>{order.shippingLine1}</p>
+                {order.shippingLine2 && <p>{order.shippingLine2}</p>}
                 <p>
-                  {order.shippingAddress.city}
-                  {order.shippingAddress.state ? `, ${order.shippingAddress.state}` : ""}{" "}
-                  {order.shippingAddress.postalCode}
+                  {order.shippingCity}
+                  {order.shippingState ? `, ${order.shippingState}` : ""}{" "}
+                  {order.shippingPostalCode}
                 </p>
-                <p>{order.shippingAddress.country}</p>
+                <p>{order.shippingCountry}</p>
               </div>
             </>
           )}

@@ -1,6 +1,7 @@
-import { OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 
+import { errorSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { products } from "@/db/schema";
@@ -20,76 +21,95 @@ const semanticSearchBodySchema = z.object({
 });
 
 export const registerSearchRoutes = (app: OpenAPIHono<HonoBindings>) => {
-  app.get("/", async (c) => {
-    const queryResult = searchQuerySchema.safeParse(c.req.query());
-    if (!queryResult.success) {
-      return c.json(
-        {
-          code: "INVALID_QUERY",
-          details: queryResult.error.flatten(),
-          message: "Invalid search query.",
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/",
+      request: {
+        query: searchQuerySchema,
+      },
+      responses: {
+        200: { description: "Keyword search results" },
+        400: {
+          content: {
+            "application/json": { schema: errorSchema },
+          },
+          description: "Invalid query",
         },
-        400
-      );
-    }
+      },
+      tags: ["Search"],
+    }),
+    async (c) => {
+      const query = c.req.valid("query");
+      const limit = Math.min(query.limit ?? 12, 50);
+      const keyword = `%${query.q}%`;
 
-    const query = queryResult.data;
-    const limit = Math.min(query.limit ?? 12, 50);
-    const keyword = `%${query.q}%`;
-
-    const rows = await db
-      .select()
-      .from(products)
-      .where(
-        and(
-          or(
-            ilike(products.name, keyword),
-            ilike(products.detailsFabric, keyword),
-            ilike(products.detailsDesigner, keyword),
-            ilike(products.storyEra, keyword),
-            ilike(products.storyProvenance, keyword)
-          ),
-          eq(products.status, "published")
+      const rows = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            or(
+              ilike(products.name, keyword),
+              ilike(products.detailsFabric, keyword),
+              ilike(products.detailsDesigner, keyword),
+              ilike(products.storyEra, keyword),
+              ilike(products.storyProvenance, keyword)
+            ),
+            eq(products.status, "published")
+          )
         )
-      )
-      .orderBy(desc(products.createdAt))
-      .limit(limit);
+        .orderBy(desc(products.createdAt))
+        .limit(limit);
 
-    return c.json(
-      {
-        docs: rows,
-        query: query.q,
-        totalDocs: rows.length,
-      },
-      200
-    );
-  });
-
-  app.post("/semantic", async (c) => {
-    const rawBody = await c.req.json().catch(() => null);
-    const body = semanticSearchBodySchema.safeParse(rawBody);
-    if (!body.success) {
       return c.json(
         {
-          code: "INVALID_BODY",
-          details: body.error.flatten(),
-          message: "Invalid semantic search payload.",
+          docs: rows,
+          query: query.q,
+          totalDocs: rows.length,
         },
-        400
+        200
       );
     }
+  );
 
-    const results = await semanticSearchProducts(body.data.query, body.data.limit ?? 12);
-    return c.json(
-      {
-        docs: results.map((entry) => ({
-          ...entry.product,
-          similarity: entry.similarity,
-        })),
-        query: body.data.query,
-        totalDocs: results.length,
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/semantic",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: semanticSearchBodySchema },
+          },
+          required: true,
+        },
       },
-      200
-    );
-  });
+      responses: {
+        200: { description: "Semantic search results" },
+        400: {
+          content: {
+            "application/json": { schema: errorSchema },
+          },
+          description: "Invalid payload",
+        },
+      },
+      tags: ["Search"],
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const results = await semanticSearchProducts(body.query, body.limit ?? 12);
+      return c.json(
+        {
+          docs: results.map((entry) => ({
+            ...entry.product,
+            similarity: entry.similarity,
+          })),
+          query: body.query,
+          totalDocs: results.length,
+        },
+        200
+      );
+    }
+  );
 };

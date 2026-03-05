@@ -7,7 +7,8 @@ import { BentoCard, BentoGrid } from "@/components/ui/bento-grid";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
-import type { HomePageGlobal, Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
+import type { HomePageContent } from "@/types/site-content";
 
 const productLayouts = [
   "lg:col-span-2 lg:row-span-2",
@@ -20,7 +21,7 @@ const productIcons = [Sparkles, Crown, Gem, ShieldCheck];
 
 interface FeaturedCollectionProps {
   products: Product[];
-  content?: HomePageGlobal | null;
+  content?: HomePageContent | null;
 }
 
 export function FeaturedCollection({ products, content }: FeaturedCollectionProps) {
@@ -29,8 +30,8 @@ export function FeaturedCollection({ products, content }: FeaturedCollectionProp
     return {
       Icon: productIcons[index % productIcons.length],
       name: product.name,
-      description: `${product.details?.fabric ?? "Heirloom"} · ${formatCurrency(
-        product.price ?? 0
+      description: `${product.detailsFabric ?? "Heirloom"} · ${formatCurrency(
+        product.pricePaise / 100
       )}`,
       href: `/collection/${product.slug}`,
       cta: "View saree",

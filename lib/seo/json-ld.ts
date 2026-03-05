@@ -1,4 +1,4 @@
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 
 const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
@@ -15,8 +15,8 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     "@type": "Product",
     name: product.name,
     description:
-      product.story?.narrative ??
-      `${product.name} — ${product.details?.fabric ?? "Heirloom"} saree.`,
+      product.storyNarrative ??
+      `${product.name} — ${product.detailsFabric ?? "Heirloom"} saree.`,
     ...(image ? { image } : {}),
     brand: {
       "@type": "Brand",
@@ -24,7 +24,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     },
     offers: {
       "@type": "Offer",
-      price: product.price,
+      price: product.pricePaise / 100,
       priceCurrency: "INR",
       availability:
         product.stockStatus === "sold"
@@ -38,11 +38,11 @@ export function productJsonLd(product: Product): Record<string, unknown> {
         name: "From the Trunk",
       },
     },
-    ...(product.details?.condition
+    ...(product.detailsCondition
       ? { itemCondition: "https://schema.org/UsedCondition" }
       : {}),
-    ...(product.details?.fabric
-      ? { material: product.details.fabric }
+    ...(product.detailsFabric
+      ? { material: product.detailsFabric }
       : {}),
   };
 }

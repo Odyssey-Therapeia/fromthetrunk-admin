@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 
 export function SearchBar() {
   const [open, setOpen] = useState(false);
@@ -51,7 +51,7 @@ export function SearchBar() {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `/api/search?q=${encodeURIComponent(q)}&limit=6`
+        `/api/v2/search?q=${encodeURIComponent(q)}&limit=6`
       );
       if (res.ok) {
         const data = await res.json();
@@ -184,8 +184,8 @@ export function SearchBar() {
                         {product.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {product.details?.fabric ?? "Heirloom"} ·{" "}
-                        {formatCurrency(product.price)}
+                        {product.detailsFabric ?? "Heirloom"} ·{" "}
+                        {formatCurrency(product.pricePaise / 100)}
                       </p>
                     </div>
                   </Link>

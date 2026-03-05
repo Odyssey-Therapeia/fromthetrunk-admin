@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,26 +42,26 @@ const statusOptions: Array<Order["status"]> = ["pending", "confirmed", "shipped"
 export default function AdminOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const [order, setOrder] = useState<Order | null>(null);
-  const [status, setStatus] = useState<Order["status"]>("pending");
+  const [statusDraft, setStatusDraft] = useState<null | Order["status"]>(null);
   const [note, setNote] = useState("");
 
-  const loadOrder = async () => {
+  const loadOrder = async (): Promise<null | Order> => {
     const response = await fetch(`/api/v2/orders/${id}`);
-    if (!response.ok) return;
-    const data = (await response.json()) as Order;
-    setOrder(data);
-    setStatus(data.status);
+    if (!response.ok) return null;
+    return (await response.json()) as Order;
   };
 
-  useEffect(() => {
-    if (!id) return;
-    void loadOrder();
-  }, [id]);
+  const { data: order, refetch } = useQuery({
+    queryKey: ["admin-order", id],
+    queryFn: loadOrder,
+    enabled: Boolean(id),
+  });
 
   if (!order) {
     return <p className="text-sm text-muted-foreground">Loading order...</p>;
   }
+
+  const selectedStatus = statusDraft ?? order.status;
 
   return (
     <div className="space-y-6">
@@ -101,7 +102,10 @@ export default function AdminOrderDetailPage() {
           <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select onValueChange={(value) => setStatus(value as Order["status"])} value={status}>
+              <Select
+                onValueChange={(value) => setStatusDraft(value as Order["status"])}
+                value={selectedStatus}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -125,14 +129,15 @@ export default function AdminOrderDetailPage() {
                 await fetch(`/api/v2/admin/orders/${order.id}/status`, {
                   body: JSON.stringify({
                     note,
-                    status,
+                    status: selectedStatus,
                   }),
                   headers: {
                     "Content-Type": "application/json",
                   },
                   method: "PATCH",
                 });
-                await loadOrder();
+                setStatusDraft(null);
+                await refetch();
               }}
               type="button"
             >

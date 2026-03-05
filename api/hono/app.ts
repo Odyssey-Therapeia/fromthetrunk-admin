@@ -20,7 +20,7 @@ import { registerWishlistRoutes } from "@/api/hono/routes/wishlist";
 import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
 import type { HonoBindings } from "@/api/hono/types";
 
-const app = new OpenAPIHono<HonoBindings>();
+const app = new OpenAPIHono<HonoBindings>().basePath("/api/v2");
 
 app.use("*", cors());
 app.use("*", authMiddleware);

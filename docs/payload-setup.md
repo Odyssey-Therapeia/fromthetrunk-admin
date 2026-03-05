@@ -1,34 +1,33 @@
-# Payload Setup and Seed Flow
+# Platform Setup (Current Stack)
 
-## Environment Prerequisites
+> Note: this file name is kept for continuity, but setup now targets the current Next.js + Hono + Drizzle stack.
 
-Set the variables in `.env.example` before running migrations or seed tasks:
+## Environment prerequisites
+
+Set required values in `.env.example` / `.env.local`:
 
 - `DATABASE_URL`
-- `PAYLOAD_SECRET`
-- `PAYLOAD_PREVIEW_SECRET`
-- `NEXT_PUBLIC_SERVER_URL`
+- `NEXTAUTH_SECRET`
+- OAuth provider credentials (at least one provider)
+- Razorpay keys
+- Resend API key
+- `CRON_SECRET`
+- `ADMIN_API_SECRET`
 
-## Fresh Environment Sequence
-
-Run the following commands in order:
-
-```bash
-npm install
-npm run payload:types
-npm run payload:migrate
-npm run seed:payload
-```
-
-If you need to create a migration first, use:
+## Local startup
 
 ```bash
-npm run payload:migrate:create -- migration_name_here
+npm install --legacy-peer-deps
+npm run dev
 ```
 
-## Seed Idempotency
+## Optional legacy-data import
 
-`scripts/seed-payload.ts` is slug-aware:
+If you need to import historical data into the current schema:
 
-- Existing products with matching `slug` are skipped.
-- Re-running `npm run seed:payload` does not duplicate existing products.
+```bash
+npm run migrate:payload-to-drizzle
+```
+
+For dry-run and truncate options, see:
+- [`docs/rebuild-data-migration.md`](./rebuild-data-migration.md)

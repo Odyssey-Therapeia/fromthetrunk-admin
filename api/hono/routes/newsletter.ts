@@ -1,89 +1,111 @@
 import crypto from "crypto";
-import { OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 
+import { errorSchema } from "@/api/hono/schemas/common";
 import { newsletterConfirmQuerySchema, newsletterSubscribeSchema } from "@/api/hono/schemas/newsletter";
 import type { HonoBindings } from "@/api/hono/types";
 import { confirmSubscription, subscribe } from "@/db/queries/newsletter";
 import { sendEmail } from "@/lib/email/send";
 import { newsletterConfirmationEmail } from "@/lib/email/templates";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 
 export const registerNewsletterRoutes = (app: OpenAPIHono<HonoBindings>) => {
-  app.post("/subscribe", async (c) => {
-    const rawBody = await c.req.json().catch(() => null);
-    const body = newsletterSubscribeSchema.safeParse(rawBody);
-    if (!body.success) {
-      return c.json(
-        {
-          code: "INVALID_BODY",
-          details: body.error.flatten(),
-          message: "Invalid newsletter payload.",
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/subscribe",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: newsletterSubscribeSchema },
+          },
+          required: true,
         },
-        400
-      );
-    }
+      },
+      responses: {
+        200: { description: "Newsletter subscription accepted" },
+      },
+      tags: ["Newsletter"],
+    }),
+    async (c) => {
+      const rateLimited = rateLimitResponse(c.req.raw, "newsletter:sub", {
+        limit: 3,
+        windowSeconds: 60,
+      });
+      if (rateLimited) return rateLimited;
 
-    const hasEmailProvider = Boolean(process.env.RESEND_API_KEY);
-    if (!hasEmailProvider) {
-      await subscribe(body.data.email, null);
+      const body = c.req.valid("json");
+      const hasEmailProvider = Boolean(process.env.RESEND_API_KEY);
+      if (!hasEmailProvider) {
+        await subscribe(body.email, null);
+        return c.json(
+          {
+            message: "You're subscribed. We'll share new drops with you soon.",
+            requiresEmailConfirmation: false,
+            subscribed: true,
+          },
+          200
+        );
+      }
+
+      const confirmToken = crypto.randomBytes(32).toString("hex");
+      await subscribe(body.email, confirmToken);
+
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "[REDACTED]";
+      const confirmUrl = `${baseUrl}/api/v2/newsletter/confirm?token=${confirmToken}&email=${encodeURIComponent(
+        body.email
+      )}`;
+      const emailTemplate = newsletterConfirmationEmail(confirmUrl);
+      await sendEmail({
+        to: body.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+      });
+
       return c.json(
         {
-          message: "You're subscribed. We'll share new drops with you soon.",
-          requiresEmailConfirmation: false,
+          message: "Check your email to confirm your subscription.",
+          requiresEmailConfirmation: true,
           subscribed: true,
         },
         200
       );
     }
+  );
 
-    const confirmToken = crypto.randomBytes(32).toString("hex");
-    await subscribe(body.data.email, confirmToken);
-
-    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3000";
-    const confirmUrl = `${baseUrl}/api/v2/newsletter/confirm?token=${confirmToken}&email=${encodeURIComponent(
-      body.data.email
-    )}`;
-    const emailTemplate = newsletterConfirmationEmail(confirmUrl);
-    await sendEmail({
-      to: body.data.email,
-      subject: emailTemplate.subject,
-      html: emailTemplate.html,
-    });
-
-    return c.json(
-      {
-        message: "Check your email to confirm your subscription.",
-        requiresEmailConfirmation: true,
-        subscribed: true,
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/confirm",
+      request: {
+        query: newsletterConfirmQuerySchema,
       },
-      200
-    );
-  });
-
-  app.get("/confirm", async (c) => {
-    const query = newsletterConfirmQuerySchema.safeParse(c.req.query());
-    if (!query.success) {
-      return c.json(
-        {
-          code: "INVALID_QUERY",
-          details: query.error.flatten(),
-          message: "Invalid newsletter confirmation query.",
+      responses: {
+        302: { description: "Redirect to confirmation page" },
+        404: {
+          content: {
+            "application/json": { schema: errorSchema },
+          },
+          description: "Subscription not found",
         },
-        400
-      );
-    }
+      },
+      tags: ["Newsletter"],
+    }),
+    async (c) => {
+      const query = c.req.valid("query");
+      const confirmed = await confirmSubscription(query.token);
+      if (!confirmed) {
+        return c.json(
+          {
+            code: "NOT_FOUND",
+            message: "Subscription not found.",
+          },
+          404
+        );
+      }
 
-    const confirmed = await confirmSubscription(query.data.token);
-    if (!confirmed) {
-      return c.json(
-        {
-          code: "NOT_FOUND",
-          message: "Subscription not found.",
-        },
-        404
-      );
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "[REDACTED]";
+      return c.redirect(`${baseUrl}/?newsletter=confirmed`, 302);
     }
-
-    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3000";
-    return c.redirect(`${baseUrl}/?newsletter=confirmed`, 302);
-  });
+  );
 };

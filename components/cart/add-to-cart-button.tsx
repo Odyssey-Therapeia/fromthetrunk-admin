@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { useLiveProductStock } from "@/lib/realtime/use-live-product-stock";
 import { useCartStore } from "@/lib/store/cart-store";
-import type { Product, StockStatus } from "@/types/payload-types";
+import type { Product, StockStatus } from "@/types/domain";
 
 interface AddToCartButtonProps {
   product: Product;
@@ -27,7 +27,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
   const inCart = hasItem(product.id);
 
   const { stockStatus } = useLiveProductStock({
-    initialStatus: (product.stockStatus ?? "available") as StockStatus,
+    initialStatus: product.stockStatus as StockStatus,
     productId: product.id,
     productSlug: product.slug,
   });
@@ -71,7 +71,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
         addItem({
           id: product.id,
           name: product.name,
-          price: product.price ?? 0,
+          price: product.pricePaise / 100,
           image,
         });
         setAdded(true);

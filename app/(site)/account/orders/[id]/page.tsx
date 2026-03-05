@@ -8,16 +8,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
-import type { Order, OrderItem, OrderStatus } from "@/types/payload-types";
+import type { Order, OrderItem } from "@/types/domain";
 
 const fetchOrder = async (id: string): Promise<Order> => {
-  const response = await fetch(`/api/account/orders?orderId=${id}`);
+  const response = await fetch(`/api/v2/orders/${id}`);
   if (!response.ok) throw new Error("Unable to load order.");
-  const data = await response.json();
-  return data.order ?? data.orders?.[0];
+  return (await response.json()) as Order;
 };
 
-const statusSteps: OrderStatus[] = ["pending", "confirmed", "shipped", "delivered"];
+const statusSteps: Array<Order["status"]> = ["pending", "confirmed", "shipped", "delivered"];
 
 const statusLabels: Record<string, string> = {
   pending: "Order Placed",
@@ -134,7 +133,7 @@ export default function OrderDetailPage() {
                 <p className="text-xs text-muted-foreground">Qty: {item.quantity} · One of a kind</p>
               </div>
               <p className="font-semibold text-foreground">
-                {formatCurrency(item.price * item.quantity)}
+                {formatCurrency((item.pricePaise * item.quantity) / 100)}
               </p>
             </div>
           ))}
@@ -145,44 +144,44 @@ export default function OrderDetailPage() {
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>
-            <span>{formatCurrency(order.subtotal)}</span>
+            <span>{formatCurrency(order.subtotalPaise / 100)}</span>
           </div>
-          {(order.shippingCost ?? 0) > 0 && (
+          {order.shippingCostPaise > 0 && (
             <div className="flex justify-between text-muted-foreground">
               <span>Shipping</span>
-              <span>{formatCurrency(order.shippingCost!)}</span>
+              <span>{formatCurrency(order.shippingCostPaise / 100)}</span>
             </div>
           )}
-          {(order.taxAmount ?? 0) > 0 && (
+          {order.taxAmountPaise > 0 && (
             <div className="flex justify-between text-muted-foreground">
               <span>GST</span>
-              <span>{formatCurrency(order.taxAmount!)}</span>
+              <span>{formatCurrency(order.taxAmountPaise / 100)}</span>
             </div>
           )}
           <Separator className="my-2" />
           <div className="flex justify-between font-semibold text-foreground">
             <span>Total</span>
-            <span>{formatCurrency(order.total ?? order.subtotal)}</span>
+            <span>{formatCurrency(order.totalPaise / 100)}</span>
           </div>
         </div>
       </div>
 
       {/* Shipping address */}
-      {order.shippingAddress && (
+      {order.shippingLine1 && (
         <div className="rounded-2xl border border-border/60 bg-card/70 p-6 shadow-soft">
           <h3 className="font-serif text-lg text-foreground">Shipping Address</h3>
           <Separator className="my-3" />
           <div className="text-sm text-muted-foreground space-y-0.5">
-            <p className="font-medium text-foreground">{order.shippingAddress.name}</p>
-            <p>{order.shippingAddress.line1}</p>
-            {order.shippingAddress.line2 && <p>{order.shippingAddress.line2}</p>}
+            <p className="font-medium text-foreground">{order.shippingName}</p>
+            <p>{order.shippingLine1}</p>
+            {order.shippingLine2 && <p>{order.shippingLine2}</p>}
             <p>
-              {order.shippingAddress.city}
-              {order.shippingAddress.state ? `, ${order.shippingAddress.state}` : ""}{" "}
-              {order.shippingAddress.postalCode}
+              {order.shippingCity}
+              {order.shippingState ? `, ${order.shippingState}` : ""}{" "}
+              {order.shippingPostalCode}
             </p>
-            <p>{order.shippingAddress.country}</p>
-            {order.shippingAddress.phone && <p>Phone: {order.shippingAddress.phone}</p>}
+            <p>{order.shippingCountry}</p>
+            {order.shippingPhone && <p>Phone: {order.shippingPhone}</p>}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,18 +36,18 @@ const emptyDraft = {
 };
 
 export default function AdminCollectionsPage() {
-  const [collections, setCollections] = useState<Collection[]>([]);
   const [draft, setDraft] = useState(emptyDraft);
 
-  const loadCollections = async () => {
+  const loadCollections = async (): Promise<Collection[]> => {
     const response = await fetch("/api/v2/collections");
-    const data = (await response.json()) as Collection[];
-    setCollections(data);
+    if (!response.ok) return [];
+    return (await response.json()) as Collection[];
   };
 
-  useEffect(() => {
-    void loadCollections();
-  }, []);
+  const { data: collections = [], refetch } = useQuery({
+    queryKey: ["admin-collections"],
+    queryFn: loadCollections,
+  });
 
   const handleCreate = async () => {
     await fetch("/api/v2/collections", {
@@ -57,7 +58,7 @@ export default function AdminCollectionsPage() {
       method: "POST",
     });
     setDraft(emptyDraft);
-    await loadCollections();
+    await refetch();
   };
 
   return (
@@ -130,7 +131,7 @@ export default function AdminCollectionsPage() {
                       await fetch(`/api/v2/collections/${collection.id}`, {
                         method: "DELETE",
                       });
-                      await loadCollections();
+                      await refetch();
                     }}
                     size="sm"
                     type="button"
