@@ -27,6 +27,8 @@ npm run demo:check
 - `CRON_SECRET`
 - `ADMIN_API_SECRET`
 
+Important: `NEXTAUTH_URL` and `NEXT_PUBLIC_SERVER_URL` must point at the same origin for the current environment. If they drift apart, successful sign-in and sign-out flows can redirect users to the wrong host or port.
+
 ## 3) Demo flow
 
 1. Homepage and collection UX

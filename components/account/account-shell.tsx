@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { Heart, LogOut, MapPin, Package, User } from "lucide-react";
 import { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { buildClientCallbackUrl } from "@/lib/auth/client-callback-url";
+import { useUiHaptics } from "@/lib/haptics/use-ui-haptics";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -18,7 +20,9 @@ const navLinks = [
 
 export function AccountShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
+  const { nudge } = useUiHaptics();
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8 px-6 py-16">
@@ -41,7 +45,15 @@ export function AccountShell({ children }: { children: ReactNode }) {
             variant="ghost"
             size="sm"
             className="gap-2 text-muted-foreground"
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={async () => {
+              nudge();
+              const result = await signOut({
+                callbackUrl: buildClientCallbackUrl("/", "/"),
+                redirect: false,
+              });
+              router.push(buildClientCallbackUrl(result?.url, "/"));
+              router.refresh();
+            }}
           >
             <LogOut className="h-4 w-4" />
             Sign out

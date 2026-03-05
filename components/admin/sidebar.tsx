@@ -5,23 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { adminNavItems } from "@/components/admin/nav-items";
 import { cn } from "@/lib/utils";
-
-type NavItem = {
-  href: string;
-  label: string;
-};
-
-const navItems: NavItem[] = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/products", label: "Products" },
-  { href: "/admin/collections", label: "Collections" },
-  { href: "/admin/orders", label: "Orders" },
-  { href: "/admin/customers", label: "Customers" },
-  { href: "/admin/media", label: "Media" },
-  { href: "/admin/globals", label: "Globals" },
-  { href: "/admin/settings", label: "Settings" },
-];
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -62,12 +47,18 @@ export function AdminSidebar() {
   }, []);
 
   return (
-    <aside className="hidden w-64 border-r border-border/70 bg-card/60 px-4 py-6 backdrop-blur lg:block">
-      <p className="mb-6 px-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-        FTT Admin
-      </p>
+    <aside className="sticky top-0 hidden h-screen w-72 border-r border-border/70 bg-card/75 px-5 py-6 backdrop-blur lg:block">
+      <div className="mb-8 rounded-2xl border border-border/70 bg-background/75 p-4 shadow-sm">
+        <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+          FTT Admin
+        </p>
+        <p className="mt-3 text-lg font-semibold text-foreground">Control center</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Products, collections, orders, and storefront content in one place.
+        </p>
+      </div>
       <ul ref={listRef} className="space-y-1">
-        {navItems.map((item) => {
+        {adminNavItems.map((item) => {
           const isActive =
             pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
           return (
@@ -75,10 +66,10 @@ export function AdminSidebar() {
               <Link
                 href={item.href}
                 className={cn(
-                  "block rounded-md px-3 py-2 text-sm transition-colors",
+                  "block rounded-xl px-4 py-3 text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-muted"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-foreground hover:bg-muted/80"
                 )}
               >
                 {item.label}

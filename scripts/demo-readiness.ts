@@ -108,20 +108,47 @@ const validateEnv = (): CheckResult[] => {
   });
 
   const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+  const authUrl = process.env.NEXTAUTH_URL;
   if (serverUrl) {
     try {
       const parsed = new URL(serverUrl);
-      const https = parsed.protocol === "https:";
+      const isLocalhost = ["127.0.0.1", "localhost"].includes(parsed.hostname);
+      const validProtocol = parsed.protocol === "https:" || isLocalhost;
       checks.push({
         name: "NEXT_PUBLIC_SERVER_URL format",
-        ok: https,
-        detail: https ? "Valid https URL" : "URL should use https",
+        ok: validProtocol,
+        detail: validProtocol
+          ? isLocalhost
+            ? "Valid local development URL"
+            : "Valid https URL"
+          : "URL should use https unless it targets localhost",
       });
     } catch {
       checks.push({
         name: "NEXT_PUBLIC_SERVER_URL format",
         ok: false,
         detail: "Invalid URL value",
+      });
+    }
+  }
+
+  if (serverUrl && authUrl) {
+    try {
+      const publicOrigin = new URL(serverUrl).origin;
+      const authOrigin = new URL(authUrl).origin;
+      checks.push({
+        name: "Auth/Public URL alignment",
+        ok: publicOrigin === authOrigin,
+        detail:
+          publicOrigin === authOrigin
+            ? "NEXTAUTH_URL and NEXT_PUBLIC_SERVER_URL are aligned"
+            : `Mismatch detected: ${authOrigin} vs ${publicOrigin}`,
+      });
+    } catch {
+      checks.push({
+        name: "Auth/Public URL alignment",
+        ok: false,
+        detail: "Unable to compare NEXTAUTH_URL and NEXT_PUBLIC_SERVER_URL",
       });
     }
   }

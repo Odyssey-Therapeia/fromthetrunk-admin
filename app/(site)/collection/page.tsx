@@ -56,6 +56,12 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
 
   const totalDocs = (productsResult as { totalDocs?: number })?.totalDocs ?? items.length;
   const totalPages = Math.ceil(totalDocs / ITEMS_PER_PAGE);
+  const collectionCount = collections.length;
+  const activeCollectionLabel = activeCollection?.name ?? "All collections";
+  const filterDescription =
+    activeCollection?.description ??
+    cms?.filtersBody ??
+    "Move through curated edits by story, mood, and provenance without losing your place in the catalog.";
 
   const buildPageUrl = (page: number) => {
     const params = new URLSearchParams();
@@ -67,65 +73,98 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-12 px-6 py-16">
-      <ScrollReveal className="space-y-4">
-        <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-          {cms?.eyebrow ?? "The Collection"}
-        </p>
-        <h1 className="font-serif text-4xl text-foreground md:text-5xl">
-          {cms?.title ?? "Curated pre-loved sarees"}
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {cms?.description ??
-            "Discover heirlooms from private wardrobes, couture archives, and collector trunks. Each piece is authenticated and accompanied by its story."}
-        </p>
-      </ScrollReveal>
-
-      <div className="rounded-2xl border border-border/60 bg-card/70 p-6 shadow-soft">
-        <div className="flex flex-col gap-4">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
-              Curated Filters
-            </p>
-            <h2 className="font-serif text-2xl text-foreground">
-              {activeCollection?.name ??
-                cms?.filtersTitle ??
-                "Browse by collection"}
-            </h2>
-            {activeCollection?.description && (
-              <p className="text-sm text-muted-foreground">
-                {activeCollection.description}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]">
+        <ScrollReveal className="rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,rgba(255,250,244,0.98),rgba(246,238,228,0.92))] p-8 shadow-soft">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+                {cms?.eyebrow ?? "The Collection"}
               </p>
-            )}
+              <h1 className="font-serif text-4xl text-foreground md:text-5xl">
+                {cms?.title ?? "Curated pre-loved sarees"}
+              </h1>
+              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                {cms?.description ??
+                  "Discover heirlooms from private wardrobes, couture archives, and collector trunks. Each piece is authenticated and accompanied by its story."}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                  Live pieces
+                </p>
+                <p className="mt-3 font-serif text-3xl text-foreground">{totalDocs}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                  Edits
+                </p>
+                <p className="mt-3 font-serif text-3xl text-foreground">{collectionCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                  Current view
+                </p>
+                <p className="mt-3 text-sm font-medium text-foreground">{activeCollectionLabel}</p>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/collection"
-              className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
-                !activeCollectionSlug
-                  ? "border-trunk-gold/60 bg-trunk-gold/10 text-foreground"
-                  : "border-border/70 bg-background/70 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All
-            </Link>
-            {collections.map((collection) => (
+        </ScrollReveal>
+
+        <ScrollReveal delay={0.1} className="rounded-[2rem] border border-border/60 bg-card/80 p-6 shadow-soft">
+          <div className="flex h-full flex-col gap-5">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+                Curated Filters
+              </p>
+              <h2 className="font-serif text-2xl text-foreground">
+                {activeCollection?.name ?? cms?.filtersTitle ?? "Browse by collection"}
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">{filterDescription}</p>
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                Curation note
+              </p>
+              <p className="mt-3 text-sm leading-6 text-foreground">
+                Every piece in this edit is authenticated, photographed in detail, and released in
+                intentionally small drops.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               <Link
-                key={collection.id}
-                href={`/collection?collection=${encodeURIComponent(collection.slug)}`}
+                href="/collection"
                 className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
-                  activeCollectionSlug === collection.slug
+                  !activeCollectionSlug
                     ? "border-trunk-gold/60 bg-trunk-gold/10 text-foreground"
                     : "border-border/70 bg-background/70 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {collection.name}
+                All
               </Link>
-            ))}
+              {collections.map((collection) => (
+                <Link
+                  key={collection.id}
+                  href={`/collection?collection=${encodeURIComponent(collection.slug)}`}
+                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
+                    activeCollectionSlug === collection.slug
+                      ? "border-trunk-gold/60 bg-trunk-gold/10 text-foreground"
+                      : "border-border/70 bg-background/70 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {collection.name}
+                </Link>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Showing {items.length} of {totalDocs} curated piece{totalDocs === 1 ? "" : "s"}.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Showing {items.length} of {totalDocs} curated piece{totalDocs === 1 ? "" : "s"}.
-          </p>
-        </div>
+        </ScrollReveal>
       </div>
 
       {items.length === 0 ? (

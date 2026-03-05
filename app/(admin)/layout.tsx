@@ -23,7 +23,7 @@ export default async function AdminLayout({
 }: AdminLayoutProps) {
   const session = await getServerAuthSession();
   if (!session || session.user.role !== "admin") {
-    redirect("/account/sign-in");
+    redirect("/account/sign-in?callbackUrl=/admin");
   }
 
   return (
@@ -33,13 +33,13 @@ export default async function AdminLayout({
           <div className="min-h-screen bg-background">
             <div className="flex min-h-screen">
               <AdminSidebar />
-              <div className="flex min-h-screen flex-1 flex-col">
+              <div className="flex min-h-screen flex-1 flex-col bg-[linear-gradient(180deg,rgba(250,246,240,0.92),rgba(245,240,232,0.98))]">
                 <AdminTopBar
                   email={session.user.email ?? null}
                   image={session.user.image ?? null}
                   name={session.user.name ?? null}
                 />
-                <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
+                <main className="flex-1 px-4 py-6 md:px-6 lg:px-8">{children}</main>
               </div>
             </div>
           </div>

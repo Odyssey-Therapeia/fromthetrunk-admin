@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildClientCallbackUrl } from "@/lib/auth/client-callback-url";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -71,7 +72,7 @@ export default function SignUpPage() {
               redirect: false,
               email: email.trim(),
               password,
-              callbackUrl: "/account/profile",
+              callbackUrl: buildClientCallbackUrl("/account/profile", "/account/profile"),
             });
 
             if (!result || result.error) {
@@ -79,7 +80,7 @@ export default function SignUpPage() {
               return;
             }
 
-            router.push(result.url || "/account/profile");
+            router.push(buildClientCallbackUrl("/account/profile", "/account/profile"));
             router.refresh();
           } finally {
             setIsSubmitting(false);

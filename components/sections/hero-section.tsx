@@ -8,6 +8,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
+import { useUiHaptics } from "@/lib/haptics/use-ui-haptics";
 
 const fallbackHeroImage =
   "https://images.unsplash.com/photo-1641699862936-be9f49b1c38d?q=80&w=2400&auto=format&fit=crop";
@@ -34,6 +35,7 @@ interface HeroSectionProps {
 
 export function HeroSection({ content }: HeroSectionProps) {
   const imageRef = useRef<HTMLDivElement | null>(null);
+  const { nudge } = useUiHaptics();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -98,15 +100,16 @@ export function HeroSection({ content }: HeroSectionProps) {
             asChild
             className="rounded-full px-8 py-6 text-sm transition hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0"
           >
-            <Link href={content?.primaryCtaHref ?? "/collection"}>
+            <Link href={content?.primaryCtaHref ?? "/collection"} onClick={nudge}>
               {content?.primaryCtaLabel ?? "Explore the Collection"}
             </Link>
           </Button>
           <Button
             asChild
-            className="rounded-full bg-white/90 px-8 py-6 text-sm text-trunk-brown shadow-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lift active:translate-y-0"
+            variant="heroSecondary"
+            className="rounded-full px-8 py-6 text-sm font-semibold transition hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0"
           >
-            <Link href={content?.secondaryCtaHref ?? "/our-story"}>
+            <Link href={content?.secondaryCtaHref ?? "/our-story"} onClick={nudge}>
               {content?.secondaryCtaLabel ?? "Read the Story"}
             </Link>
           </Button>

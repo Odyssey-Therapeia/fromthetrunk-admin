@@ -1,10 +1,14 @@
 "use client";
 
 import { LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
+import { AdminMobileNav } from "@/components/admin/mobile-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { buildClientCallbackUrl } from "@/lib/auth/client-callback-url";
+import { useUiHaptics } from "@/lib/haptics/use-ui-haptics";
 
 type AdminTopBarProps = {
   email: null | string;
@@ -29,11 +33,17 @@ export function AdminTopBar({
   image,
   name,
 }: AdminTopBarProps) {
+  const router = useRouter();
+  const { nudge } = useUiHaptics();
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/70 bg-background/90 px-4 backdrop-blur md:px-6">
-      <div>
-        <p className="text-sm text-muted-foreground">Control center</p>
-        <h1 className="text-base font-semibold text-foreground">From the Trunk</h1>
+    <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-border/70 bg-background/92 px-4 py-3 backdrop-blur md:px-6">
+      <div className="flex items-center gap-3">
+        <AdminMobileNav />
+        <div>
+          <p className="text-sm text-muted-foreground">Control center</p>
+          <h1 className="text-base font-semibold text-foreground">From the Trunk</h1>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -49,7 +59,15 @@ export function AdminTopBar({
 
         <Button
           className="gap-2"
-          onClick={() => signOut({ callbackUrl: "/account/sign-in" })}
+          onClick={async () => {
+            nudge();
+            const result = await signOut({
+              callbackUrl: buildClientCallbackUrl("/account/sign-in", "/account/sign-in"),
+              redirect: false,
+            });
+            router.push(buildClientCallbackUrl(result?.url, "/account/sign-in"));
+            router.refresh();
+          }}
           size="sm"
           type="button"
           variant="outline"
