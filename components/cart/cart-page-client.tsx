@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
-import type { Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
 
 interface CartPageClientProps {
   featuredPicks: Product[];
@@ -88,10 +88,10 @@ export function CartPageClient({ featuredPicks }: CartPageClientProps) {
                             {product.name}
                           </p>
                           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                            {product.details?.fabric ?? "Heirloom"}
+                            {product.detailsFabric ?? "Heirloom"}
                           </p>
                           <p className="text-sm font-semibold text-foreground">
-                            {formatCurrency(product.price ?? 0)}
+                            {formatCurrency(product.pricePaise / 100)}
                           </p>
                         </div>
                       </Link>

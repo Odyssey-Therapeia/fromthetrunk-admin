@@ -11,7 +11,6 @@ type CheckResult = {
 
 const requiredEnvVars = [
   "DATABASE_URL",
-  "PAYLOAD_SECRET",
   "NEXTAUTH_SECRET",
   "NEXTAUTH_URL",
   "NEXT_PUBLIC_SERVER_URL",
@@ -176,7 +175,7 @@ const validateSeedData = async (): Promise<CheckResult> => {
       detail:
         count > 0
           ? `${count} published products found`
-          : "No published products found. Run npm run seed:payload",
+          : "No published products found. Run your Drizzle seed script.",
     };
   } catch (error) {
     const detail =

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const fetchProfile = async () => {
-  const response = await fetch("/api/account/profile");
+  const response = await fetch("/api/v2/users/me");
   if (!response.ok) {
     throw new Error("Unable to load profile.");
   }
@@ -18,7 +18,7 @@ const fetchProfile = async () => {
 };
 
 const updateProfile = async (payload: { name: string; phone: string }) => {
-  const response = await fetch("/api/account/profile", {
+  const response = await fetch("/api/v2/users/me", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

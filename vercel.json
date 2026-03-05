@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/release-reservations",
+      "path": "/api/v2/cron/release-reservations",
       "schedule": "*/10 * * * *"
     }
   ]

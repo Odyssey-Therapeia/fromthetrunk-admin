@@ -25,26 +25,34 @@ export default function OurStoryPage() {
 async function OurStoryPageContent() {
   const { isEnabled: includeDrafts } = await draftMode();
   const ourStoryPage = await getGlobals("ourStoryPage", { includeDrafts });
+  const textOrFallback = (value: unknown, fallback: string) =>
+    typeof value === "string" && value.trim().length > 0 ? value : fallback;
   const heroImage = resolveMediaURL(ourStoryPage?.heroImage) ?? storyHero;
 
   const cards = [
     {
-      title: ourStoryPage?.cardOneTitle ?? "Curated Heritage",
+      title: textOrFallback(ourStoryPage?.cardOneTitle, "Curated Heritage"),
       description:
-        ourStoryPage?.cardOneBody ??
-        "Every saree is sourced from trusted collectors and family archives.",
+        textOrFallback(
+          ourStoryPage?.cardOneBody,
+          "Every saree is sourced from trusted collectors and family archives."
+        ),
     },
     {
-      title: ourStoryPage?.cardTwoTitle ?? "Authenticated Craft",
+      title: textOrFallback(ourStoryPage?.cardTwoTitle, "Authenticated Craft"),
       description:
-        ourStoryPage?.cardTwoBody ??
-        "We verify weave, zari, and provenance before adding any piece.",
+        textOrFallback(
+          ourStoryPage?.cardTwoBody,
+          "We verify weave, zari, and provenance before adding any piece."
+        ),
     },
     {
-      title: ourStoryPage?.cardThreeTitle ?? "Modern Heirlooms",
+      title: textOrFallback(ourStoryPage?.cardThreeTitle, "Modern Heirlooms"),
       description:
-        ourStoryPage?.cardThreeBody ??
-        "Pieces are restored with care so they can be cherished again.",
+        textOrFallback(
+          ourStoryPage?.cardThreeBody,
+          "Pieces are restored with care so they can be cherished again."
+        ),
     },
   ];
 
@@ -62,10 +70,10 @@ async function OurStoryPageContent() {
         <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 pb-16 pt-32 text-white">
           <ScrollReveal>
             <p className="text-xs uppercase tracking-[0.5em] text-amber-100/70">
-              {ourStoryPage?.heroEyebrow ?? "Our Story"}
+              {textOrFallback(ourStoryPage?.heroEyebrow, "Our Story")}
             </p>
             <h1 className="font-serif text-4xl md:text-6xl">
-              {ourStoryPage?.heroTitle ?? "A trunk of memories, reopened"}
+              {textOrFallback(ourStoryPage?.heroTitle, "A trunk of memories, reopened")}
             </h1>
           </ScrollReveal>
         </div>
@@ -74,11 +82,13 @@ async function OurStoryPageContent() {
       <section className="mx-auto w-full max-w-5xl space-y-10 px-6">
         <ScrollReveal className="space-y-4">
           <h2 className="font-serif text-3xl text-foreground">
-            {ourStoryPage?.sectionTitle ?? "From keepsake to collection"}
+            {textOrFallback(ourStoryPage?.sectionTitle, "From keepsake to collection")}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {ourStoryPage?.sectionBody ??
-              "The first trunk belonged to a grandmother who kept every saree she wore for milestones, festivals, and family weddings. We realized each piece carried a story worth preserving and sharing."}
+            {textOrFallback(
+              ourStoryPage?.sectionBody,
+              "The first trunk belonged to a grandmother who kept every saree she wore for milestones, festivals, and family weddings. We realized each piece carried a story worth preserving and sharing."
+            )}
           </p>
         </ScrollReveal>
 

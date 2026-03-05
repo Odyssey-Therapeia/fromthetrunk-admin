@@ -9,7 +9,8 @@ import { Newsletter } from "@/components/sections/newsletter";
 import { TrustSignals } from "@/components/sections/trust-signals";
 import { getFeaturedProducts, getGlobals, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
-import type { HomePageGlobal, Product } from "@/types/payload-types";
+import type { Product } from "@/types/domain";
+import type { HomePageContent } from "@/types/site-content";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +29,15 @@ export default async function Home() {
     getProducts(6, { includeDrafts }),
   ]);
 
-  const cms = homePage as unknown as HomePageGlobal | null;
+  const cms = homePage as HomePageContent | null;
   const heroImage = resolveMediaURL(cms?.heroImage);
   const heroContent = {
     ...cms,
     heroImage: heroImage ?? undefined,
   };
 
-  const featuredDocs = (featuredProducts?.docs ?? []) as unknown as Product[];
-  const allDocs = (allProducts?.docs ?? []) as unknown as Product[];
+  const featuredDocs = (featuredProducts?.docs ?? []) as Product[];
+  const allDocs = (allProducts?.docs ?? []) as Product[];
   const productFallback = featuredDocs.length ? featuredDocs : allDocs;
 
   return (

@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
@@ -5,10 +7,11 @@ import { ArrowUpRight } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { cn } from "@/lib/utils";
+import { useLiveProductStock } from "@/lib/realtime/use-live-product-stock";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { WishlistButton } from "@/components/product/wishlist-button";
-import type { Product, StockStatus } from "@/types/payload-types";
+import type { Product, StockStatus } from "@/types/domain";
 
 interface ProductCardProps {
   product: Product;
@@ -17,7 +20,11 @@ interface ProductCardProps {
 
 export function ProductCard({ product, className }: ProductCardProps) {
   const primaryImage = resolveMediaURL(product.images?.[0]);
-  const stockStatus: StockStatus = product.stockStatus ?? "available";
+  const { stockStatus } = useLiveProductStock({
+    initialStatus: product.stockStatus as StockStatus,
+    productId: product.id,
+    productSlug: product.slug,
+  });
   const isSold = stockStatus === "sold";
   const isReserved = stockStatus === "reserved";
 
@@ -63,7 +70,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
           )}
 
           {/* Pre-loved badge */}
-          {!isSold && !isReserved && product.originalPrice && (
+          {!isSold && !isReserved && product.originalPricePaise && (
             <Badge className="absolute left-4 top-4 bg-white/85 text-trunk-brown shadow-soft">
               Pre-loved
             </Badge>
@@ -87,7 +94,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
                 {product.name}
               </h3>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                {product.details?.fabric ?? "Heirloom"} · One of a kind
+                {product.detailsFabric ?? "Heirloom"} · One of a kind
               </p>
             </div>
             <ArrowUpRight className="mt-1 h-5 w-5 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
@@ -97,16 +104,16 @@ export function ProductCard({ product, className }: ProductCardProps) {
               "text-sm font-semibold",
               isSold ? "text-muted-foreground line-through" : "text-foreground"
             )}>
-              {formatCurrency(product.price ?? 0)}
+              {formatCurrency(product.pricePaise / 100)}
             </span>
-            {product.originalPrice && !isSold && (
+            {product.originalPricePaise && !isSold && (
               <span className="text-xs text-muted-foreground line-through">
-                {formatCurrency(product.originalPrice)}
+                {formatCurrency(product.originalPricePaise / 100)}
               </span>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            {product.story?.title ?? "A story from the trunk"}
+            {product.storyTitle ?? "A story from the trunk"}
           </p>
         </div>
       </Link>

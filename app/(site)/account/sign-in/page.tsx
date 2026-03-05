@@ -171,7 +171,7 @@ export default function SignInPage() {
       <div className="rounded-2xl border border-dashed border-border/70 px-5 py-4 text-sm text-muted-foreground">
         Admin access available via{" "}
         <Link href="/admin" className="font-medium text-foreground underline underline-offset-4">
-          Payload Console
+          Admin Console
         </Link>
         .
       </div>

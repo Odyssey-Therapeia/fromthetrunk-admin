@@ -18,7 +18,7 @@ export interface CartItem {
  */
 async function releaseReservation(productId: string): Promise<void> {
   try {
-    await fetch("/api/cart/release", {
+    await fetch("/api/v2/cart/release", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId }),

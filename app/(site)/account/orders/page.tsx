@@ -6,14 +6,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/formatters";
-import type { Order, OrderItem } from "@/types/payload-types";
+import type { Order, OrderItem } from "@/types/domain";
 
 const fetchOrders = async () => {
-  const response = await fetch("/api/account/orders");
+  const response = await fetch("/api/v2/orders");
   if (!response.ok) {
     throw new Error("Unable to load orders.");
   }
-  return response.json();
+  return (await response.json()) as Order[];
 };
 
 export default function OrdersPage() {
@@ -39,7 +39,7 @@ export default function OrdersPage() {
     );
   }
 
-  const orders = (data?.orders ?? []) as Order[];
+  const orders = data ?? [];
 
   return (
     <div className="space-y-6">
@@ -82,7 +82,7 @@ export default function OrdersPage() {
                   {order.items?.length ?? 0} items
                 </p>
                 <p className="text-sm font-semibold text-foreground">
-                  {formatCurrency(order.subtotal ?? 0)}
+                  {formatCurrency(order.subtotalPaise / 100)}
                 </p>
               </div>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
@@ -90,7 +90,7 @@ export default function OrdersPage() {
                   <div key={`${order.id}-${index}`} className="flex justify-between">
                     <span>{item.name}</span>
                     <span>
-                      {item.quantity} × {formatCurrency(item.price ?? 0)}
+                      {item.quantity} × {formatCurrency(item.pricePaise / 100)}
                     </span>
                   </div>
                 ))}

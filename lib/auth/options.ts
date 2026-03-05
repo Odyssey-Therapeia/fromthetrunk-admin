@@ -1,11 +1,12 @@
+import bcrypt from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import TwitterProvider from "next-auth/providers/twitter";
 
-import { PayloadAdapter } from "@/lib/auth/payload-adapter";
-import { getPayloadClient } from "@/lib/payload/server";
+import { getUserByEmail } from "@/db/queries/users";
+import { DrizzleAdapter } from "@/lib/auth/drizzle-adapter";
 
 const providers: NonNullable<NextAuthOptions["providers"]> = [];
 
@@ -60,25 +61,20 @@ providers.push(
       }
 
       try {
-        const payload = await getPayloadClient();
-        const result = await payload.login({
-          collection: "users",
-          data: {
-            email,
-            password,
-          },
-          overrideAccess: true,
-        });
+        const user = await getUserByEmail(email);
+        if (!user || !user.passwordHash) {
+          return null;
+        }
 
-        const user = result.user;
-
-        if (!user || !user.id || !user.email) {
+        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        if (!isPasswordValid) {
           return null;
         }
 
         return {
-          id: String(user.id),
-          email: String(user.email),
+          id: user.id,
+          role: user.role,
+          email: user.email,
           name: user.name ?? null,
           image: user.image ?? null,
         };
@@ -90,7 +86,7 @@ providers.push(
 );
 
 export const authOptions: NextAuthOptions = {
-  adapter: PayloadAdapter(),
+  adapter: DrizzleAdapter(),
   session: {
     strategy: "jwt",
   },
@@ -99,6 +95,9 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user?.id) {
         token.id = user.id;
+      }
+      if (user && "role" in user && typeof user.role === "string") {
+        token.role = user.role;
       }
 
       return token;
@@ -109,6 +108,9 @@ export const authOptions: NextAuthOptions = {
 
       if (session.user && resolvedId) {
         session.user.id = resolvedId;
+        if (typeof token.role === "string") {
+          session.user.role = token.role;
+        }
       }
       return session;
     },

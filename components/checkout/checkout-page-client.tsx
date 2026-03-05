@@ -22,13 +22,12 @@ import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
-import type { Address, Product } from "@/types/payload-types";
+import type { Address, Product } from "@/types/domain";
 
 const fetchAddresses = async (): Promise<Address[]> => {
-  const response = await fetch("/api/account/addresses");
+  const response = await fetch("/api/v2/addresses");
   if (!response.ok) return [];
-  const data = await response.json();
-  return data.addresses ?? [];
+  return (await response.json()) as Address[];
 };
 
 interface CheckoutPageClientProps {
@@ -174,7 +173,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         shippingMethod,
       };
 
-      const createResponse = await fetch("/api/payments/create-order", {
+      const createResponse = await fetch("/api/v2/payments/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderPayload),
@@ -194,7 +193,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
 
       const options: Record<string, unknown> = {
         key: orderData.razorpayKeyId,
-        amount: orderData.amount * 100,
+        amount: orderData.amountPaise,
         currency: orderData.currency,
         name: "From the Trunk",
         description: `Order for ${items.length} piece${items.length > 1 ? "s" : ""}`,
@@ -210,7 +209,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         handler: async (response: Record<string, unknown>) => {
           // Step 3: Verify payment on server
           try {
-            const verifyResponse = await fetch("/api/payments/verify", {
+            const verifyResponse = await fetch("/api/v2/payments/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -553,7 +552,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         {product.name}
                       </p>
                       <p className="text-sm font-semibold text-foreground">
-                        {formatCurrency(product.price ?? 0)}
+                        {formatCurrency(product.pricePaise / 100)}
                       </p>
                     </div>
                   </Link>

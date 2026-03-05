@@ -1,50 +1,47 @@
-import { getPayloadClient } from "@/lib/payload/server";
-import type { Where } from "payload";
+import { getCollectionBySlug, listCollections } from "@/db/queries/collections";
+import {
+  getFeaturedProducts as getFeaturedProductsQuery,
+  getProductBySlug as getProductBySlugQuery,
+  getProductsByCollection as getProductsByCollectionQuery,
+  listProducts as listProductsQuery,
+  searchProducts as searchProductsQuery,
+} from "@/db/queries/products";
+import { getGlobal } from "@/db/queries/globals";
+import type { Product } from "@/types/domain";
 
 type QueryOptions = {
   includeDrafts?: boolean;
   page?: number;
 };
 
-const getPublishedWhereClause = (includeDrafts?: boolean): undefined | Where =>
-  includeDrafts ? undefined : { status: { equals: "published" } };
-
 export const getGlobals = async (slug: string, options: QueryOptions = {}) => {
-  const payload = await getPayloadClient();
-  return payload.findGlobal({
-    slug,
-    depth: 2,
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
-  });
+  void options;
+  const content = await getGlobal(slug);
+  return content ?? null;
 };
 
 export const getCollections = async (options: QueryOptions = {}) => {
-  const payload = await getPayloadClient();
-  return payload.find({
-    collection: "collections",
-    depth: 2,
-    limit: 100,
-    sort: "name",
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
-  });
+  void options;
+  const docs = (await listCollections()).sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    docs,
+    totalDocs: docs.length,
+  };
 };
 
 export const getProducts = async (limit = 200, options: QueryOptions = {}) => {
-  const payload = await getPayloadClient();
-  const where = getPublishedWhereClause(options.includeDrafts);
-
-  return payload.find({
-    collection: "products",
-    depth: 2,
+  const page = options.page ?? 1;
+  const offset = (page - 1) * limit;
+  const docs = await listProductsQuery({
+    includeDrafts: options.includeDrafts,
     limit,
-    page: options.page ?? 1,
-    where,
-    sort: "-createdAt",
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
+    offset,
   });
+
+  return {
+    docs,
+    totalDocs: docs.length,
+  };
 };
 
 export const getProductsByCollection = async (
@@ -52,76 +49,59 @@ export const getProductsByCollection = async (
   limit = 200,
   options: QueryOptions = {}
 ) => {
-  const payload = await getPayloadClient();
-  const collectionResult = await payload.find({
-    collection: "collections",
-    where: { slug: { equals: collectionSlug } },
-    limit: 1,
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
-  });
-
-  const collectionDoc = collectionResult.docs[0];
+  const collectionDoc = await getCollectionBySlug(collectionSlug);
   if (!collectionDoc) {
-    return { docs: [] as unknown[] };
+    return { docs: [] as Product[], totalDocs: 0 };
   }
 
-  const filters: Where[] = [{ collection: { equals: collectionDoc.id } }];
-  const publishedFilter = getPublishedWhereClause(options.includeDrafts);
-  if (publishedFilter) {
-    filters.push(publishedFilter);
-  }
-
-  return payload.find({
-    collection: "products",
-    depth: 2,
+  const page = options.page ?? 1;
+  const offset = (page - 1) * limit;
+  const docs = await getProductsByCollectionQuery(collectionDoc.slug, {
+    includeDrafts: options.includeDrafts,
     limit,
-    page: options.page ?? 1,
-    where: { and: filters },
-    sort: "-createdAt",
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
+    offset,
   });
+
+  return {
+    docs,
+    totalDocs: docs.length,
+  };
 };
 
 export const getFeaturedProducts = async (
   limit = 4,
   options: QueryOptions = {}
 ) => {
-  const payload = await getPayloadClient();
-  const filters: Where[] = [{ featured: { equals: true } }];
-  const publishedFilter = getPublishedWhereClause(options.includeDrafts);
-  if (publishedFilter) {
-    filters.push(publishedFilter);
-  }
-
-  return payload.find({
-    collection: "products",
-    depth: 2,
+  const docs = await getFeaturedProductsQuery({
+    includeDrafts: options.includeDrafts,
     limit,
-    where: { and: filters },
-    sort: "-createdAt",
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
   });
+
+  return {
+    docs,
+    totalDocs: docs.length,
+  };
 };
 
 export const getProductBySlug = async (slug: string, options: QueryOptions = {}) => {
-  const payload = await getPayloadClient();
-  const filters: Where[] = [{ slug: { equals: slug } }];
-  const publishedFilter = getPublishedWhereClause(options.includeDrafts);
-  if (publishedFilter) {
-    filters.push(publishedFilter);
-  }
-
-  const result = await payload.find({
-    collection: "products",
-    depth: 2,
-    limit: 1,
-    where: { and: filters },
-    draft: Boolean(options.includeDrafts),
-    overrideAccess: Boolean(options.includeDrafts),
+  const result = await getProductBySlugQuery(slug, {
+    includeDrafts: options.includeDrafts,
   });
 
-  return result.docs[0] ?? null;
+  return result;
+};
+
+export const searchProducts = async (
+  query: string,
+  limit = 48,
+  options: Pick<QueryOptions, "includeDrafts"> = {}
+) => {
+  const docs = await searchProductsQuery(query, limit, {
+    includeDrafts: options.includeDrafts,
+  });
+
+  return {
+    docs,
+    totalDocs: docs.length,
+  };
 };

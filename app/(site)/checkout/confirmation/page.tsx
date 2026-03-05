@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getServerAuthSession } from "@/lib/auth/get-session";
-import { getPayloadClient } from "@/lib/payload/server";
-import type { Order, OrderItem } from "@/types/payload-types";
+import { getOrder } from "@/db/queries/orders";
+import type { Order, OrderItem } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -37,16 +37,15 @@ export default async function ConfirmationPage({
       redirect("/account/sign-in");
     }
 
-    const payload = await getPayloadClient();
-    const order = (await payload.findByID({
-      collection: "orders",
-      id: orderId,
-      overrideAccess: true,
-    })) as unknown as Order;
+    const rawOrder = await getOrder(orderId);
+    if (!rawOrder) {
+      return <GenericConfirmation />;
+    }
+
+    const order: Order = rawOrder;
 
     // Verify the order belongs to the current user
-    const orderUserId =
-      typeof order.user === "object" ? order.user.id : order.user;
+    const orderUserId = order.userId;
     if (orderUserId !== session.user.id) {
       return <GenericConfirmation />;
     }
@@ -93,7 +92,7 @@ export default async function ConfirmationPage({
                   <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                 </div>
                 <p className="font-semibold text-foreground">
-                  {formatCurrency(item.price * item.quantity)}
+                  {formatCurrency((item.pricePaise * item.quantity) / 100)}
                 </p>
               </div>
             ))}
@@ -104,41 +103,41 @@ export default async function ConfirmationPage({
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Subtotal</span>
-              <span>{formatCurrency(order.subtotal)}</span>
+              <span>{formatCurrency(order.subtotalPaise / 100)}</span>
             </div>
-            {(order.shippingCost ?? 0) > 0 && (
+            {order.shippingCostPaise > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Shipping</span>
-                <span>{formatCurrency(order.shippingCost ?? 0)}</span>
+                <span>{formatCurrency(order.shippingCostPaise / 100)}</span>
               </div>
             )}
-            {(order.taxAmount ?? 0) > 0 && (
+            {order.taxAmountPaise > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>GST</span>
-                <span>{formatCurrency(order.taxAmount ?? 0)}</span>
+                <span>{formatCurrency(order.taxAmountPaise / 100)}</span>
               </div>
             )}
             <Separator className="my-2" />
             <div className="flex justify-between text-base font-semibold text-foreground">
               <span>Total</span>
-              <span>{formatCurrency(order.total ?? order.subtotal)}</span>
+              <span>{formatCurrency(order.totalPaise / 100)}</span>
             </div>
           </div>
 
-          {order.shippingAddress && (
+          {order.shippingLine1 && (
             <>
               <Separator className="my-4" />
               <div className="text-sm text-muted-foreground">
                 <p className="font-semibold text-foreground">Shipping to</p>
-                <p className="mt-1">{order.shippingAddress.name}</p>
-                <p>{order.shippingAddress.line1}</p>
-                {order.shippingAddress.line2 && <p>{order.shippingAddress.line2}</p>}
+                <p className="mt-1">{order.shippingName}</p>
+                <p>{order.shippingLine1}</p>
+                {order.shippingLine2 && <p>{order.shippingLine2}</p>}
                 <p>
-                  {order.shippingAddress.city}
-                  {order.shippingAddress.state ? `, ${order.shippingAddress.state}` : ""}{" "}
-                  {order.shippingAddress.postalCode}
+                  {order.shippingCity}
+                  {order.shippingState ? `, ${order.shippingState}` : ""}{" "}
+                  {order.shippingPostalCode}
                 </p>
-                <p>{order.shippingAddress.country}</p>
+                <p>{order.shippingCountry}</p>
               </div>
             </>
           )}
