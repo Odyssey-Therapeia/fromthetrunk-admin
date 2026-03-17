@@ -23,6 +23,20 @@ export const updatePasswordInputSchema = z
   })
   .strict();
 
+export const adminCreateUserInputSchema = z
+  .object({
+    email: z.string().trim().email().max(320),
+    name: z.string().trim().min(1).max(120),
+    password: passwordSchema,
+  })
+  .strict();
+
+export const adminResetPasswordInputSchema = z
+  .object({
+    newPassword: passwordSchema,
+  })
+  .strict();
+
 export const updateMeInputSchema = z
   .object({
     defaultAddressId: z.string().uuid().nullable().optional(),

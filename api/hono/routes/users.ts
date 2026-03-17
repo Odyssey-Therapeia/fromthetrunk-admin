@@ -3,8 +3,10 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 
 import { requireAdmin, requireAuth } from "@/api/hono/middleware/auth";
-import { errorSchema } from "@/api/hono/schemas/common";
+import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
 import {
+  adminCreateUserInputSchema,
+  adminResetPasswordInputSchema,
   signUpInputSchema,
   updateMeInputSchema,
   updatePasswordInputSchema,
@@ -36,6 +38,63 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
         offset: 0,
       });
       return c.json(users, 200);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/admins",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: adminCreateUserInputSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        201: { description: "Admin user created" },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Invalid payload",
+        },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Email already registered",
+        },
+      },
+      tags: ["Users"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const body = c.req.valid("json");
+      const existing = await getUserByEmail(body.email);
+      if (existing) {
+        return c.json(
+          {
+            code: "EMAIL_ALREADY_REGISTERED",
+            message: "An account with this email already exists.",
+          },
+          409
+        );
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, 12);
+      const [created] = await db
+        .insert(users)
+        .values({
+          email: body.email.toLowerCase(),
+          name: body.name,
+          passwordHash,
+          role: "admin",
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return c.json(created, 201);
     }
   );
 
@@ -194,6 +253,66 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const passwordHash = await bcrypt.hash(body.newPassword, 12);
       const updated = await updateUser(authUserOrResponse.id, {
+        passwordHash,
+      });
+
+      if (!updated) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+
+      return c.json({ success: true }, 200);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/{id}/password",
+      request: {
+        params: idParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: adminResetPasswordInputSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "User password updated by admin" },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Password reset only supports admin targets",
+        },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "User not found",
+        },
+      },
+      tags: ["Users"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+      const body = c.req.valid("json");
+      const user = await getUserById(id);
+      if (!user) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+
+      if (user.role !== "admin") {
+        return c.json(
+          {
+            code: "ADMIN_PASSWORD_RESET_REQUIRES_ADMIN_TARGET",
+            message: "Only admin accounts can be updated from this admin password flow.",
+          },
+          400
+        );
+      }
+
+      const passwordHash = await bcrypt.hash(body.newPassword, 12);
+      const updated = await updateUser(id, {
         passwordHash,
       });
 
