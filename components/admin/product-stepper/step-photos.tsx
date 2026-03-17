@@ -2,26 +2,24 @@
 
 import { put } from "@vercel/blob/client";
 import { Loader2, UploadCloud, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
+import type { ProductStepperMedia } from "./types";
+
 type StepPhotosProps = {
   form: any;
+  setUploaded: Dispatch<SetStateAction<ProductStepperMedia[]>>;
+  uploaded: ProductStepperMedia[];
 };
 
 type UploadConfig = {
   clientToken: string;
   pathname: string;
-};
-
-type CompletedMedia = {
-  filename: string;
-  id: string;
-  url: string;
 };
 
 type UploadProgress = {
@@ -32,10 +30,11 @@ type UploadProgress = {
 
 export function StepPhotos({
   form,
+  setUploaded,
+  uploaded,
 }: StepPhotosProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploaded, setUploaded] = useState<CompletedMedia[]>([]);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
   const [draggingMediaId, setDraggingMediaId] = useState<null | string>(null);
 
@@ -61,7 +60,7 @@ export function StepPhotos({
         const mediaById = new Map(mediaRows.map((row) => [row.id, row]));
         const ordered = imageMediaIds
           .map((id) => mediaById.get(id))
-          .filter((row): row is CompletedMedia => Boolean(row));
+          .filter((row): row is ProductStepperMedia => Boolean(row));
 
         if (!cancelled) {
           setUploaded(ordered);
@@ -75,7 +74,7 @@ export function StepPhotos({
     return () => {
       cancelled = true;
     };
-  }, [imageMediaIds, uploaded.length]);
+  }, [imageMediaIds, setUploaded, uploaded.length]);
 
   const updateQueueProgress = (id: string, progress: number) => {
     setUploadQueue((current) =>
@@ -83,7 +82,7 @@ export function StepPhotos({
     );
   };
 
-  const syncUploaded = (next: CompletedMedia[]) => {
+  const syncUploaded = (next: ProductStepperMedia[]) => {
     setUploaded(next);
     form.setFieldValue(
       "imageMediaIds",
@@ -91,7 +90,7 @@ export function StepPhotos({
     );
   };
 
-  const appendUploaded = (media: CompletedMedia) => {
+  const appendUploaded = (media: ProductStepperMedia) => {
     setUploaded((current) => {
       const next = [...current, media];
       form.setFieldValue(
@@ -174,7 +173,7 @@ export function StepPhotos({
         }
         updateQueueProgress(uploadId, 100);
 
-        const mediaResponse = (await completeResponse.json()) as Omit<CompletedMedia, "filename">;
+        const mediaResponse = (await completeResponse.json()) as Omit<ProductStepperMedia, "filename">;
         appendUploaded({
           ...mediaResponse,
           filename: file.name,

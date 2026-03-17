@@ -1,3 +1,11 @@
+import { toRupees } from "@/db/money";
+
+export type ProductStepperMedia = {
+  filename: string;
+  id: string;
+  url: string;
+};
+
 export type ProductStepperValues = {
   collectionId: string;
   detailsCondition: string;
@@ -18,8 +26,6 @@ export type ProductStepperValues = {
   storyTitle: string;
   tagsCsv: string;
 };
-
-import { toRupees } from "@/db/money";
 
 export const mapProductToStepperValues = (product: {
   collectionId?: null | string;

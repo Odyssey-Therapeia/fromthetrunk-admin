@@ -1,16 +1,25 @@
 import { z } from "@hono/zod-openapi";
 
+const passwordSchema = z
+  .string()
+  .min(8)
+  .max(128)
+  .regex(/[A-Z]/)
+  .regex(/[a-z]/)
+  .regex(/[0-9]/);
+
 export const signUpInputSchema = z
   .object({
     email: z.string().trim().email().max(320),
     name: z.string().trim().min(1).max(120),
-    password: z
-      .string()
-      .min(8)
-      .max(128)
-      .regex(/[A-Z]/)
-      .regex(/[a-z]/)
-      .regex(/[0-9]/),
+    password: passwordSchema,
+  })
+  .strict();
+
+export const updatePasswordInputSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(128),
+    newPassword: passwordSchema,
   })
   .strict();
 

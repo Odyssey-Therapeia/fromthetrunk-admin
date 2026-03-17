@@ -33,6 +33,12 @@ type AdminSettingsContent = {
   };
 };
 
+type PasswordFormState = {
+  confirmNewPassword: string;
+  currentPassword: string;
+  newPassword: string;
+};
+
 const defaultSettings: AdminSettingsContent = {
   commerce: {
     expressShipping: 1200,
@@ -54,11 +60,27 @@ const defaultSettings: AdminSettingsContent = {
   },
 };
 
+const defaultPasswordForm: PasswordFormState = {
+  confirmNewPassword: "",
+  currentPassword: "",
+  newPassword: "",
+};
+
+const passwordRequirements =
+  "Use at least 8 characters with uppercase, lowercase, and a number.";
+
+const meetsPasswordRequirements = (value: string) =>
+  value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value);
+
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AdminSettingsContent>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordForm, setPasswordForm] = useState<PasswordFormState>(defaultPasswordForm);
+  const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -103,6 +125,70 @@ export default function AdminSettingsPage() {
     });
     setIsSaving(false);
     setStatus(response.ok ? "Settings saved successfully." : `Save failed (${response.status}).`);
+  };
+
+  const updatePasswordField = <TKey extends keyof PasswordFormState>(
+    key: TKey,
+    value: PasswordFormState[TKey]
+  ) => {
+    setPasswordForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const changePassword = async () => {
+    setPasswordError(null);
+    setPasswordStatus(null);
+
+    if (!passwordForm.currentPassword.trim()) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+
+    if (!meetsPasswordRequirements(passwordForm.newPassword)) {
+      setPasswordError(passwordRequirements);
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      setPasswordError("New password and confirmation must match.");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const response = await fetch("/api/v2/users/me/password", {
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+      });
+
+      if (!response.ok) {
+        let message = `Password update failed (${response.status}).`;
+        try {
+          const data = (await response.json()) as { message?: string };
+          if (typeof data.message === "string" && data.message.length > 0) {
+            message = data.message;
+          }
+        } catch {
+          // no-op
+        }
+
+        setPasswordError(message);
+        return;
+      }
+
+      setPasswordForm(defaultPasswordForm);
+      setPasswordStatus("Password updated successfully.");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const updateCommerce = <TKey extends keyof AdminSettingsContent["commerce"]>(
@@ -301,6 +387,58 @@ export default function AdminSettingsPage() {
               disabled={isLoading}
               onCheckedChange={(checked) => updateOperations("maintenanceMode", checked)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+          <CardDescription>Update your admin password without leaving the dashboard.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                onChange={(event) => updatePasswordField("currentPassword", event.target.value)}
+                type="password"
+                value={passwordForm.currentPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                onChange={(event) => updatePasswordField("newPassword", event.target.value)}
+                type="password"
+                value={passwordForm.newPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+              <Input
+                id="confirm-new-password"
+                onChange={(event) => updatePasswordField("confirmNewPassword", event.target.value)}
+                type="password"
+                value={passwordForm.confirmNewPassword}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{passwordRequirements}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              disabled={isUpdatingPassword}
+              onClick={() => void changePassword()}
+              type="button"
+            >
+              {isUpdatingPassword ? "Updating..." : "Update Password"}
+            </Button>
+            {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
+            {!passwordError && passwordStatus ? (
+              <p className="text-sm text-muted-foreground">{passwordStatus}</p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

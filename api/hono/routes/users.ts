@@ -4,7 +4,11 @@ import { and, eq } from "drizzle-orm";
 
 import { requireAdmin, requireAuth } from "@/api/hono/middleware/auth";
 import { errorSchema } from "@/api/hono/schemas/common";
-import { signUpInputSchema, updateMeInputSchema } from "@/api/hono/schemas/users";
+import {
+  signUpInputSchema,
+  updateMeInputSchema,
+  updatePasswordInputSchema,
+} from "@/api/hono/schemas/users";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { getUserByEmail, getUserById, listUsers, updateUser } from "@/db/queries/users";
@@ -125,6 +129,69 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       return c.json(user, 200);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/me/password",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: updatePasswordInputSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "Current user password updated" },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Invalid payload",
+        },
+        401: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Invalid current password",
+        },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "User not found",
+        },
+      },
+      tags: ["Users"],
+    }),
+    async (c) => {
+      const authUserOrResponse = requireAuth(c);
+      if (authUserOrResponse instanceof Response) return authUserOrResponse;
+
+      const body = c.req.valid("json");
+      const user = await getUserById(authUserOrResponse.id);
+      if (!user) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+
+      const currentPasswordMatches = await bcrypt.compare(body.currentPassword, user.passwordHash);
+      if (!currentPasswordMatches) {
+        return c.json(
+          {
+            code: "INVALID_CURRENT_PASSWORD",
+            message: "Current password is incorrect.",
+          },
+          401
+        );
+      }
+
+      const passwordHash = await bcrypt.hash(body.newPassword, 12);
+      const updated = await updateUser(authUserOrResponse.id, {
+        passwordHash,
+      });
+
+      if (!updated) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+
+      return c.json({ success: true }, 200);
     }
   );
 

@@ -15,7 +15,11 @@ import { StepPhotos } from "./step-photos";
 import { StepPreview } from "./step-preview";
 import { StepPricing } from "./step-pricing";
 import { StepStory } from "./step-story";
-import { defaultStepperValues, ProductStepperValues } from "./types";
+import {
+  defaultStepperValues,
+  type ProductStepperMedia,
+  type ProductStepperValues,
+} from "./types";
 
 type ProductStepperProps = {
   initialValues?: Partial<ProductStepperValues>;
@@ -45,6 +49,7 @@ export function ProductStepper({
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const [uploaded, setUploaded] = useState<ProductStepperMedia[]>([]);
   const stepContainerRef = useRef<HTMLDivElement>(null);
 
   const mergedInitialValues = useMemo<ProductStepperValues>(
@@ -188,7 +193,9 @@ export function ProductStepper({
         </div>
 
         <div ref={stepContainerRef}>
-          {stepIndex === 0 ? <StepPhotos form={form} /> : null}
+          {stepIndex === 0 ? (
+            <StepPhotos form={form} setUploaded={setUploaded} uploaded={uploaded} />
+          ) : null}
           {stepIndex === 1 ? <StepDetails form={form} /> : null}
           {stepIndex === 2 ? <StepStory form={form} /> : null}
           {stepIndex === 3 ? <StepPricing form={form} /> : null}
@@ -224,7 +231,13 @@ export function ProductStepper({
         </div>
       </div>
 
-      <LivePreviewCard values={form.state.values} />
+      <LivePreviewCard
+        imageUrls={uploaded.map((media) => ({
+          id: media.id,
+          url: media.url,
+        }))}
+        values={form.state.values}
+      />
     </div>
   );
 }
