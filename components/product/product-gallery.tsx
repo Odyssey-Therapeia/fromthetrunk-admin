@@ -26,13 +26,14 @@ export function ProductGallery({ images, alt }: ProductGalleryProps) {
 
   return (
     <div className="space-y-3 lg:sticky lg:top-28 lg:space-y-4">
-      <div className="relative max-h-[44vh] overflow-hidden rounded-2xl bg-card sm:max-h-[50vh] lg:max-h-none lg:rounded-3xl">
+      <div className="relative flex items-center justify-center max-h-[44vh] overflow-hidden rounded-2xl bg-card sm:max-h-[50vh] lg:max-h-[70vh] lg:rounded-3xl">
         <Image
           src={activeImage}
           alt={alt}
           width={800}
           height={1000}
-          className="h-auto max-h-[44vh] w-full object-cover sm:max-h-[50vh] lg:max-h-none"
+          sizes="(max-width: 1024px) 100vw, 55vw"
+          className="h-auto max-h-[44vh] w-full object-cover sm:max-h-[50vh] lg:max-h-[70vh] lg:w-auto lg:object-contain"
         />
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 lg:gap-3">
