@@ -16,13 +16,14 @@ export function BrandStoryTeaser() {
             Our Story
           </p>
           <h2 className="font-serif text-3xl text-foreground md:text-4xl">
-            The trunk that carries memories
+            Born in Bengaluru, rooted in heritage
           </h2>
           <p className="text-sm text-muted-foreground">
-            From the Trunk began with a single cedar chest filled with heirloom
-            sarees. Each piece whispered stories of celebrations, journeys, and
-            women who wore them before. We now curate these treasures so their
-            legacy can continue.
+            Why let beautiful sarees fade away in dark trunks? At FTT, we
+            breathe new life into preloved gems. By sourcing forgotten treasures
+            and meticulously restoring them to their original glory, we bridge
+            the gap between vintage charm and modern luxury. We believe in a
+            world where quality isn&apos;t just bought, it&apos;s preserved.
           </p>
           <Button asChild className="rounded-full px-8">
             <Link href="/our-story">Read the full story</Link>

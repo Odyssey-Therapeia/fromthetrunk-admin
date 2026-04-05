@@ -72,15 +72,15 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-12 px-6 py-16">
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 sm:space-y-10 sm:px-6 sm:py-12 lg:space-y-12 lg:py-16">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]">
-        <ScrollReveal className="rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,rgba(255,250,244,0.98),rgba(246,238,228,0.92))] p-8 shadow-soft">
+        <ScrollReveal className="rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,rgba(255,250,244,0.98),rgba(246,238,228,0.92))] p-5 sm:p-8 shadow-soft">
           <div className="space-y-5">
             <div className="space-y-3">
               <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
                 {cms?.eyebrow ?? "The Collection"}
               </p>
-              <h1 className="font-serif text-4xl text-foreground md:text-5xl">
+              <h1 className="font-serif text-2xl text-foreground sm:text-4xl md:text-5xl">
                 {cms?.title ?? "Curated pre-loved sarees"}
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -89,7 +89,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <div className="rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur">
                 <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
                   Live pieces
@@ -112,7 +112,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
           </div>
         </ScrollReveal>
 
-        <ScrollReveal delay={0.1} className="rounded-[2rem] border border-border/60 bg-card/80 p-6 shadow-soft">
+        <ScrollReveal delay={0.1} className="rounded-[2rem] border border-border/60 bg-card/80 p-4 sm:p-6 shadow-soft">
           <div className="flex h-full flex-col gap-5">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
@@ -182,7 +182,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
         </div>
       ) : (
         <>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:gap-6 lg:grid-cols-3">
             {items.map((product, index) => (
               <ScrollReveal key={product.id} delay={index * 0.05}>
                 <ProductCard product={product} />

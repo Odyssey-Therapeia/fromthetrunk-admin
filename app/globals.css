@@ -2,7 +2,6 @@
 
 @plugin "tailwindcss-animate";
 
-@custom-variant dark (&:is(.dark *));
 
 :root {
   --background: #f5f0e8;
@@ -83,41 +82,6 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-}
-
-.dark {
-  --background: #140d0a;
-  --foreground: #f4eee4;
-  --card: #1f1511;
-  --card-foreground: #f4eee4;
-  --popover: #1f1511;
-  --popover-foreground: #f4eee4;
-  --primary: #f2d6a3;
-  --primary-foreground: #2a1b14;
-  --secondary: #2b1f18;
-  --secondary-foreground: #f4eee4;
-  --muted: #2b1f18;
-  --muted-foreground: #c6b2a3;
-  --accent: #3b2a22;
-  --accent-foreground: #f4eee4;
-  --destructive: #f97066;
-  --destructive-foreground: #2a1b14;
-  --border: rgba(244, 238, 228, 0.18);
-  --input: rgba(244, 238, 228, 0.18);
-  --ring: #f2d6a3;
-  --chart-1: #f2d6a3;
-  --chart-2: #b8860b;
-  --chart-3: #9c6b4a;
-  --chart-4: #6b1d1d;
-  --chart-5: #f6c271;
-  --sidebar: #1f1511;
-  --sidebar-foreground: #f4eee4;
-  --sidebar-primary: #f2d6a3;
-  --sidebar-primary-foreground: #2a1b14;
-  --sidebar-accent: #2b1f18;
-  --sidebar-accent-foreground: #f4eee4;
-  --sidebar-border: rgba(244, 238, 228, 0.18);
-  --sidebar-ring: #f2d6a3;
 }
 
 @layer base {

@@ -56,7 +56,7 @@ export function SiteFooter() {
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <a
-              href="https://instagram.com/fromthetrunk"
+              href="https://www.instagram.com/from.thetrunk/"
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-muted-foreground transition hover:border-trunk-gold/50 hover:text-foreground"
@@ -66,7 +66,7 @@ export function SiteFooter() {
               Instagram
             </a>
             <a
-              href="https://wa.me/910000000000"
+              href="https://wa.me/919731910202"
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-muted-foreground transition hover:border-trunk-gold/50 hover:text-foreground"

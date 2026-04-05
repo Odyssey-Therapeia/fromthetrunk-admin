@@ -18,7 +18,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getProductBySlug, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
@@ -144,7 +143,7 @@ export default async function SareePage({ params }: ProductPageProps) {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-16 px-6 py-16">
+    <div className="mx-auto w-full max-w-6xl space-y-10 px-4 py-6 sm:px-6 sm:py-10 lg:space-y-16 lg:py-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -160,12 +159,12 @@ export default async function SareePage({ params }: ProductPageProps) {
         price={product.pricePaise / 100}
         image={images[0] ?? ""}
       />
-      <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-        <ScrollReveal>
+      <div className="grid gap-6 lg:gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="order-2 lg:order-1">
           <ProductGallery images={images} alt={product.name} />
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal delay={0.1} className="space-y-6">
+        <ScrollReveal delay={0.1} className="order-1 flex flex-col gap-6 lg:order-2">
           <div className="space-y-3">
             <Badge className="bg-secondary text-muted-foreground">
               {product.storyEra ?? "Archive"}
@@ -192,25 +191,7 @@ export default async function SareePage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <Separator />
-
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {product.storyNarrative}
-            </p>
-            {product.storyProvenance && (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  Provenance:
-                </span>{" "}
-                {product.storyProvenance}
-              </p>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="space-y-4">
+          <div className="order-2 space-y-4 border-t border-border/60 pt-6 lg:order-3">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
                 Length
@@ -232,7 +213,25 @@ export default async function SareePage({ params }: ProductPageProps) {
             )}
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
+          <div className="order-3 space-y-4 border-t border-border/60 pt-6 lg:order-2">
+            <p className="text-sm text-muted-foreground">
+              {product.storyNarrative}
+            </p>
+            {product.storyProvenance && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  Provenance:
+                </span>{" "}
+                {product.storyProvenance}
+              </p>
+            )}
+          </div>
+
+          <Accordion
+            type="single"
+            collapsible
+            className="order-4 w-full border-t border-border/60 pt-2"
+          >
             <AccordionItem value="details">
               <AccordionTrigger>Product Details</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
@@ -268,7 +267,7 @@ export default async function SareePage({ params }: ProductPageProps) {
               </h2>
             </div>
           </ScrollReveal>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:gap-6 lg:grid-cols-3">
             {related.map((item, index) => (
               <ScrollReveal key={item.id} delay={index * 0.05}>
                 <ProductCard product={item} />

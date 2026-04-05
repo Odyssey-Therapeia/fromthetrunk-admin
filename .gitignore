@@ -30,8 +30,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE
-.cursor/
+# IDE — ignore everything inside .cursor except rules
+.cursor/*
+!.cursor/rules/
+
+# Test artifacts
+test-results/
 
 # lock files (keep package-lock.json for reproducible builds)
 bun.lock
