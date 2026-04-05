@@ -64,13 +64,13 @@ export function ProductCard({ product, className }: ProductCardProps) {
             </div>
           )}
           {isReserved && (
-            <Badge className="absolute left-3 top-3 @sm:left-4 @sm:top-4 bg-amber-100/90 text-trunk-brown shadow-soft">
+            <Badge className="absolute left-2 top-2 @sm:left-4 @sm:top-4 text-[10px] @sm:text-xs bg-amber-100/90 text-trunk-brown shadow-soft">
               Reserved
             </Badge>
           )}
 
           {!isSold && !isReserved && product.originalPricePaise && (
-            <Badge className="absolute left-3 top-3 @sm:left-4 @sm:top-4 bg-white/85 text-trunk-brown shadow-soft">
+            <Badge className="absolute left-2 top-2 @sm:left-4 @sm:top-4 text-[10px] @sm:text-xs bg-white/85 text-trunk-brown shadow-soft">
               Pre-loved
             </Badge>
           )}
@@ -85,19 +85,20 @@ export function ProductCard({ product, className }: ProductCardProps) {
             </div>
           )}
         </div>
-        <div className="space-y-1 p-3 @sm:space-y-1.5 @sm:p-4">
-          <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1 p-2.5 @sm:space-y-1.5 @sm:p-4">
+          <div className="flex items-start justify-between gap-1.5">
             <div className="min-w-0">
-              <h3 className="truncate font-serif text-sm @sm:text-base @md:text-lg text-foreground">
+              <h3 className="line-clamp-2 font-serif text-[13px] leading-tight @sm:text-base @md:text-lg text-foreground">
                 {product.name}
               </h3>
-              <p className="truncate text-[10px] @sm:text-xs uppercase tracking-[0.15em] @sm:tracking-[0.2em] text-muted-foreground">
-                {product.detailsFabric ?? "Heirloom"} · One of a kind
+              <p className="mt-0.5 truncate text-[10px] @sm:text-xs uppercase tracking-[0.12em] @sm:tracking-[0.2em] text-muted-foreground">
+                <span>{product.detailsFabric ?? "Heirloom"}</span>
+                <span className="hidden @sm:inline"> · One of a kind</span>
               </p>
             </div>
-            <ArrowUpRight className="mt-0.5 h-4 w-4 @sm:h-5 @sm:w-5 shrink-0 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
+            <ArrowUpRight className="mt-0.5 hidden @sm:block h-5 w-5 shrink-0 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
           </div>
-          <div className="flex items-center gap-1.5 @sm:gap-2">
+          <div className="flex items-center gap-1 @sm:gap-2">
             <span className={cn(
               "text-xs @sm:text-sm font-semibold",
               isSold ? "text-muted-foreground line-through" : "text-foreground"
