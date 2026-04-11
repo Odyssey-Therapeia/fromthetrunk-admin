@@ -7,6 +7,7 @@
 
 const STORAGE_KEY = "ftt-recently-viewed-v1";
 const MAX_ITEMS = 12;
+const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface RecentlyViewedItem {
   id: string;
@@ -43,11 +44,13 @@ export function trackRecentlyViewed(item: Omit<RecentlyViewedItem, "viewedAt">):
 }
 
 export function getRecentlyViewed(excludeId?: string): RecentlyViewedItem[] {
-  const items = getItems();
-  if (excludeId) {
-    return items.filter((item) => item.id !== excludeId);
-  }
-  return items;
+  const now = Date.now();
+  return getItems().filter(
+    (item) =>
+      Boolean(item.image) &&
+      now - item.viewedAt < TTL_MS &&
+      item.id !== excludeId
+  );
 }
 
 export function clearRecentlyViewed(): void {

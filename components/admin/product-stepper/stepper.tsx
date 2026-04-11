@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { toPaise, toRupees } from "@/db/money";
+import { slugify } from "@/lib/utils";
 
 import { LivePreviewCard } from "./live-preview-card";
 import { StepDetails } from "./step-details";
@@ -27,13 +28,6 @@ type ProductStepperProps = {
 };
 
 const steps = ["Photos", "Details", "Story", "Pricing", "Preview"] as const;
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 
 const toNullableText = (value: string) => {
   const trimmed = value.trim();

@@ -10,6 +10,7 @@ import {
   productTags,
   tags,
 } from "@/db/schema";
+import { slugify } from "@/lib/utils";
 
 type CollectionRecord = InferSelectModel<typeof collections>;
 type MediaRecord = InferSelectModel<typeof mediaAssets>;
@@ -170,15 +171,20 @@ export const getProductBySlug = async (
   slug: string,
   options: Pick<ListProductsOptions, "includeDrafts"> = {}
 ): Promise<null | ProductWithRelations> => {
-  const whereClause = buildWhere([
-    eq(products.slug, slug),
-    ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
-  ]);
+  const candidates = [...new Set([slug, slugify(slug)])];
 
-  const [row] = await db.select().from(products).where(whereClause).limit(1);
-  if (!row) return null;
-  const [hydrated] = await hydrateProducts([row]);
-  return hydrated ?? null;
+  for (const candidate of candidates) {
+    const whereClause = buildWhere([
+      eq(products.slug, candidate),
+      ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
+    ]);
+    const [row] = await db.select().from(products).where(whereClause).limit(1);
+    if (row) {
+      const [hydrated] = await hydrateProducts([row]);
+      return hydrated ?? null;
+    }
+  }
+  return null;
 };
 
 export const getFeaturedProducts = async (
@@ -288,7 +294,7 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductW
     ...productData
   } = input;
 
-  const slug = await uniqueSlug(productData.slug ?? "untitled-product");
+  const slug = await uniqueSlug(slugify(productData.slug ?? "untitled-product"));
 
   const [created] = await db
     .insert(products)
@@ -316,7 +322,7 @@ export const duplicateProduct = async (productId: string): Promise<null | Produc
   const source = await getProduct(productId);
   if (!source) return null;
 
-  const duplicateSlug = await uniqueSlug(source.slug);
+  const duplicateSlug = await uniqueSlug(slugify(source.slug));
   const duplicateName = source.name.trim().length > 0 ? `${source.name} Copy` : "Untitled Product Copy";
 
   const [created] = await db
@@ -372,6 +378,10 @@ export const updateProduct = async (
     tagIds,
     ...productData
   } = input;
+
+  if (typeof productData.slug === "string") {
+    productData.slug = slugify(productData.slug);
+  }
 
   const [updated] = await db
     .update(products)
