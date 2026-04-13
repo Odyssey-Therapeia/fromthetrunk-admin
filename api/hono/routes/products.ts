@@ -45,7 +45,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
     }),
     async (c) => {
       const query = c.req.valid("query");
-      const products = await listProducts({
+      const { rows: products } = await listProducts({
         includeDrafts: Boolean(query.includeDrafts),
         limit: query.limit ?? 200,
         offset: query.offset ?? 0,

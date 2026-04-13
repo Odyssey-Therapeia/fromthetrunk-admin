@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, like, or, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, like, or, SQL } from "drizzle-orm";
 import { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
@@ -141,7 +141,7 @@ const replaceProductTags = async (productId: string, tagIds: number[]) => {
   await db.insert(productTags).values(tagIds.map((tagId) => ({ productId, tagId })));
 };
 
-export const listProducts = async (options: ListProductsOptions = {}): Promise<ProductWithRelations[]> => {
+export const listProducts = async (options: ListProductsOptions = {}): Promise<{ rows: ProductWithRelations[]; totalCount: number }> => {
   const {
     includeDrafts = false,
     limit = 200,
@@ -152,17 +152,25 @@ export const listProducts = async (options: ListProductsOptions = {}): Promise<P
     ...(includeDrafts ? [] : [eq(products.status, "published")]),
   ]);
 
-  const rows = await withRetry(() =>
-    db
-      .select()
-      .from(products)
-      .where(whereClause)
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
-      .offset(offset)
-  );
+  const [rows, [countResult]] = await Promise.all([
+    withRetry(() =>
+      db
+        .select()
+        .from(products)
+        .where(whereClause)
+        .orderBy(desc(products.createdAt))
+        .limit(limit)
+        .offset(offset)
+    ),
+    withRetry(() =>
+      db
+        .select({ total: count() })
+        .from(products)
+        .where(whereClause)
+    ),
+  ]);
 
-  return hydrateProducts(rows);
+  return { rows: await hydrateProducts(rows), totalCount: countResult?.total ?? 0 };
 };
 
 export const getProduct = async (productId: string): Promise<null | ProductWithRelations> => {
@@ -255,7 +263,7 @@ export const searchProducts = async (
 export const getProductsByCollection = async (
   collectionSlug: string,
   options: ListProductsOptions = {}
-): Promise<ProductWithRelations[]> => {
+): Promise<{ rows: ProductWithRelations[]; totalCount: number }> => {
   const {
     includeDrafts = false,
     limit = 200,
@@ -270,24 +278,32 @@ export const getProductsByCollection = async (
       .limit(1)
   );
 
-  if (!collection) return [];
+  if (!collection) return { rows: [], totalCount: 0 };
 
   const whereClause = buildWhere([
     eq(products.collectionId, collection.id),
     ...(includeDrafts ? [] : [eq(products.status, "published")]),
   ]);
 
-  const rows = await withRetry(() =>
-    db
-      .select()
-      .from(products)
-      .where(whereClause)
-      .orderBy(desc(products.createdAt))
-      .limit(limit)
-      .offset(offset)
-  );
+  const [rows, [countResult]] = await Promise.all([
+    withRetry(() =>
+      db
+        .select()
+        .from(products)
+        .where(whereClause)
+        .orderBy(desc(products.createdAt))
+        .limit(limit)
+        .offset(offset)
+    ),
+    withRetry(() =>
+      db
+        .select({ total: count() })
+        .from(products)
+        .where(whereClause)
+    ),
+  ]);
 
-  return hydrateProducts(rows);
+  return { rows: await hydrateProducts(rows), totalCount: countResult?.total ?? 0 };
 };
 
 async function uniqueSlug(base: string): Promise<string> {

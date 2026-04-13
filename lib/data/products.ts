@@ -32,15 +32,15 @@ export const getCollections = async (options: QueryOptions = {}) => {
 export const getProducts = async (limit = 200, options: QueryOptions = {}) => {
   const page = options.page ?? 1;
   const offset = (page - 1) * limit;
-  const docs = await listProductsQuery({
+  const { rows, totalCount } = await listProductsQuery({
     includeDrafts: options.includeDrafts,
     limit,
     offset,
   });
 
   return {
-    docs,
-    totalDocs: docs.length,
+    docs: rows,
+    totalDocs: totalCount,
   };
 };
 
@@ -56,15 +56,15 @@ export const getProductsByCollection = async (
 
   const page = options.page ?? 1;
   const offset = (page - 1) * limit;
-  const docs = await getProductsByCollectionQuery(collectionDoc.slug, {
+  const { rows, totalCount } = await getProductsByCollectionQuery(collectionDoc.slug, {
     includeDrafts: options.includeDrafts,
     limit,
     offset,
   });
 
   return {
-    docs,
-    totalDocs: docs.length,
+    docs: rows,
+    totalDocs: totalCount,
   };
 };
 

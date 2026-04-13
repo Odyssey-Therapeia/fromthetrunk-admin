@@ -82,7 +82,7 @@ export const recommendProducts = async (productId: string, limit = 6) => {
   const remainder = Math.max(limit - semanticRecommendations.length, 0);
   let heuristicRecommendations: Recommendation[] = [];
   if (remainder > 0) {
-    const candidates = await listProducts({
+    const { rows: candidates } = await listProducts({
       includeDrafts: false,
       limit: 200,
     });

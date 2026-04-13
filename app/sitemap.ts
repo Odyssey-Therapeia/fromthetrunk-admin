@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [products, collections] = await Promise.all([
+  const [{ rows: products }, collections] = await Promise.all([
     listProducts({ includeDrafts: false, limit: 1000, offset: 0 }),
     listCollections(100, 0),
   ]);
