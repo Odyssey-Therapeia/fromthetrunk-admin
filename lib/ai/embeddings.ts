@@ -102,7 +102,7 @@ const upsertEmbedding = async (
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return false;
 
-  await rawSql`
+  await withRetry(() => rawSql`
     insert into product_embeddings (product_id, embedding, model, updated_at)
     values (${productId}, ${toVectorLiteral(embedding)}::vector, ${model}, now())
     on conflict (product_id)
@@ -110,7 +110,7 @@ const upsertEmbedding = async (
       embedding = excluded.embedding,
       model = excluded.model,
       updated_at = now()
-  `;
+  `);
 
   return true;
 };

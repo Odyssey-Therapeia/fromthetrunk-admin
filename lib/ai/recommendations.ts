@@ -81,7 +81,7 @@ export const recommendProducts = async (productId: string, limit = 6) => {
       source: "semantic",
     }));
   } catch (err) {
-    console.warn("[recommendations] Semantic search failed, falling back to heuristics:", err);
+    console.warn("[recommendations] Semantic search failed, falling back to heuristics:", { productId, limit }, err);
   }
 
   const remainder = Math.max(limit - semanticRecommendations.length, 0);

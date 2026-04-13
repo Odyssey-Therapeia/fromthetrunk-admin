@@ -424,6 +424,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
       ctx.revert();
       lenis?.destroy();
       lenis = null;
+      gsap.ticker.lagSmoothing(500, 33);
     };
   }, [embedded]);
 
