@@ -5,6 +5,7 @@ import {
   ThreadPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
+  type ToolCallMessagePartStatus,
   useAssistantToolUI,
 } from "@assistant-ui/react";
 import {
@@ -60,8 +61,6 @@ const STEPS = [
   "Preview",
 ] as const;
 
-type ToolStatus = { type: string };
-
 function ToolCallWrapper({
   children,
   label,
@@ -69,7 +68,7 @@ function ToolCallWrapper({
 }: {
   children: React.ReactNode;
   label: string;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   if (!status || status.type === "running") {
     return (
@@ -103,7 +102,7 @@ function SuggestNamesToolUI({
 }: {
   form: StepperForm;
   result: { names?: string[] } | undefined;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   const [applied, setApplied] = useState<string | null>(null);
 
@@ -157,7 +156,7 @@ function DraftStoryToolUI({
     storyProvenance?: string;
     storyEra?: string;
   } | undefined;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   const [applied, setApplied] = useState(false);
 
@@ -226,15 +225,16 @@ function SuggestTagsToolUI({
   result:
     | { tags?: Array<{ id: number; name: string; category: string }> }
     | undefined;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   const [applied, setApplied] = useState(false);
 
   const handleApply = () => {
-    const ids = result!.tags!.map((t) => t.id).join(", ");
+    const tags = result?.tags ?? [];
+    const ids = tags.map((tag) => tag.id).join(", ");
     form.setFieldValue("tagsCsv", ids);
     setApplied(true);
-    toast.success(`Applied ${result!.tags!.length} tags`);
+    toast.success(`Applied ${tags.length} tags`);
   };
 
   return (
@@ -280,7 +280,7 @@ function GenerateSlugToolUI({
 }: {
   form: StepperForm;
   result: { slug?: string } | undefined;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   const [applied, setApplied] = useState(false);
 
@@ -330,7 +330,7 @@ function DraftMarketingCopyToolUI({
     seoTitle?: string;
     seoDescription?: string;
   } | undefined;
-  status: ToolStatus | undefined;
+  status: ToolCallMessagePartStatus | undefined;
 }) {
   const handleCopy = (text: string) => {
     void navigator.clipboard.writeText(text);
@@ -406,7 +406,7 @@ function ToolUIRegistrations({ form }: { form: StepperForm }) {
       <SuggestNamesToolUI
         result={result as { names?: string[] } | undefined}
         form={form}
-        status={status as ToolStatus | undefined}
+        status={status as ToolCallMessagePartStatus | undefined}
       />
     ),
   });
@@ -426,7 +426,7 @@ function ToolUIRegistrations({ form }: { form: StepperForm }) {
             | undefined
         }
         form={form}
-        status={status as ToolStatus | undefined}
+        status={status as ToolCallMessagePartStatus | undefined}
       />
     ),
   });
@@ -447,7 +447,7 @@ function ToolUIRegistrations({ form }: { form: StepperForm }) {
             | undefined
         }
         form={form}
-        status={status as ToolStatus | undefined}
+        status={status as ToolCallMessagePartStatus | undefined}
       />
     ),
   });
@@ -458,7 +458,7 @@ function ToolUIRegistrations({ form }: { form: StepperForm }) {
       <GenerateSlugToolUI
         result={result as { slug?: string } | undefined}
         form={form}
-        status={status as ToolStatus | undefined}
+        status={status as ToolCallMessagePartStatus | undefined}
       />
     ),
   });
@@ -476,7 +476,7 @@ function ToolUIRegistrations({ form }: { form: StepperForm }) {
               }
             | undefined
         }
-        status={status as ToolStatus | undefined}
+        status={status as ToolCallMessagePartStatus | undefined}
       />
     ),
   });
@@ -605,7 +605,7 @@ export function useProductAssistantRuntime({
         uploadedImageFilenames: uploaded.map((m) => m.filename),
       },
     }),
-    [conversationId, form.state.values, productId, stepIndex, uploaded],
+    [conversationId, form, productId, stepIndex, uploaded],
   );
 
   const transport = useMemo(

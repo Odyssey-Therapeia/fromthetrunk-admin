@@ -1,6 +1,7 @@
 import { desc, eq, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import { mediaAssets } from "@/db/schema";
 
 type MediaRecord = InferSelectModel<typeof mediaAssets>;
@@ -32,13 +33,16 @@ export const getMediaById = async (mediaId: string): Promise<MediaRecord | null>
 };
 
 export const createMediaRecord = async (input: CreateMediaInput): Promise<MediaRecord> => {
-  const [created] = await db
-    .insert(mediaAssets)
-    .values({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const created = requireFirstRow(
+    await db
+      .insert(mediaAssets)
+      .values({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .returning(),
+    "Failed to create media record."
+  );
 
   return created;
 };
@@ -47,14 +51,16 @@ export const updateMediaRecord = async (
   mediaId: string,
   input: UpdateMediaInput
 ): Promise<MediaRecord | null> => {
-  const [updated] = await db
-    .update(mediaAssets)
-    .set({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .where(eq(mediaAssets.id, mediaId))
-    .returning();
+  const updated = getFirstRow(
+    await db
+      .update(mediaAssets)
+      .set({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .where(eq(mediaAssets.id, mediaId))
+      .returning()
+  );
 
   return updated ?? null;
 };

@@ -6,6 +6,7 @@ import { addressCreateSchema, addressPatchSchema } from "@/api/hono/schemas/addr
 import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
+import { requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 
 export const registerAddressRoutes = (app: OpenAPIHono<HonoBindings>) => {
@@ -56,13 +57,16 @@ export const registerAddressRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const body = c.req.valid("json");
 
-      const [address] = await db
-        .insert(addresses)
-        .values({
-          ...body,
-          userId: authUserOrResponse.id,
-        })
-        .returning();
+      const address = requireFirstRow(
+        await db
+          .insert(addresses)
+          .values({
+            ...body,
+            userId: authUserOrResponse.id,
+          })
+          .returning(),
+        "Failed to create address."
+      );
 
       if (body.isDefault) {
         await db
@@ -136,14 +140,17 @@ export const registerAddressRoutes = (app: OpenAPIHono<HonoBindings>) => {
         return c.json({ code: "ADDRESS_NOT_FOUND", message: "Address not found." }, 404);
       }
 
-      const [updated] = await db
-        .update(addresses)
-        .set({
-          ...body,
-          updatedAt: new Date(),
-        })
-        .where(eq(addresses.id, id))
-        .returning();
+      const updated = requireFirstRow(
+        await db
+          .update(addresses)
+          .set({
+            ...body,
+            updatedAt: new Date(),
+          })
+          .where(eq(addresses.id, id))
+          .returning(),
+        "Failed to update address."
+      );
 
       if (body.isDefault) {
         await db

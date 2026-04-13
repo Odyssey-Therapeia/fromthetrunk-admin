@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  AnyPgColumn,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -13,6 +15,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
@@ -47,7 +50,9 @@ export const users = pgTable(
     phone: text("phone"),
     passwordHash: text("password_hash"),
     emailVerified: timestamp("email_verified", { withTimezone: true }),
-    defaultAddressId: uuid("default_address_id"),
+    defaultAddressId: uuid("default_address_id").references((): AnyPgColumn => addresses.id, {
+      onDelete: "set null",
+    }),
     metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -153,6 +158,8 @@ export const products = pgTable(
   (table) => ({
     slugUnique: uniqueIndex("products_slug_unique").on(table.slug),
     collectionIdx: index("products_collection_idx").on(table.collectionId),
+    statusIdx: index("products_status_idx").on(table.status),
+    stockStatusIdx: index("products_stock_status_idx").on(table.stockStatus),
   })
 );
 
@@ -267,6 +274,26 @@ export const orders = pgTable(
     userIdx: index("orders_user_idx").on(table.userId),
     statusIdx: index("orders_status_idx").on(table.status),
     paymentStatusIdx: index("orders_payment_status_idx").on(table.paymentStatus),
+    subtotalNonNegative: check(
+      "orders_subtotal_paise_non_negative",
+      sql`${table.subtotalPaise} >= 0`
+    ),
+    shippingCostNonNegative: check(
+      "orders_shipping_cost_paise_non_negative",
+      sql`${table.shippingCostPaise} >= 0`
+    ),
+    taxRateRange: check(
+      "orders_tax_rate_range",
+      sql`${table.taxRate} >= 0 and ${table.taxRate} <= 100`
+    ),
+    taxAmountNonNegative: check(
+      "orders_tax_amount_paise_non_negative",
+      sql`${table.taxAmountPaise} >= 0`
+    ),
+    totalNonNegative: check(
+      "orders_total_paise_non_negative",
+      sql`${table.totalPaise} >= 0`
+    ),
   })
 );
 
@@ -287,6 +314,14 @@ export const orderItems = pgTable(
   (table) => ({
     orderIdx: index("order_items_order_idx").on(table.orderId),
     productIdx: index("order_items_product_idx").on(table.productId),
+    priceNonNegative: check(
+      "order_items_price_paise_non_negative",
+      sql`${table.pricePaise} >= 0`
+    ),
+    quantityPositive: check(
+      "order_items_quantity_positive",
+      sql`${table.quantity} > 0`
+    ),
   })
 );
 
@@ -405,7 +440,29 @@ export const chatConversations = pgTable(
   (table) => ({
     userIdx: index("chat_conversations_user_idx").on(table.userId),
     productIdx: index("chat_conversations_product_idx").on(table.productId),
+    productUserIdx: index("chat_conversations_product_user_idx").on(
+      table.productId,
+      table.userId,
+    ),
   }),
+);
+
+export const productEmbeddings = pgTable(
+  "product_embeddings",
+  {
+    productId: uuid("product_id")
+      .primaryKey()
+      .references(() => products.id, { onDelete: "cascade" }),
+    embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    model: text("model").notNull().default("text-embedding-3-small"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    embeddingIdx: index("product_embeddings_embedding_idx")
+      .using("ivfflat", table.embedding.op("vector_cosine_ops"))
+      .with({ lists: 100 }),
+  })
 );
 
 export const siteConfig = pgTable(

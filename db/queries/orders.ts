@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import { orderEvents, orderItems, orders } from "@/db/schema";
 
 type OrderEventRecord = InferSelectModel<typeof orderEvents>;
@@ -109,13 +110,16 @@ export const createOrder = async (input: CreateOrderInput): Promise<OrderWithRel
     ...orderData
   } = input;
 
-  const [createdOrder] = await db
-    .insert(orders)
-    .values({
-      ...orderData,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const createdOrder = requireFirstRow(
+    await db
+      .insert(orders)
+      .values({
+        ...orderData,
+        updatedAt: new Date(),
+      })
+      .returning(),
+    "Failed to create order."
+  );
 
   if (items.length > 0) {
     await db.insert(orderItems).values(
@@ -147,14 +151,16 @@ export const updateOrderStatus = async (
   note = "Order status updated",
   payload: Record<string, unknown> | null = null
 ): Promise<OrderWithRelations | null> => {
-  const [updated] = await db
-    .update(orders)
-    .set({
-      status,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId))
-    .returning({ id: orders.id, status: orders.status });
+  const updated = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning({ id: orders.id, status: orders.status })
+  );
 
   if (!updated) return null;
 
@@ -174,15 +180,18 @@ export const addOrderEvent = async (
   status: OrderRecord["status"],
   payload: Record<string, unknown> | null = null
 ): Promise<OrderEventRecord> => {
-  const [created] = await db
-    .insert(orderEvents)
-    .values({
-      orderId,
-      note,
-      status,
-      payload,
-    })
-    .returning();
+  const created = requireFirstRow(
+    await db
+      .insert(orderEvents)
+      .values({
+        orderId,
+        note,
+        status,
+        payload,
+      })
+      .returning(),
+    "Failed to create order event."
+  );
 
   return created;
 };

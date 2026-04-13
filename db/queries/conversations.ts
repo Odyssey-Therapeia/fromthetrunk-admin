@@ -1,6 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { requireFirstRow } from "@/db/results";
 import { chatConversations } from "@/db/schema";
 
 export type ChatConversation = typeof chatConversations.$inferSelect;
@@ -21,6 +22,20 @@ export const getConversation = async (
       )
       .limit(1)
   );
+  return row ?? null;
+};
+
+export const getConversationById = async (
+  conversationId: string,
+): Promise<ChatConversation | null> => {
+  const [row] = await withRetry(() =>
+    db
+      .select()
+      .from(chatConversations)
+      .where(eq(chatConversations.id, conversationId))
+      .limit(1)
+  );
+
   return row ?? null;
 };
 
@@ -50,22 +65,26 @@ export const upsertConversation = async (
   messages: unknown[],
   productId?: string | null,
 ): Promise<ChatConversation> => {
-  const [row] = await db
-    .insert(chatConversations)
-    .values({
-      id: conversationId,
-      userId,
-      productId: productId ?? null,
-      messages,
-    })
-    .onConflictDoUpdate({
-      target: chatConversations.id,
-      set: {
+  const row = requireFirstRow(
+    await db
+      .insert(chatConversations)
+      .values({
+        id: conversationId,
+        userId,
+        productId: productId ?? null,
         messages,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: chatConversations.id,
+        set: {
+          messages,
+          productId: sql`coalesce(excluded.product_id, ${chatConversations.productId})`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning(),
+    "Failed to upsert conversation."
+  );
 
   return row;
 };

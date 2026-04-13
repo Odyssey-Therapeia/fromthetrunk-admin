@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { ilike, or } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, withRetry } from "@/db";
 import { tags } from "@/db/schema";
 import { slugify } from "@/lib/utils";
 
@@ -75,15 +75,17 @@ export const productTools = {
 
       if (clauses.length === 0) return { tags: [] };
 
-      const matched = await db
-        .select({
-          id: tags.id,
-          name: tags.name,
-          category: tags.category,
-        })
-        .from(tags)
-        .where(or(...clauses))
-        .limit(15);
+      const matched = await withRetry(() =>
+        db
+          .select({
+            id: tags.id,
+            name: tags.name,
+            category: tags.category,
+          })
+          .from(tags)
+          .where(or(...clauses))
+          .limit(15)
+      );
 
       const unique = Array.from(
         new Map(matched.map((tag) => [tag.id, tag])).values(),

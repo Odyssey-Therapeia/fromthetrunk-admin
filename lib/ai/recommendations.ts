@@ -1,5 +1,4 @@
 import { getProduct, listProducts, type ProductWithRelations } from "@/db/queries/products";
-import { ensurePgmlExtension } from "@/lib/ai/extensions";
 
 import { findSimilarProductsByProductId } from "./embeddings";
 
@@ -69,8 +68,6 @@ const uniqueById = (items: Recommendation[]) => {
 };
 
 export const recommendProducts = async (productId: string, limit = 6) => {
-  await ensurePgmlExtension();
-
   const source = await getProduct(productId);
   if (!source) return [];
 

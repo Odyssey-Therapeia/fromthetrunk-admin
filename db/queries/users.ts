@@ -1,6 +1,7 @@
 import { desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { getFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 
 type AddressRecord = InferSelectModel<typeof addresses>;
@@ -88,15 +89,17 @@ export const updateUser = async (
   userId: string,
   input: UpdateUserInput
 ): Promise<UserWithDefaultAddress | null> => {
-  const [updated] = await db
-    .update(users)
-    .set({
-      ...input,
-      email: input.email?.toLowerCase(),
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, userId))
-    .returning();
+  const updated = getFirstRow(
+    await db
+      .update(users)
+      .set({
+        ...input,
+        email: input.email?.toLowerCase(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning()
+  );
 
   if (!updated) return null;
   const [hydrated] = await hydrateUsers([updated]);

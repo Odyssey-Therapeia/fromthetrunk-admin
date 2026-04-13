@@ -14,6 +14,7 @@ import {
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { getUserByEmail, getUserById, listUsers, updateUser } from "@/db/queries/users";
+import { requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import { welcomeEmail } from "@/lib/email/templates";
@@ -83,16 +84,19 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       const passwordHash = await bcrypt.hash(body.password, 12);
-      const [created] = await db
-        .insert(users)
-        .values({
-          email: body.email.toLowerCase(),
-          name: body.name,
-          passwordHash,
-          role: "admin",
-          updatedAt: new Date(),
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(users)
+          .values({
+            email: body.email.toLowerCase(),
+            name: body.name,
+            passwordHash,
+            role: "admin",
+            updatedAt: new Date(),
+          })
+          .returning(),
+        "Failed to create admin user."
+      );
 
       return c.json(created, 201);
     }
@@ -143,16 +147,19 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       const passwordHash = await bcrypt.hash(body.password, 12);
-      const [created] = await db
-        .insert(users)
-        .values({
-          email: body.email.toLowerCase(),
-          name: body.name,
-          passwordHash,
-          role: "customer",
-          updatedAt: new Date(),
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(users)
+          .values({
+            email: body.email.toLowerCase(),
+            name: body.name,
+            passwordHash,
+            role: "customer",
+            updatedAt: new Date(),
+          })
+          .returning(),
+        "Failed to create user."
+      );
 
       const emailTemplate = welcomeEmail(body.name.trim());
       sendEmail({

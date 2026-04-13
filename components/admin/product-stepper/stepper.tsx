@@ -13,7 +13,11 @@ import { slugify } from "@/lib/utils";
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 
-import { AiAssistPanel, useProductAssistantRuntime } from "./ai-assist-panel";
+import {
+  AiAssistPanel,
+  type StepperForm,
+  useProductAssistantRuntime,
+} from "./ai-assist-panel";
 import { LivePreviewCard } from "./live-preview-card";
 import { StepDetails } from "./step-details";
 import { StepPhotos } from "./step-photos";
@@ -149,7 +153,7 @@ export function ProductStepper({
   });
 
   const aiRuntime = useProductAssistantRuntime({
-    form: form as unknown as Parameters<typeof useProductAssistantRuntime>[0]["form"],
+    form: form as StepperForm,
     productId: activeProductId,
     stepIndex,
     uploaded,
@@ -183,7 +187,7 @@ export function ProductStepper({
 
   return (
     <AssistantRuntimeProvider runtime={aiRuntime}>
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="@container grid gap-6 @5xl:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {steps.map((step, index) => (

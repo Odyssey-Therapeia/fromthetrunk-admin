@@ -1,15 +1,39 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { convertToModelMessages, stepCountIs, streamText } from "ai";
+import {
+  convertToModelMessages,
+  type InferUITools,
+  safeValidateUIMessages,
+  stepCountIs,
+  streamText,
+  type UIMessage,
+} from "ai";
+import { z } from "zod";
 
 import { getServerAuthSession } from "@/lib/auth/get-session";
-import { buildSystemPrompt } from "@/lib/ai/prompts/product-assistant";
+import {
+  buildSystemPrompt,
+  productAssistantFormContextSchema,
+} from "@/lib/ai/prompts/product-assistant";
 import { productTools } from "@/lib/ai/tools/product-tools";
 import {
-  getConversation,
+  getConversationById,
   upsertConversation,
 } from "@/db/queries/conversations";
 
 export const maxDuration = 120;
+
+type ProductAssistantUIMessage = UIMessage<
+  unknown,
+  never,
+  InferUITools<typeof productTools>
+>;
+
+const chatRequestSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  formContext: productAssistantFormContextSchema.optional(),
+  messages: z.array(z.unknown()),
+  productId: z.string().uuid().optional(),
+});
 
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -43,28 +67,39 @@ export async function POST(req: Request) {
     );
   }
 
-  const {
-    messages,
-    formContext,
-    conversationId,
-    productId,
-  } = body as {
-    messages: unknown;
-    formContext: unknown;
-    conversationId?: string;
-    productId?: string;
-  };
-
-  if (!messages || !Array.isArray(messages)) {
+  const parsedBody = chatRequestSchema.safeParse(body);
+  if (!parsedBody.success) {
     return Response.json(
-      { code: "INVALID_MESSAGES", error: "Messages array is required." },
+      {
+        code: "INVALID_REQUEST",
+        error: "Invalid request body.",
+        issues: parsedBody.error.flatten(),
+      },
+      { status: 400 },
+    );
+  }
+
+  const {
+    conversationId,
+    formContext,
+    messages: inputMessages,
+    productId,
+  } = parsedBody.data;
+  const validatedMessages = await safeValidateUIMessages<ProductAssistantUIMessage>({
+    messages: inputMessages,
+    tools: productTools,
+  });
+
+  if (!validatedMessages.success) {
+    return Response.json(
+      { code: "INVALID_MESSAGES", error: validatedMessages.error.message },
       { status: 400 },
     );
   }
 
   if (conversationId) {
     try {
-      const existing = await getConversation(conversationId, userId);
+      const existing = await getConversationById(conversationId);
       if (existing && existing.userId !== userId) {
         return Response.json(
           { code: "FORBIDDEN", error: "Not your conversation." },
@@ -76,18 +111,21 @@ export async function POST(req: Request) {
     }
   }
 
-  const systemPrompt = buildSystemPrompt(
-    formContext as Parameters<typeof buildSystemPrompt>[0],
-  );
+  const systemPrompt = buildSystemPrompt(formContext);
 
   try {
     const result = streamText({
       model: anthropic("claude-opus-4-6"),
       providerOptions: {
-        anthropic: { thinking: { type: "enabled" } },
+        anthropic: {
+          effort: "medium",
+          thinking: { type: "adaptive" },
+        },
       },
       system: systemPrompt,
-      messages: await convertToModelMessages(messages),
+      messages: await convertToModelMessages(validatedMessages.data, {
+        tools: productTools,
+      }),
       tools: productTools,
       stopWhen: stepCountIs(25),
       onFinish: async () => {
@@ -96,7 +134,7 @@ export async function POST(req: Request) {
             await upsertConversation(
               conversationId,
               userId,
-              messages as unknown[],
+              validatedMessages.data,
               productId,
             );
           } catch (err) {

@@ -1,6 +1,7 @@
 import { desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import { collections, mediaAssets } from "@/db/schema";
 
 type CollectionRecord = InferSelectModel<typeof collections>;
@@ -67,13 +68,16 @@ export const getCollectionBySlug = async (
 export const createCollection = async (
   input: CreateCollectionInput
 ): Promise<CollectionWithHeroMedia> => {
-  const [created] = await db
-    .insert(collections)
-    .values({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const created = requireFirstRow(
+    await db
+      .insert(collections)
+      .values({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .returning(),
+    "Failed to create collection."
+  );
 
   const [hydrated] = await hydrateCollections([created]);
   if (!hydrated) {
@@ -87,14 +91,16 @@ export const updateCollection = async (
   collectionId: string,
   input: UpdateCollectionInput
 ): Promise<CollectionWithHeroMedia | null> => {
-  const [updated] = await db
-    .update(collections)
-    .set({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .where(eq(collections.id, collectionId))
-    .returning();
+  const updated = getFirstRow(
+    await db
+      .update(collections)
+      .set({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .where(eq(collections.id, collectionId))
+      .returning()
+  );
 
   if (!updated) return null;
 

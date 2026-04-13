@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, inArray, like, or, SQL } from "drizzle-orm";
 import { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import {
   collections,
   mediaAssets,
@@ -314,14 +315,17 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductW
 
   const slug = await uniqueSlug(slugify(productData.slug ?? "untitled-product"));
 
-  const [created] = await db
-    .insert(products)
-    .values({
-      ...productData,
-      slug,
-      updatedAt: new Date(),
-    })
-    .returning({ id: products.id });
+  const created = requireFirstRow(
+    await db
+      .insert(products)
+      .values({
+        ...productData,
+        slug,
+        updatedAt: new Date(),
+      })
+      .returning({ id: products.id }),
+    "Failed to create product."
+  );
 
   await Promise.all([
     replaceProductImages(created.id, imageMediaIds),
@@ -343,33 +347,36 @@ export const duplicateProduct = async (productId: string): Promise<null | Produc
   const duplicateSlug = await uniqueSlug(slugify(source.slug));
   const duplicateName = source.name.trim().length > 0 ? `${source.name} Copy` : "Untitled Product Copy";
 
-  const [created] = await db
-    .insert(products)
-    .values({
-      artisanId: source.artisanId,
-      collectionId: source.collectionId,
-      detailsCondition: source.detailsCondition,
-      detailsDesigner: source.detailsDesigner,
-      detailsFabric: source.detailsFabric,
-      detailsLength: source.detailsLength,
-      detailsWidth: source.detailsWidth,
-      featured: false,
-      metadata: source.metadata,
-      name: duplicateName,
-      originalPricePaise: source.originalPricePaise,
-      pricePaise: source.pricePaise,
-      reservedUntil: null,
-      slug: duplicateSlug,
-      soldAt: null,
-      status: "draft",
-      stockStatus: "available",
-      storyEra: source.storyEra,
-      storyNarrative: source.storyNarrative,
-      storyProvenance: source.storyProvenance,
-      storyTitle: source.storyTitle,
-      updatedAt: new Date(),
-    })
-    .returning({ id: products.id });
+  const created = requireFirstRow(
+    await db
+      .insert(products)
+      .values({
+        artisanId: source.artisanId,
+        collectionId: source.collectionId,
+        detailsCondition: source.detailsCondition,
+        detailsDesigner: source.detailsDesigner,
+        detailsFabric: source.detailsFabric,
+        detailsLength: source.detailsLength,
+        detailsWidth: source.detailsWidth,
+        featured: false,
+        metadata: source.metadata,
+        name: duplicateName,
+        originalPricePaise: source.originalPricePaise,
+        pricePaise: source.pricePaise,
+        reservedUntil: null,
+        slug: duplicateSlug,
+        soldAt: null,
+        status: "draft",
+        stockStatus: "available",
+        storyEra: source.storyEra,
+        storyNarrative: source.storyNarrative,
+        storyProvenance: source.storyProvenance,
+        storyTitle: source.storyTitle,
+        updatedAt: new Date(),
+      })
+      .returning({ id: products.id }),
+    "Failed to duplicate product."
+  );
 
   await Promise.all([
     replaceProductImages(
@@ -401,14 +408,16 @@ export const updateProduct = async (
     productData.slug = slugify(productData.slug);
   }
 
-  const [updated] = await db
-    .update(products)
-    .set({
-      ...productData,
-      updatedAt: new Date(),
-    })
-    .where(eq(products.id, productId))
-    .returning({ id: products.id });
+  const updated = getFirstRow(
+    await db
+      .update(products)
+      .set({
+        ...productData,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, productId))
+      .returning({ id: products.id })
+  );
 
   if (!updated) return null;
 

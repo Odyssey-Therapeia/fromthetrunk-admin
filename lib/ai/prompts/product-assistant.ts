@@ -1,4 +1,5 @@
 import type { ProductStepperValues } from "@/components/admin/product-stepper/types";
+import { z } from "zod";
 
 const BRAND_VOICE = `You are the AI product assistant for **From the Trunk** (FTT), a curated marketplace for pre-loved luxury sarees with provenance.
 
@@ -33,14 +34,41 @@ You help the admin create compelling product listings. You can:
 - You NEVER modify existing products or write to the database. You only suggest content the admin can review and apply.
 - When uncertain about details, say so honestly within the generated content rather than refusing to generate at all.`;
 
-type FormContext = {
-  currentStep: string;
-  uploadedImageCount: number;
-  uploadedImageFilenames: string[];
-  values: Partial<ProductStepperValues>;
-};
+export const productAssistantFormValuesSchema = z.object({
+  collectionId: z.string().optional(),
+  detailsCondition: z.string().optional(),
+  detailsDesigner: z.string().optional(),
+  detailsFabric: z.string().optional(),
+  detailsLength: z.string().optional(),
+  detailsWidth: z.string().optional(),
+  featured: z.boolean().optional(),
+  imageMediaIds: z.array(z.string()).optional(),
+  name: z.string().optional(),
+  originalPriceRupees: z.number().optional(),
+  priceRupees: z.number().optional(),
+  slug: z.string().optional(),
+  status: z.enum(["draft", "published"]).optional(),
+  storyEra: z.string().optional(),
+  storyNarrative: z.string().optional(),
+  storyProvenance: z.string().optional(),
+  storyTitle: z.string().optional(),
+  tagsCsv: z.string().optional(),
+}) satisfies z.ZodType<Partial<ProductStepperValues>>;
 
-export function buildSystemPrompt(formContext?: FormContext): string {
+export const productAssistantFormContextSchema = z.object({
+  currentStep: z.string(),
+  uploadedImageCount: z.number().int().min(0),
+  uploadedImageFilenames: z.array(z.string()),
+  values: productAssistantFormValuesSchema,
+});
+
+export type ProductAssistantFormContext = z.infer<
+  typeof productAssistantFormContextSchema
+>;
+
+export function buildSystemPrompt(
+  formContext?: ProductAssistantFormContext,
+): string {
   if (!formContext) return BRAND_VOICE;
 
   const { currentStep, values, uploadedImageCount, uploadedImageFilenames } =

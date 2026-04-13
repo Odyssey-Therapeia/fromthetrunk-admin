@@ -91,6 +91,28 @@ const climaxLines = [
 
 export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const beatImageIndexes = beats.reduce<{
+    indexes: Array<null | number>;
+    nextImageIndex: number;
+  }>(
+    (state, beat) => {
+      if (beat.layout === "text-only-dark") {
+        return {
+          ...state,
+          indexes: [...state.indexes, null],
+        };
+      }
+
+      return {
+        indexes: [...state.indexes, state.nextImageIndex],
+        nextImageIndex: state.nextImageIndex + 1,
+      };
+    },
+    {
+      indexes: [],
+      nextImageIndex: embedded ? 0 : 1,
+    },
+  ).indexes;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -111,14 +133,18 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
     gsap.registerPlugin(ScrollTrigger);
 
     let lenis: Lenis | null = null;
+    let lenisScrollHandler: null | (() => void) = null;
+    let tickerCallback: null | ((time: number) => void) = null;
+    const mm = gsap.matchMedia();
     if (!embedded) {
       lenis = new Lenis({ lerp: 0.08, duration: 1.4 });
-      lenis.on("scroll", ScrollTrigger.update);
-      gsap.ticker.add((time) => lenis!.raf(time * 1000));
+      lenisScrollHandler = () => ScrollTrigger.update();
+      tickerCallback = (time) => lenis?.raf(time * 1000);
+      lenis.on("scroll", lenisScrollHandler);
+      gsap.ticker.add(tickerCallback);
       gsap.ticker.lagSmoothing(0);
     }
 
-    const mm = gsap.matchMedia();
     const ctx = gsap.context(() => {
       if (!containerRef.current) return;
 
@@ -388,17 +414,29 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
     }, containerRef);
 
     return () => {
+      if (tickerCallback) {
+        gsap.ticker.remove(tickerCallback);
+      }
+      if (lenis && lenisScrollHandler) {
+        lenis.off("scroll", lenisScrollHandler);
+      }
+      mm.revert();
       ctx.revert();
       lenis?.destroy();
+      lenis = null;
     };
   }, [embedded]);
 
-  const imageForBeat = (i: number) => images[i + 1] ?? images[0];
+  const imageForBeat = (beatIndex: number) => {
+    const imageIndex = beatImageIndexes[beatIndex];
+    if (imageIndex === null) return images[0];
+    return images[imageIndex] ?? images[0];
+  };
 
   return (
     <div ref={containerRef} className="overflow-x-hidden">
       {!embedded && (
-        <section className="story-hero relative flex min-h-screen items-end overflow-hidden">
+        <section className="story-hero @container relative flex min-h-screen items-end overflow-hidden">
           <div className="hero-parallax absolute inset-0">
             <Image
               src={images[0]}
@@ -410,14 +448,14 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
           </div>
-          <div className="relative mx-auto w-full max-w-5xl space-y-5 px-4 pb-20 sm:px-6 sm:pb-28 lg:pb-36">
+          <div className="relative mx-auto w-full max-w-5xl space-y-5 px-4 pb-20 @[640px]:px-6 @[640px]:pb-28 @[1024px]:pb-36">
             <p className="hero-eyebrow reveal-el text-xs uppercase tracking-[0.5em] text-amber-100/50">
               Our Manifesto
             </p>
-            <h1 className="hero-title font-serif text-5xl leading-[1.1] text-white sm:text-6xl lg:text-8xl">
+            <h1 className="hero-title font-serif text-5xl leading-[1.1] text-white @[640px]:text-6xl @[1024px]:text-8xl">
               <SplitWords text="Why we do what we do" />
             </h1>
-            <p className="hero-subtitle reveal-el max-w-lg text-base text-amber-100/60 sm:text-lg lg:text-xl">
+            <p className="hero-subtitle reveal-el max-w-lg text-base text-amber-100/60 @[640px]:text-lg @[1024px]:text-xl">
               A story of heritage, second chances, and the quiet power of a saree.
             </p>
           </div>

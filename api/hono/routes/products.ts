@@ -11,7 +11,6 @@ import {
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import type { HonoBindings } from "@/api/hono/types";
 import { refreshProductEmbedding } from "@/lib/ai/embeddings";
-import { ensureProductEmbeddingsTable } from "@/lib/ai/extensions";
 import { recommendProducts } from "@/lib/ai/recommendations";
 import { suggestTagIds } from "@/lib/ai/tag-suggestions";
 import {
@@ -178,7 +177,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const body = c.req.valid("json");
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       const created = await createProduct({
         ...body,
         imageMediaIds: body.imageMediaIds ?? [],
@@ -223,7 +221,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       void refreshProductEmbedding(duplicated.id).catch(() => undefined);
 
       return c.json(duplicated, 201);
@@ -270,7 +267,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       const updated = await updateProduct(params.id, {
         ...body,
         reservedUntil: parseDate(body.reservedUntil),

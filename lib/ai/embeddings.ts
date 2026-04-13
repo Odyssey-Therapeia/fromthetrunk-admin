@@ -1,5 +1,5 @@
 import { getProduct, type ProductWithRelations } from "@/db/queries/products";
-import { rawSql } from "@/db";
+import { rawSql, withRetry } from "@/db";
 
 import { ensureProductEmbeddingsTable } from "./extensions";
 
@@ -88,18 +88,15 @@ const upsertEmbedding = async (
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return false;
 
-  await rawSql(
-    `
-      insert into product_embeddings (product_id, embedding, model, updated_at)
-      values ($1, $2::vector, $3, now())
-      on conflict (product_id)
-      do update set
-        embedding = excluded.embedding,
-        model = excluded.model,
-        updated_at = now()
-    `,
-    [productId, toVectorLiteral(embedding), model]
-  );
+  await rawSql`
+    insert into product_embeddings (product_id, embedding, model, updated_at)
+    values (${productId}, ${toVectorLiteral(embedding)}::vector, ${model}, now())
+    on conflict (product_id)
+    do update set
+      embedding = excluded.embedding,
+      model = excluded.model,
+      updated_at = now()
+  `;
 
   return true;
 };
@@ -108,15 +105,15 @@ const loadEmbedding = async (productId: string): Promise<null | number[]> => {
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return null;
 
-  const rows = await rawSql(
-    `
-      select embedding
-      from product_embeddings
-      where product_id = $1
-      limit 1
-    `,
-    [productId]
-  ) as Array<{ embedding: string }>;
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select embedding
+        from product_embeddings
+        where product_id = ${productId}
+        limit 1
+      `) as Array<{ embedding: string }>
+  );
 
   return parseVector(rows[0]?.embedding ?? null);
 };
@@ -184,18 +181,18 @@ export const findSimilarProductsByProductId = async (
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return [];
 
-  const rows = await rawSql(
-    `
-      select pe.product_id, 1 - (pe.embedding <=> $1::vector) as similarity
-      from product_embeddings pe
-      join products p on p.id = pe.product_id
-      where pe.product_id <> $2
-        and p.status = 'published'
-      order by pe.embedding <=> $1::vector asc
-      limit $3
-    `,
-    [toVectorLiteral(embedding), productId, limit]
-  ) as SimilarityRow[];
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select pe.product_id, 1 - (pe.embedding <=> ${toVectorLiteral(embedding)}::vector) as similarity
+        from product_embeddings pe
+        join products p on p.id = pe.product_id
+        where pe.product_id <> ${productId}
+          and p.status = 'published'
+        order by pe.embedding <=> ${toVectorLiteral(embedding)}::vector asc
+        limit ${limit}
+      `) as SimilarityRow[]
+  );
 
   return hydrateSimilarityRows(rows);
 };
@@ -207,17 +204,17 @@ export const semanticSearchProducts = async (query: string, limit = 12) => {
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return [];
 
-  const rows = await rawSql(
-    `
-      select pe.product_id, 1 - (pe.embedding <=> $1::vector) as similarity
-      from product_embeddings pe
-      join products p on p.id = pe.product_id
-      where p.status = 'published'
-      order by pe.embedding <=> $1::vector asc
-      limit $2
-    `,
-    [toVectorLiteral(embedded.embedding), limit]
-  ) as SimilarityRow[];
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select pe.product_id, 1 - (pe.embedding <=> ${toVectorLiteral(embedded.embedding)}::vector) as similarity
+        from product_embeddings pe
+        join products p on p.id = pe.product_id
+        where p.status = 'published'
+        order by pe.embedding <=> ${toVectorLiteral(embedded.embedding)}::vector asc
+        limit ${limit}
+      `) as SimilarityRow[]
+  );
 
   return hydrateSimilarityRows(rows);
 };
