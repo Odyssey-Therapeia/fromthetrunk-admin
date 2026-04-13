@@ -38,25 +38,27 @@ export const subscribe = async (
   const now = new Date();
 
   const subscriber = requireFirstRow(
-    await db
-      .insert(newsletterSubscribers)
-      .values({
-        email: normalizedEmail,
-        confirmToken,
-        status: "pending",
-        updatedAt: now,
-        confirmedAt: null,
-      })
-      .onConflictDoUpdate({
-        target: newsletterSubscribers.email,
-        set: {
+    await withRetry(() =>
+      db
+        .insert(newsletterSubscribers)
+        .values({
+          email: normalizedEmail,
           confirmToken,
-          confirmedAt: null,
           status: "pending",
           updatedAt: now,
-        },
-      })
-      .returning(),
+          confirmedAt: null,
+        })
+        .onConflictDoUpdate({
+          target: newsletterSubscribers.email,
+          set: {
+            confirmToken,
+            confirmedAt: null,
+            status: "pending",
+            updatedAt: now,
+          },
+        })
+        .returning()
+    ),
     "Failed to subscribe newsletter user."
   );
 
@@ -67,15 +69,17 @@ export const confirmSubscription = async (
   confirmToken: string
 ): Promise<NewsletterSubscriberRecord | null> => {
   const subscriber = getFirstRow(
-    await db
-      .update(newsletterSubscribers)
-      .set({
-        status: "confirmed",
-        confirmedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(newsletterSubscribers.confirmToken, confirmToken))
-      .returning()
+    await withRetry(() =>
+      db
+        .update(newsletterSubscribers)
+        .set({
+          status: "confirmed",
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(newsletterSubscribers.confirmToken, confirmToken))
+        .returning()
+    )
   );
 
   return subscriber ?? null;
@@ -87,14 +91,16 @@ export const unsubscribe = async (
   const normalizedEmail = email.trim().toLowerCase();
 
   const subscriber = getFirstRow(
-    await db
-      .update(newsletterSubscribers)
-      .set({
-        status: "unsubscribed",
-        updatedAt: new Date(),
-      })
-      .where(eq(newsletterSubscribers.email, normalizedEmail))
-      .returning()
+    await withRetry(() =>
+      db
+        .update(newsletterSubscribers)
+        .set({
+          status: "unsubscribed",
+          updatedAt: new Date(),
+        })
+        .where(eq(newsletterSubscribers.email, normalizedEmail))
+        .returning()
+    )
   );
 
   return subscriber ?? null;

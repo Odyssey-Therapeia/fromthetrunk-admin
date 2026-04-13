@@ -140,17 +140,18 @@ export const registerAddressRoutes = (app: OpenAPIHono<HonoBindings>) => {
         return c.json({ code: "ADDRESS_NOT_FOUND", message: "Address not found." }, 404);
       }
 
-      const updated = requireFirstRow(
-        await db
-          .update(addresses)
-          .set({
-            ...body,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(addresses.id, id), eq(addresses.userId, authUserOrResponse.id)))
-          .returning(),
-        "Failed to update address."
-      );
+      const [updated] = await db
+        .update(addresses)
+        .set({
+          ...body,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(addresses.id, id), eq(addresses.userId, authUserOrResponse.id)))
+        .returning();
+
+      if (!updated) {
+        return c.json({ code: "ADDRESS_NOT_FOUND", message: "Address not found." }, 404);
+      }
 
       if (body.isDefault) {
         await db

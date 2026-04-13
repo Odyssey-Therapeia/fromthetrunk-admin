@@ -335,8 +335,10 @@ function DraftMarketingCopyToolUI({
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const handleCopy = (text: string) => {
-    void navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Copied to clipboard"),
+      () => toast.error("Failed to copy — try selecting the text manually"),
+    );
   };
 
   return (
@@ -545,7 +547,7 @@ function Composer() {
         rows={1}
       />
       <ComposerPrimitive.Send asChild>
-        <Button size="icon" variant="default" className="h-10 w-10 shrink-0">
+        <Button size="icon" variant="default" className="h-10 w-10 shrink-0" aria-label="Send message">
           <SendHorizontal className="h-4 w-4" />
         </Button>
       </ComposerPrimitive.Send>
@@ -601,7 +603,7 @@ export function useProductAssistantRuntime({
       conversationId,
       productId: productId ?? undefined,
       formContext: {
-        currentStep: STEPS[stepIndex],
+        currentStep: STEPS[stepIndex] ?? STEPS[0],
         values: form.state.values,
         uploadedImageCount: uploaded.length,
         uploadedImageFilenames: uploaded.map((m) => m.filename),
