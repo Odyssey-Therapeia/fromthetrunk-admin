@@ -449,10 +449,12 @@ export const updateProduct = async (
 };
 
 export const deleteProduct = async (productId: string): Promise<boolean> => {
-  const deleted = await db
-    .delete(products)
-    .where(eq(products.id, productId))
-    .returning({ id: products.id });
+  const deleted = await withRetry(() =>
+    db
+      .delete(products)
+      .where(eq(products.id, productId))
+      .returning({ id: products.id })
+  );
 
   return deleted.length > 0;
 };

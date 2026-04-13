@@ -447,6 +447,7 @@ export const chatConversations = pgTable(
   }),
 );
 
+// TODO: Tune ivfflat `lists` parameter as the product catalog grows (target: lists ≈ sqrt(num_rows)).
 export const productEmbeddings = pgTable(
   "product_embeddings",
   {

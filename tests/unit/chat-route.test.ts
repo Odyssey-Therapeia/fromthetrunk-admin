@@ -126,6 +126,30 @@ describe("POST /api/chat", () => {
     });
   });
 
+  it("returns 400 when message validation fails", async () => {
+    safeValidateUIMessagesMock.mockResolvedValue({
+      success: false,
+      error: { message: "Invalid message format" },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/chat", {
+        body: JSON.stringify({
+          messages: [{ role: "user", parts: [{ type: "text", text: "hi" }] }],
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "INVALID_MESSAGES",
+    });
+  });
+
   it("returns 403 when the conversation belongs to another user", async () => {
     const conversationId = "11111111-1111-4111-8111-111111111111";
 

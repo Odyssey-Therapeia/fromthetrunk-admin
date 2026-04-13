@@ -65,11 +65,9 @@ export const productTools = {
         const normalized = term.toLowerCase().trim();
         if (!normalized) return [];
         return [
-          or(
-            ilike(tags.name, `%${normalized}%`),
-            ilike(tags.slug, `%${normalized}%`),
-            ilike(tags.category, `%${normalized}%`),
-          ),
+          ilike(tags.name, `%${normalized}%`),
+          ilike(tags.slug, `%${normalized}%`),
+          ilike(tags.category, `%${normalized}%`),
         ];
       });
 

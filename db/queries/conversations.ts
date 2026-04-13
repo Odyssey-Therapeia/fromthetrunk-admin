@@ -66,23 +66,25 @@ export const upsertConversation = async (
   productId?: string | null,
 ): Promise<ChatConversation> => {
   const row = requireFirstRow(
-    await db
-      .insert(chatConversations)
-      .values({
-        id: conversationId,
-        userId,
-        productId: productId ?? null,
-        messages,
-      })
-      .onConflictDoUpdate({
-        target: chatConversations.id,
-        set: {
+    await withRetry(() =>
+      db
+        .insert(chatConversations)
+        .values({
+          id: conversationId,
+          userId,
+          productId: productId ?? null,
           messages,
-          productId: sql`coalesce(excluded.product_id, ${chatConversations.productId})`,
-          updatedAt: new Date(),
-        },
-      })
-      .returning(),
+        })
+        .onConflictDoUpdate({
+          target: chatConversations.id,
+          set: {
+            messages,
+            productId: sql`coalesce(excluded.product_id, ${chatConversations.productId})`,
+            updatedAt: new Date(),
+          },
+        })
+        .returning()
+    ),
     "Failed to upsert conversation."
   );
 
@@ -93,15 +95,17 @@ export const deleteConversation = async (
   conversationId: string,
   userId: string,
 ): Promise<boolean> => {
-  const deleted = await db
-    .delete(chatConversations)
-    .where(
-      and(
-        eq(chatConversations.id, conversationId),
-        eq(chatConversations.userId, userId),
-      ),
-    )
-    .returning({ id: chatConversations.id });
+  const deleted = await withRetry(() =>
+    db
+      .delete(chatConversations)
+      .where(
+        and(
+          eq(chatConversations.id, conversationId),
+          eq(chatConversations.userId, userId),
+        ),
+      )
+      .returning({ id: chatConversations.id })
+  );
 
   return deleted.length > 0;
 };

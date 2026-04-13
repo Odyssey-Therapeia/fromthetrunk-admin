@@ -42,7 +42,7 @@ export const productAssistantFormValuesSchema = z.object({
   detailsLength: z.string().optional(),
   detailsWidth: z.string().optional(),
   featured: z.boolean().optional(),
-  imageMediaIds: z.array(z.string()).optional(),
+  imageMediaIds: z.array(z.string().uuid()).optional(),
   name: z.string().optional(),
   originalPriceRupees: z.number().optional(),
   priceRupees: z.number().optional(),

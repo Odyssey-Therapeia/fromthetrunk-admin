@@ -285,9 +285,11 @@ function GenerateSlugToolUI({
   const [applied, setApplied] = useState(false);
 
   const handleApply = () => {
-    form.setFieldValue("slug", result!.slug!);
+    const slug = result?.slug;
+    if (!slug) return;
+    form.setFieldValue("slug", slug);
     setApplied(true);
-    toast.success(`Slug set: ${result!.slug}`);
+    toast.success(`Slug set: ${slug}`);
   };
 
   return (

@@ -50,20 +50,33 @@ export const createEmbedding = async (
   if (!apiKey || apiKey.startsWith("{{") || !apiKey.startsWith("sk-")) return null;
 
   const model = getEmbeddingModel();
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    body: JSON.stringify({
-      input,
-      model,
-    }),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+  const timeoutMs = parseInt(process.env.EMBEDDING_TIMEOUT_MS ?? "15000", 10);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/embeddings", {
+      body: JSON.stringify({
+        input,
+        model,
+      }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    console.warn("[ai] Embedding request error:", { model, inputLength: input.length }, err);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
-    console.warn("[ai] Embedding request failed", await response.text());
+    console.warn("[ai] Embedding request failed:", { model, status: response.status });
     return null;
   }
 

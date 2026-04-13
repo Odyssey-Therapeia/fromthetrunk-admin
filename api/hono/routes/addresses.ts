@@ -147,7 +147,7 @@ export const registerAddressRoutes = (app: OpenAPIHono<HonoBindings>) => {
             ...body,
             updatedAt: new Date(),
           })
-          .where(eq(addresses.id, id))
+          .where(and(eq(addresses.id, id), eq(addresses.userId, authUserOrResponse.id)))
           .returning(),
         "Failed to update address."
       );

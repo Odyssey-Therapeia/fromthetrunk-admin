@@ -51,6 +51,7 @@ export const subscribe = async (
         target: newsletterSubscribers.email,
         set: {
           confirmToken,
+          confirmedAt: null,
           status: "pending",
           updatedAt: now,
         },
