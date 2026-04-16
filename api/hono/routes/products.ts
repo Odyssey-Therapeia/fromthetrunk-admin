@@ -31,6 +31,37 @@ const parseDate = (value: null | string | undefined) => {
 };
 
 export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
+  // Lightweight admin-only product lookup by ID (for agent panel auto-anchor)
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/by-id/{id}",
+      request: { params: idParamSchema },
+      responses: {
+        200: { description: "Product summary" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Not found",
+        },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+      const product = await getProduct(id);
+      if (!product) {
+        return c.json({ code: "NOT_FOUND", message: "Product not found." }, 404);
+      }
+      return c.json(
+        { id: product.id, name: product.name, slug: product.slug, status: product.status },
+        200,
+      );
+    },
+  );
+
   app.openapi(
     createRoute({
       method: "get",

@@ -35,6 +35,9 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Quick actions near the top for easy access */}
+      <QuickActions />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading || !metrics ? (
           Array.from({ length: 4 }, (_, i) => (
@@ -82,8 +85,6 @@ export default function AdminDashboardPage() {
           />
         )}
       </div>
-
-      <QuickActions />
     </div>
   );
 }

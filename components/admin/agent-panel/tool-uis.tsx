@@ -324,6 +324,101 @@ function DraftMarketingCopyToolUI({
   );
 }
 
+function CreateProductToolUI({
+  result,
+  status,
+}: {
+  result:
+    | {
+        name?: string;
+        slug?: string;
+        pricePaise?: number;
+        storyTitle?: string;
+        storyNarrative?: string;
+        detailsFabric?: string;
+        confirmationRequired?: boolean;
+      }
+    | undefined;
+  status: ToolCallMessagePartStatus | undefined;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+
+  const handleCreate = async () => {
+    if (!result?.name || !result?.storyTitle) return;
+    setCreating(true);
+    try {
+      const res = await fetch("/api/v2/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: result.name,
+          slug: result.slug || result.name.toLowerCase().replace(/\s+/g, "-"),
+          pricePaise: result.pricePaise || 0,
+          storyTitle: result.storyTitle,
+          storyNarrative: result.storyNarrative || null,
+          detailsFabric: result.detailsFabric || null,
+          status: "draft",
+          stockStatus: "available",
+          featured: false,
+          imageMediaIds: [],
+          tagIds: [],
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create product");
+      setCreated(true);
+      toast.success(`Created: ${result.name}`);
+    } catch {
+      toast.error("Failed to create product");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <ToolCallWrapper label="createProduct" status={status}>
+      {result?.confirmationRequired && result.name ? (
+        <div className="space-y-2 rounded-lg border border-[#c9a96e]/30 bg-[#222] p-3">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-[#c9a96e]">
+            <Wrench className="h-3 w-3" /> Proposed product
+          </p>
+          <p className="text-sm font-semibold text-[#e5e5e5]">{result.name}</p>
+          {result.storyTitle && (
+            <p className="text-xs text-[#aaa]">Story: {result.storyTitle}</p>
+          )}
+          {result.detailsFabric && (
+            <p className="text-xs text-[#aaa]">Fabric: {result.detailsFabric}</p>
+          )}
+          {result.pricePaise != null && result.pricePaise > 0 && (
+            <p className="text-xs text-[#aaa]">
+              Price: ₹{(result.pricePaise / 100).toLocaleString("en-IN")}
+            </p>
+          )}
+          {created ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              className="mt-1 border-green-600 text-green-400"
+            >
+              <Check className="mr-1 h-3 w-3" /> Created
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={handleCreate}
+              disabled={creating}
+              className="mt-1 bg-[#c9a96e] text-[#1a1a1a] hover:bg-[#b8984e]"
+            >
+              {creating ? "Creating..." : "Create Product"}
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </ToolCallWrapper>
+  );
+}
+
 /** Register all product tool UIs for the agent panel. */
 export function AgentToolUIRegistrations() {
   useAssistantToolUI({
@@ -377,6 +472,28 @@ export function AgentToolUIRegistrations() {
         result={
           result as
             | { shortDescription?: string; seoTitle?: string; seoDescription?: string }
+            | undefined
+        }
+        status={status as ToolCallMessagePartStatus | undefined}
+      />
+    ),
+  });
+
+  useAssistantToolUI({
+    toolName: "createProduct",
+    render: ({ result, status }) => (
+      <CreateProductToolUI
+        result={
+          result as
+            | {
+                name?: string;
+                slug?: string;
+                pricePaise?: number;
+                storyTitle?: string;
+                storyNarrative?: string;
+                detailsFabric?: string;
+                confirmationRequired?: boolean;
+              }
             | undefined
         }
         status={status as ToolCallMessagePartStatus | undefined}

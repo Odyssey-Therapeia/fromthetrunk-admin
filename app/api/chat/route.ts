@@ -17,8 +17,11 @@ import {
 import { productTools } from "@/lib/ai/tools/product-tools";
 import {
   getConversationById,
+  updateConversationTitle,
   upsertConversation,
 } from "@/db/queries/conversations";
+import { getProduct } from "@/db/queries/products";
+import { toRupees } from "@/db/money";
 
 export const maxDuration = 120;
 
@@ -34,6 +37,8 @@ const chatRequestSchema = z.object({
   messages: z.array(z.unknown()),
   modelId: z.string().optional(),
   productId: z.string().uuid().optional(),
+  thinkingEnabled: z.boolean().optional(),
+  thinkingEffort: z.enum(["low", "medium", "high"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -86,6 +91,8 @@ export async function POST(req: Request) {
     messages: inputMessages,
     modelId,
     productId,
+    thinkingEnabled = true,
+    thinkingEffort = "medium",
   } = parsedBody.data;
   const validatedMessages = await safeValidateUIMessages<ProductAssistantUIMessage>({
     messages: inputMessages,
@@ -113,17 +120,55 @@ export async function POST(req: Request) {
     }
   }
 
-  const systemPrompt = buildSystemPrompt(formContext);
+  // If we have a productId but no formContext, fetch the product and build
+  // a synthetic formContext so the AI has full product knowledge.
+  let resolvedFormContext = formContext;
+  if (productId && !formContext) {
+    try {
+      const product = await getProduct(productId);
+      if (product) {
+        resolvedFormContext = {
+          currentStep: "General",
+          values: {
+            name: product.name ?? undefined,
+            slug: product.slug ?? undefined,
+            priceRupees: product.pricePaise ? toRupees(product.pricePaise) : undefined,
+            originalPriceRupees: product.originalPricePaise
+              ? toRupees(product.originalPricePaise)
+              : undefined,
+            storyTitle: product.storyTitle ?? undefined,
+            storyNarrative: product.storyNarrative ?? undefined,
+            storyProvenance: product.storyProvenance ?? undefined,
+            storyEra: product.storyEra ?? undefined,
+            detailsFabric: product.detailsFabric ?? undefined,
+            detailsLength: product.detailsLength ?? undefined,
+            detailsWidth: product.detailsWidth ?? undefined,
+            detailsCondition: product.detailsCondition ?? undefined,
+            detailsDesigner: product.detailsDesigner ?? undefined,
+            status: product.status ?? undefined,
+            featured: product.featured ?? undefined,
+          },
+          uploadedImageCount: product.images?.length ?? 0,
+          uploadedImageFilenames: product.images?.map(
+            (img: { media: { filename: string } }) => img.media.filename,
+          ) ?? [],
+        };
+      }
+    } catch (err) {
+      console.error("[api/chat] Product lookup failed (non-blocking):", err);
+    }
+  }
+
+  const systemPrompt = buildSystemPrompt(resolvedFormContext);
 
   try {
-    const selectedModel = modelId || "claude-sonnet-4-20250514";
+    const selectedModel = modelId || "claude-sonnet-4-6";
     const result = streamText({
       model: anthropic(selectedModel),
       providerOptions: {
-        anthropic: {
-          effort: "medium",
-          thinking: { type: "adaptive" },
-        },
+        anthropic: thinkingEnabled
+          ? { effort: thinkingEffort, thinking: { type: "adaptive" } }
+          : {},
       },
       system: systemPrompt,
       messages: await convertToModelMessages(validatedMessages.data, {
@@ -134,12 +179,40 @@ export async function POST(req: Request) {
       onFinish: async () => {
         if (conversationId) {
           try {
+            const existing = await getConversationById(conversationId);
             await upsertConversation(
               conversationId,
               userId,
               validatedMessages.data,
               productId,
             );
+
+            // Auto-generate title from the first user message if none exists
+            if (!existing?.title) {
+              const firstUserMsg = validatedMessages.data.find(
+                (m: { role: string }) => m.role === "user",
+              );
+              if (firstUserMsg && "content" in firstUserMsg) {
+                const content = String(
+                  typeof firstUserMsg.content === "string"
+                    ? firstUserMsg.content
+                    : Array.isArray(firstUserMsg.content)
+                      ? firstUserMsg.content
+                          .filter(
+                            (p: { type: string }) => p.type === "text",
+                          )
+                          .map((p: { text: string }) => p.text)
+                          .join(" ")
+                      : "",
+                );
+                const title = content.slice(0, 80).trim() || "New conversation";
+                await updateConversationTitle(
+                  conversationId,
+                  userId,
+                  title,
+                );
+              }
+            }
           } catch (err) {
             console.error("[api/chat] Failed to persist conversation:", err);
           }

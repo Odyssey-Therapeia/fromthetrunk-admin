@@ -430,7 +430,7 @@ export const chatConversations = pgTable(
       onDelete: "set null",
     }),
     title: text("title"),
-    modelId: text("model_id").default("claude-sonnet-4-20250514"),
+    modelId: text("model_id").default("claude-sonnet-4-6"),
     messages: jsonb("messages").$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

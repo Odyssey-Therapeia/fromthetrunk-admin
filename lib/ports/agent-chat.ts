@@ -16,8 +16,8 @@ export type AgentModelConfig = {
 
 /** Available models for the agent panel. */
 export const AGENT_MODELS: AgentModelConfig[] = [
-  { modelId: "claude-sonnet-4-20250514", label: "Claude Sonnet" },
-  { modelId: "claude-opus-4-6", label: "Claude Opus" },
+  { modelId: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { modelId: "claude-opus-4-6", label: "Claude Opus 4.6" },
 ];
 
 /** Port for agent chat operations -- decouples UI from API layer. */

@@ -3,18 +3,21 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 
 import { useAgentChat } from "@/lib/hooks/use-agent-chat";
+import { useAgentStore } from "@/lib/store/agent-store";
 
 import { AgentPanel } from "./agent-panel";
 
 /**
- * Layout-level provider that wraps the AssistantRuntimeProvider
- * and renders the AgentPanel. Chat state persists across page navigations.
+ * Layout-level provider. Uses `runtimeKey` to force-remount the
+ * AssistantRuntimeProvider when the user clicks "New Chat", which
+ * clears the message history in the thread UI.
  */
 export function AgentPanelProvider() {
   const runtime = useAgentChat();
+  const runtimeKey = useAgentStore((s) => s.runtimeKey);
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
+    <AssistantRuntimeProvider key={runtimeKey} runtime={runtime}>
       <AgentPanel />
     </AssistantRuntimeProvider>
   );

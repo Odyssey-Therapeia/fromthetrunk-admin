@@ -4,9 +4,19 @@ import {
   ThreadPrimitive,
   MessagePrimitive,
 } from "@assistant-ui/react";
+import { useSession } from "next-auth/react";
 import { Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+
+import { AgentQuickChips } from "./agent-quick-chips";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
 
 function ThinkingIndicator() {
   return (
@@ -24,21 +34,27 @@ function ThinkingIndicator() {
 }
 
 function ThreadWelcome() {
+  const { data: session } = useSession();
+  const firstName = session?.user?.name?.split(" ")[0] ?? "Curator";
+  const greeting = getGreeting();
+
   return (
     <ThreadPrimitive.Empty>
-      <div className="flex flex-col items-center gap-3 py-8 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#c9a96e]/10">
-          <Sparkles className="h-5 w-5 text-[#c9a96e]" />
+      <div className="flex flex-col gap-4 py-6">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6B1D1D]">
+            <Sparkles className="h-4 w-4 text-[#c9a96e]" />
+          </div>
+          <div>
+            <p className="text-sm italic text-[#e5e5e5]">
+              {greeting}, {firstName}.
+            </p>
+            <p className="mt-1 text-xs text-[#777]">
+              How can I help with the FTT catalog today?
+            </p>
+          </div>
         </div>
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-[#e5e5e5]">
-            FTT AI Assistant
-          </p>
-          <p className="max-w-[260px] text-xs text-[#777]">
-            I can help with product listings, stories, tags, marketing copy,
-            and general admin tasks.
-          </p>
-        </div>
+        <AgentQuickChips />
       </div>
     </ThreadPrimitive.Empty>
   );

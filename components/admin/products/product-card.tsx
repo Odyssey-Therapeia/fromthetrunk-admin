@@ -16,12 +16,6 @@ type ProductCardProps = {
   onDelete?: (id: string) => void;
 };
 
-const stockColors = {
-  available: "border-green-300 text-green-700 bg-green-50",
-  reserved: "border-amber-300 text-amber-700 bg-amber-50",
-  sold: "border-red-300 text-red-700 bg-red-50",
-} as const;
-
 export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-border/70 bg-card/85 shadow-sm transition-shadow hover:shadow-md">
@@ -33,12 +27,27 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
               alt={product.name}
               fill
               className="object-cover transition-transform group-hover:scale-105"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <span className="text-sm">No image</span>
             </div>
+          )}
+
+          {/* Published badge -- prominent, overlaid on image */}
+          {product.status === "published" && (
+            <Badge className="absolute left-2 top-2 bg-primary text-primary-foreground text-[10px] uppercase tracking-wider shadow-sm">
+              Published
+            </Badge>
+          )}
+          {product.status === "draft" && (
+            <Badge
+              variant="outline"
+              className="absolute left-2 top-2 border-border bg-background/80 text-[10px] uppercase tracking-wider text-muted-foreground backdrop-blur-sm"
+            >
+              Draft
+            </Badge>
           )}
         </div>
       </Link>
@@ -48,25 +57,20 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
           <h3 className="truncate text-sm font-medium">{product.name}</h3>
         </Link>
         <p className="text-base font-semibold">{formatINR(product.pricePaise)}</p>
-        <div className="flex items-center gap-2">
+        {/* Stock status -- secondary, smaller */}
+        {product.stockStatus !== "available" && (
           <Badge
             variant="outline"
             className={cn(
               "text-[10px] uppercase tracking-wider",
-              product.status === "published"
-                ? "border-green-300 text-green-700"
-                : "border-border text-muted-foreground",
+              product.stockStatus === "reserved"
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-red-300 bg-red-50 text-red-700",
             )}
-          >
-            {product.status}
-          </Badge>
-          <Badge
-            variant="outline"
-            className={cn("text-[10px] uppercase tracking-wider", stockColors[product.stockStatus])}
           >
             {product.stockStatus}
           </Badge>
-        </div>
+        )}
       </div>
 
       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -84,6 +88,7 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
           <Button
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onDuplicate(product.id);
             }}
             size="icon"
@@ -97,6 +102,7 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
           <Button
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onDelete(product.id);
             }}
             size="icon"

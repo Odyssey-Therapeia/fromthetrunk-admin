@@ -1,17 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ProductsGrid } from "@/components/admin/products/products-grid";
 import { ProductsToolbar } from "@/components/admin/products/products-toolbar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProducts } from "@/lib/hooks/use-products";
+import { useProducts, type ProductListItem } from "@/lib/hooks/use-products";
 
 export default function AdminProductsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [stockStatus, setStockStatus] = useState("all");
+  const queryClient = useQueryClient();
+
+  // Guard against duplicate click-throughs
+  const duplicatingRef = useRef<Set<string>>(new Set());
 
   const { data: products, isLoading, refetch } = useProducts({
     search,
@@ -21,6 +26,10 @@ export default function AdminProductsPage() {
 
   const handleDuplicate = useCallback(
     async (id: string) => {
+      // Prevent multiple simultaneous duplicates of the same product
+      if (duplicatingRef.current.has(id)) return;
+      duplicatingRef.current.add(id);
+
       try {
         const res = await fetch(`/api/v2/products/${id}/duplicate`, {
           method: "POST",
@@ -30,6 +39,8 @@ export default function AdminProductsPage() {
         void refetch();
       } catch {
         toast.error("Failed to duplicate product");
+      } finally {
+        duplicatingRef.current.delete(id);
       }
     },
     [refetch],
@@ -38,16 +49,26 @@ export default function AdminProductsPage() {
   const handleDelete = useCallback(
     async (id: string) => {
       if (!confirm("Delete this product?")) return;
+
+      // Optimistic removal -- remove from cache immediately
+      const queryKey = ["admin", "products", { search, status, stockStatus }];
+      queryClient.setQueryData<ProductListItem[]>(queryKey, (old) =>
+        old ? old.filter((p) => p.id !== id) : old,
+      );
+
       try {
         const res = await fetch(`/api/v2/products/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("Failed to delete");
+        if (!res.ok) {
+          throw new Error("Failed to delete");
+        }
         toast.success("Product deleted");
-        void refetch();
       } catch {
+        // Revert on failure
         toast.error("Failed to delete product");
+        void refetch();
       }
     },
-    [refetch],
+    [refetch, queryClient, search, status, stockStatus],
   );
 
   const handleExport = useCallback(async () => {

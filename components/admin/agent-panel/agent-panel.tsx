@@ -3,7 +3,9 @@
 import { useState } from "react";
 
 import { useAgentStore } from "@/lib/store/agent-store";
+import { useAutoAnchorProduct } from "@/lib/hooks/use-auto-anchor-product";
 
+import { AgentAnchorBar } from "./agent-anchor-bar";
 import { AgentPanelComposer } from "./agent-panel-composer";
 import { AgentPanelHeader } from "./agent-panel-header";
 import { AgentPanelHistory } from "./agent-panel-history";
@@ -11,8 +13,11 @@ import { AgentPanelMessages } from "./agent-panel-messages";
 import { AgentToolUIRegistrations } from "./tool-uis";
 
 export function AgentPanel() {
-  const { isOpen } = useAgentStore();
+  const isOpen = useAgentStore((s) => s.isOpen);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Auto-detect product from URL and anchor the panel
+  useAutoAnchorProduct();
 
   if (!isOpen) return null;
 
@@ -21,7 +26,6 @@ export function AgentPanel() {
       <AgentToolUIRegistrations />
       <AgentPanelHeader
         onToggleHistory={() => setHistoryOpen((v) => !v)}
-        historyOpen={historyOpen}
       />
       {historyOpen ? (
         <AgentPanelHistory onClose={() => setHistoryOpen(false)} />
@@ -31,6 +35,7 @@ export function AgentPanel() {
             <AgentPanelMessages />
           </div>
           <AgentPanelComposer />
+          <AgentAnchorBar />
         </>
       )}
     </aside>

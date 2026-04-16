@@ -148,7 +148,11 @@ export function ProductStepper({
   });
 
   const handleAiAssist = () => {
-    anchorProduct(activeProductId);
+    const name =
+      form.state.values.name.trim() ||
+      form.state.values.storyTitle.trim() ||
+      "Untitled Product";
+    anchorProduct(activeProductId, name);
     openAgent();
   };
 

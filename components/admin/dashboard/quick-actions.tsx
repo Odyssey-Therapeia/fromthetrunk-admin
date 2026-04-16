@@ -35,7 +35,7 @@ export function QuickActions() {
         className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/85 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:border-primary/30 hover:text-primary"
       >
         <Sparkles className="h-4 w-4" />
-        Open AI Assistant
+        AI Assistant
       </button>
     </div>
   );

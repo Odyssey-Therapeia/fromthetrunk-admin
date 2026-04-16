@@ -16,7 +16,8 @@ type AgentPanelHistoryProps = {
 export function AgentPanelHistory({ onClose }: AgentPanelHistoryProps) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { conversationId, setConversationId } = useAgentStore();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const conversationId = useAgentStore((s) => s.conversationId);
 
   useEffect(() => {
     setIsLoading(true);
@@ -27,9 +28,21 @@ export function AgentPanelHistory({ onClose }: AgentPanelHistoryProps) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const handleSelect = (id: string) => {
-    setConversationId(id);
-    onClose();
+  const handleSelect = async (id: string) => {
+    setLoadingId(id);
+    try {
+      const conv = await agentChatAdapter.getConversation(id);
+      // switchConversation sets ID, pendingMessages, and increments runtimeKey
+      // so the provider remounts and hydrates with the stored messages
+      useAgentStore.getState().switchConversation(id, conv?.messages ?? []);
+      onClose();
+    } catch {
+      // Fallback: just switch ID without messages
+      useAgentStore.getState().switchConversation(id, []);
+      onClose();
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -38,15 +51,12 @@ export function AgentPanelHistory({ onClose }: AgentPanelHistoryProps) {
   };
 
   const formatDate = (iso: string) => {
-    const date = new Date(iso);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    const diffDay = Math.floor(diffHr / 24);
-    return `${diffDay}d ago`;
+    const diff = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    return `${Math.floor(hr / 24)}d ago`;
   };
 
   return (
@@ -86,14 +96,15 @@ export function AgentPanelHistory({ onClose }: AgentPanelHistoryProps) {
               >
                 <button
                   type="button"
-                  onClick={() => handleSelect(conv.id)}
+                  onClick={() => void handleSelect(conv.id)}
+                  disabled={loadingId === conv.id}
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-xs font-medium text-[#ccc]">
                     {conv.title || "Untitled chat"}
                   </p>
                   <p className="text-[10px] text-[#666]">
-                    {formatDate(conv.updatedAt)}
+                    {loadingId === conv.id ? "Loading..." : formatDate(conv.updatedAt)}
                   </p>
                 </button>
                 <Button
