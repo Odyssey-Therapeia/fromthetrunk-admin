@@ -40,6 +40,7 @@ export function ProductsToolbar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search products..."
+          aria-label="Search products"
           className="pl-9"
         />
       </div>

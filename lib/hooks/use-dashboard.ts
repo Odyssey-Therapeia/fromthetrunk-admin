@@ -21,6 +21,9 @@ export function useDashboard() {
     metrics: metrics.data ?? null,
     activity: activity.data ?? [],
     isLoading: metrics.isLoading || activity.isLoading,
-    error: metrics.error || activity.error,
+    error: {
+      metrics: metrics.error,
+      activity: activity.error,
+    },
   };
 }

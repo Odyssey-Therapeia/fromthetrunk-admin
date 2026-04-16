@@ -11,6 +11,9 @@ export function useImportWizard() {
 
   const uploadAndParse = useCallback(
     async (file: File) => {
+      // Reset any stale state from a previous run so partial data from a
+      // failed parse can't bleed into the new upload.
+      store.reset();
       store.setProcessing(true);
       store.setFile(file);
       try {

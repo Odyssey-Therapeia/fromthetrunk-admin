@@ -21,8 +21,13 @@ function getGreeting(): string {
 function ThinkingIndicator() {
   return (
     <ThreadPrimitive.If running>
-      <div className="flex items-center gap-2 px-1 py-2">
-        <div className="flex gap-1">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="flex items-center gap-2 px-1 py-2"
+      >
+        <div className="flex gap-1" aria-hidden="true">
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a96e]/60 [animation-delay:0ms]" />
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a96e]/60 [animation-delay:150ms]" />
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a96e]/60 [animation-delay:300ms]" />

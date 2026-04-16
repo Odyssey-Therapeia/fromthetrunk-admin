@@ -8,6 +8,8 @@ class AgentChatRestAdapter implements AgentChatPort {
     productId?: string | null;
     formContext?: Record<string, unknown>;
     modelId?: string;
+    thinkingEnabled?: boolean;
+    thinkingEffort?: "low" | "medium" | "high" | "max";
   }) {
     return {
       api: "/api/chat",
@@ -16,6 +18,8 @@ class AgentChatRestAdapter implements AgentChatPort {
         productId: params.productId ?? undefined,
         formContext: params.formContext ?? undefined,
         modelId: params.modelId ?? undefined,
+        thinkingEnabled: params.thinkingEnabled,
+        thinkingEffort: params.thinkingEffort,
       }),
     };
   }

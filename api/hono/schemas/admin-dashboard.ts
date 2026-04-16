@@ -13,7 +13,7 @@ export const dashboardMetricsSchema = z.object({
     total: z.number(),
     published: z.number(),
     drafts: z.number(),
-    lowStock: z.number(),
+    reserved: z.number(),
   }),
   customers: z.object({
     total: z.number(),

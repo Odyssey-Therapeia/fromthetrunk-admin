@@ -6,6 +6,24 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useImportStore } from "@/lib/store/import-store";
 import { useImportWizard } from "./import-hooks";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+function validateFile(file: File): string | null {
+  const isCsvMime =
+    file.type === "text/csv" ||
+    file.type === "application/vnd.ms-excel" ||
+    file.type === "application/csv" ||
+    file.type === "";
+  const isCsvName = file.name.toLowerCase().endsWith(".csv");
+  if (!isCsvMime || !isCsvName) return "Only .csv files are supported.";
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return `File is too large (max ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB).`;
+  }
+  return null;
+}
 
 export function StepUpload() {
   const { file, isProcessing } = useImportStore();
@@ -15,6 +33,11 @@ export function StepUpload() {
 
   const handleFile = useCallback(
     (selectedFile: File) => {
+      const err = validateFile(selectedFile);
+      if (err) {
+        toast.error(err);
+        return;
+      }
       void uploadAndParse(selectedFile);
     },
     [uploadAndParse],
@@ -39,11 +62,12 @@ export function StepUpload() {
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        className={`flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-12 transition-colors ${
+        className={cn(
+          "flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-12 transition-colors",
           dragOver
             ? "border-primary bg-primary/5"
-            : "border-border/70 bg-background/50"
-        }`}
+            : "border-border/70 bg-background/50",
+        )}
       >
         <Upload className="h-8 w-8 text-muted-foreground" />
         <div className="text-center">

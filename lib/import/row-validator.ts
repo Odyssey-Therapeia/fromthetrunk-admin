@@ -43,13 +43,15 @@ export function validateRow(
         message: "Price must be a non-negative number",
         severity: "error",
       });
-    } else if (num > 0 && num < 100) {
-      // Likely in rupees, not paise
+    } else if (num > 0 && num < 100000) {
+      // Matches the auto-conversion branch in transformRow below so warnings
+      // and silent conversions stay in sync.
       errors.push({
         row: rowIndex,
         field: "pricePaise",
         value: priceValue,
-        message: "Price looks like rupees — will be auto-converted to paise (x100)",
+        message:
+          "Price looks like rupees — will be auto-converted to paise (x100, threshold 100000)",
         severity: "warning",
       });
     }

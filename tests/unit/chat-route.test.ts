@@ -231,7 +231,8 @@ describe("POST /api/chat", () => {
       conversationId,
       "admin-1",
       VALIDATED_MESSAGES,
-      productId
+      productId,
+      expect.any(String)
     );
   });
 });

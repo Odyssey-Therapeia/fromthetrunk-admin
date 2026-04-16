@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Brain, Command, CornerDownLeft, Package, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,19 +28,24 @@ type ProductOption = { id: string; name: string };
 function ProductPicker() {
   const { anchoredProductId, anchoredProductName, anchorProduct } =
     useAgentStore();
-  const [products, setProducts] = useState<ProductOption[]>([]);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    fetch("/api/v2/products?includeDrafts=true&limit=50")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: Array<{ id: string; name: string }>) =>
-        setProducts(data.map((p) => ({ id: p.id, name: p.name }))),
-      )
-      .catch(() => setProducts([]));
-  }, [open]);
+  const { data: products = [], isLoading, error } = useQuery<
+    ProductOption[],
+    Error
+  >({
+    queryKey: ["agent-panel", "products"],
+    queryFn: async () => {
+      const r = await fetch("/api/v2/products?includeDrafts=true&limit=50");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as Array<{ id: string; name: string }>;
+      return data.map((p) => ({ id: p.id, name: p.name }));
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const loadError = error?.message ?? null;
 
   const filtered = search
     ? products.filter((p) =>
@@ -49,34 +55,34 @@ function ProductPicker() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-full border border-[#444] bg-[#222] px-3 py-1 text-left transition-colors hover:border-[#666]"
-        >
-          <Package className="h-3 w-3 text-[#777]" />
-          {anchoredProductId ? (
-            <>
+      <div className="flex items-center gap-1 rounded-full border border-[#444] bg-[#222] pl-3 transition-colors hover:border-[#666]">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 py-1 pr-2 text-left"
+          >
+            <Package className="h-3 w-3 text-[#777]" />
+            {anchoredProductId ? (
               <span className="max-w-[140px] truncate text-xs font-medium text-[#c9a96e]">
                 {anchoredProductName || "Product"}
               </span>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  anchorProduct(null, null);
-                }}
-                size="icon"
-                variant="ghost"
-                className="h-4 w-4 text-[#666] hover:text-[#ccc]"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </>
-          ) : (
-            <span className="text-[10px] text-[#777]">Work in a product</span>
-          )}
-        </button>
-      </PopoverTrigger>
+            ) : (
+              <span className="text-[10px] text-[#777]">Work in a product</span>
+            )}
+          </button>
+        </PopoverTrigger>
+        {anchoredProductId ? (
+          <Button
+            onClick={() => anchorProduct(null, null)}
+            size="icon"
+            variant="ghost"
+            aria-label="Clear anchored product"
+            className="mr-1 h-5 w-5 shrink-0 text-[#666] hover:text-[#ccc]"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        ) : null}
+      </div>
       <PopoverContent
         side="top"
         align="start"
@@ -89,9 +95,15 @@ function ProductPicker() {
           className="mb-2 h-8 border-[#444] bg-[#1a1a1a] text-xs text-[#e5e5e5] placeholder:text-[#666]"
         />
         <div className="max-h-[200px] overflow-y-auto">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <p className="py-2 text-center text-xs text-[#666]">Loading...</p>
+          ) : loadError ? (
+            <p className="py-2 text-center text-xs text-red-400">
+              Failed to load products
+            </p>
+          ) : filtered.length === 0 ? (
             <p className="py-2 text-center text-xs text-[#666]">
-              {products.length === 0 ? "Loading..." : "No matches"}
+              {products.length === 0 ? "No products" : "No matches"}
             </p>
           ) : (
             filtered.map((p) => (

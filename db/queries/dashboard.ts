@@ -6,7 +6,7 @@ import { orders, products, users, orderEvents } from "@/db/schema";
 export type DashboardMetricsRow = {
   revenue: { totalPaise: number; periodLabel: string };
   orders: { total: number; pending: number };
-  products: { total: number; published: number; drafts: number; lowStock: number };
+  products: { total: number; published: number; drafts: number; reserved: number };
   customers: { total: number; newThisWeek: number };
 };
 
@@ -41,7 +41,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsRow> {
             drafts: count(
               sql`CASE WHEN ${products.status} = 'draft' THEN 1 END`,
             ),
-            lowStock: count(
+            reserved: count(
               sql`CASE WHEN ${products.stockStatus} = 'reserved' THEN 1 END`,
             ),
           })
@@ -87,7 +87,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsRow> {
       total: productCounts[0]?.total ?? 0,
       published: productCounts[0]?.published ?? 0,
       drafts: productCounts[0]?.drafts ?? 0,
-      lowStock: productCounts[0]?.lowStock ?? 0,
+      reserved: productCounts[0]?.reserved ?? 0,
     },
     customers: {
       total: customerCounts.total,

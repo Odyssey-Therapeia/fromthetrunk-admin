@@ -4,12 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 type StockAlertsProps = {
-  lowStockCount: number;
+  reservedCount: number;
   draftCount: number;
 };
 
-export function StockAlerts({ lowStockCount, draftCount }: StockAlertsProps) {
-  if (lowStockCount === 0 && draftCount === 0) return null;
+export function StockAlerts({ reservedCount, draftCount }: StockAlertsProps) {
+  if (reservedCount === 0 && draftCount === 0) return null;
 
   return (
     <Card className="border-border/70 bg-card/85 shadow-sm">
@@ -20,11 +20,11 @@ export function StockAlerts({ lowStockCount, draftCount }: StockAlertsProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {lowStockCount > 0 && (
+        {reservedCount > 0 && (
           <div className="flex items-center justify-between rounded-lg border border-amber-200/50 bg-amber-50/50 px-3 py-2">
             <span className="text-sm">Reserved products</span>
             <Badge variant="outline" className="border-amber-300 text-amber-700">
-              {lowStockCount}
+              {reservedCount}
             </Badge>
           </div>
         )}

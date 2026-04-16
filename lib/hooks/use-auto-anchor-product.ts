@@ -16,10 +16,10 @@ export function useAutoAnchorProduct() {
   const pathname = usePathname();
   const anchoredProductId = useAgentStore((s) => s.anchoredProductId);
   const anchorProduct = useAgentStore((s) => s.anchorProduct);
-  const lastPathRef = useRef(pathname);
+  const lastPathRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (pathname === lastPathRef.current) return;
+    if (lastPathRef.current !== null && pathname === lastPathRef.current) return;
     lastPathRef.current = pathname;
 
     const match = pathname.match(PRODUCT_PAGE_RE);
@@ -31,8 +31,15 @@ export function useAutoAnchorProduct() {
       // Lightweight single-product fetch (not the 200-product list)
       fetch(`/api/v2/products/by-id/${productId}`)
         .then((res) => (res.ok ? res.json() : null))
-        .then((data: { name: string } | null) => {
-          anchorProduct(productId, data?.name ?? "Product");
+        .then((data: unknown) => {
+          const name =
+            data &&
+            typeof data === "object" &&
+            "name" in data &&
+            typeof (data as { name: unknown }).name === "string"
+              ? (data as { name: string }).name
+              : "Product";
+          anchorProduct(productId, name);
         })
         .catch(() => {
           anchorProduct(productId, "Product");

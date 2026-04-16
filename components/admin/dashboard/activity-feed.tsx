@@ -1,4 +1,4 @@
-import { Package, ShoppingCart } from "lucide-react";
+import { Package, ShoppingCart, User } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ActivityItem } from "@/lib/ports/dashboard";
@@ -10,11 +10,14 @@ type ActivityFeedProps = {
 const iconMap = {
   order: ShoppingCart,
   product: Package,
-  customer: Package,
+  customer: User,
 } as const;
 
 function formatRelativeTime(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
+  const parsed = new Date(iso).getTime();
+  if (Number.isNaN(parsed)) return "Unknown time";
+  const diff = Date.now() - parsed;
+  if (diff < 0) return "just now";
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);

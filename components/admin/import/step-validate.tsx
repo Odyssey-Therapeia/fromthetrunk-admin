@@ -13,9 +13,17 @@ export function StepValidate() {
   const { validationResults, isProcessing, importResult } = useImportStore();
   const { executeImport } = useImportWizard();
 
-  const validCount = validationResults.filter((r) => r.status === "valid").length;
-  const warningCount = validationResults.filter((r) => r.status === "warning").length;
-  const errorCount = validationResults.filter((r) => r.status === "error").length;
+  // Single-pass counting; equivalent to three filters but cheaper for large imports.
+  const { validCount, warningCount, errorCount } = validationResults.reduce(
+    (acc, r) => {
+      if (r.status === "valid") acc.validCount++;
+      else if (r.status === "warning") acc.warningCount++;
+      else if (r.status === "error") acc.errorCount++;
+      return acc;
+    },
+    { validCount: 0, warningCount: 0, errorCount: 0 },
+  );
+  const importableCount = validCount + warningCount;
 
   if (importResult) {
     return (
@@ -24,7 +32,7 @@ export function StepValidate() {
           <CardTitle>Import Complete</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-3">
             <div>
               <p className="text-2xl font-semibold">{importResult.total}</p>
               <p className="text-xs text-muted-foreground">Total</p>
@@ -72,14 +80,21 @@ export function StepValidate() {
         </div>
         <Button
           onClick={() => void executeImport()}
-          disabled={isProcessing || validCount === 0}
+          disabled={isProcessing || importableCount === 0}
           className="rounded-full"
         >
           {isProcessing
             ? "Importing..."
-            : `Import ${validCount + warningCount} Products`}
+            : `Import ${importableCount} Products`}
         </Button>
       </div>
+
+      {validationResults.length > 50 && (
+        <p className="text-xs text-muted-foreground">
+          Showing the first 50 of {validationResults.length} rows — results
+          truncated for display. All rows will still be imported.
+        </p>
+      )}
 
       <div className="max-h-[400px] overflow-y-auto rounded-xl border border-border/70">
         {validationResults.slice(0, 50).map((row) => (

@@ -20,6 +20,12 @@ export const AGENT_MODELS: AgentModelConfig[] = [
   { modelId: "claude-opus-4-6", label: "Claude Opus 4.6" },
 ];
 
+/** Whitelist of model IDs accepted by the chat API. */
+export const ALLOWED_MODEL_IDS = AGENT_MODELS.map((m) => m.modelId) as readonly string[];
+
+/** Default model used when none specified. */
+export const DEFAULT_MODEL_ID = "claude-sonnet-4-6";
+
 /** Port for agent chat operations -- decouples UI from API layer. */
 export interface AgentChatPort {
   /** Returns transport config for @assistant-ui/react. */
@@ -28,6 +34,8 @@ export interface AgentChatPort {
     productId?: string | null;
     formContext?: Record<string, unknown>;
     modelId?: string;
+    thinkingEnabled?: boolean;
+    thinkingEffort?: "low" | "medium" | "high" | "max";
   }): { api: string; body: () => Record<string, unknown> };
 
   /** List conversation history for the current user. */

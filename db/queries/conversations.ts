@@ -64,6 +64,7 @@ export const upsertConversation = async (
   userId: string,
   messages: unknown[],
   productId?: string | null,
+  modelId?: string | null,
 ): Promise<ChatConversation> => {
   const row = requireFirstRow(
     await withRetry(() =>
@@ -73,6 +74,7 @@ export const upsertConversation = async (
           id: conversationId,
           userId,
           productId: productId ?? null,
+          modelId: modelId ?? undefined,
           messages,
         })
         .onConflictDoUpdate({
@@ -80,6 +82,7 @@ export const upsertConversation = async (
           set: {
             messages,
             productId: sql`coalesce(excluded.product_id, ${chatConversations.productId})`,
+            modelId: sql`coalesce(excluded.model_id, ${chatConversations.modelId})`,
             updatedAt: new Date(),
           },
           setWhere: eq(chatConversations.userId, userId),

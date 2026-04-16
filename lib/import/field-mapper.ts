@@ -74,13 +74,19 @@ export function autoMapFields(csvHeaders: string[]): FieldMapping[] {
           break;
         }
 
-        // Contains match
-        if (normalized.includes(aliasNorm) || aliasNorm.includes(normalized)) {
-          const conf = Math.min(aliasNorm.length, normalized.length) /
-            Math.max(aliasNorm.length, normalized.length);
-          if (conf > bestConfidence) {
+        // Contains match -- guard against short-header false positives like
+        // a one-letter header matching a long alias. Require substantial
+        // length overlap before accepting either direction of `contains`.
+        const lenRatio =
+          Math.min(aliasNorm.length, normalized.length) /
+          Math.max(aliasNorm.length, normalized.length);
+        if (
+          lenRatio >= 0.5 &&
+          (normalized.includes(aliasNorm) || aliasNorm.includes(normalized))
+        ) {
+          if (lenRatio > bestConfidence) {
             bestMatch = field;
-            bestConfidence = Math.max(0.5, conf);
+            bestConfidence = lenRatio;
           }
         }
       }

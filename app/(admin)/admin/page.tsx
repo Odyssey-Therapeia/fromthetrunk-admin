@@ -80,7 +80,7 @@ export default function AdminDashboardPage() {
         <ActivityFeed items={activity} />
         {metrics && (
           <StockAlerts
-            lowStockCount={metrics.products.lowStock}
+            reservedCount={metrics.products.reserved}
             draftCount={metrics.products.drafts}
           />
         )}

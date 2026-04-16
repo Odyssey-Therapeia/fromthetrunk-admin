@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   useChatRuntime,
   AssistantChatTransport,
@@ -23,17 +23,19 @@ import { useAgentStore } from "@/lib/store/agent-store";
  * actions: "New Chat" and "Switch Conversation".
  */
 export function useAgentChat() {
-  // Read pending messages at mount time (consumed once on provider remount)
-  const pendingMessages = useAgentStore((s) => s.pendingMessages);
+  // Capture pending messages ONCE at mount via store snapshot (no subscription)
+  // so the component doesn't re-render when pendingMessages later clears.
+  const initialMessagesRef = useRef<UIMessage[] | undefined>(
+    (useAgentStore.getState().pendingMessages as UIMessage[] | undefined) ??
+      undefined,
+  );
+  const initialMessages = initialMessagesRef.current;
 
-  const initialMessages = useMemo(() => {
-    const msgs = pendingMessages;
-    if (msgs) {
-      // Clear after consuming so the next mount doesn't re-hydrate
+  // Side effect: clear consumed pendingMessages after mount (kept out of useMemo)
+  useEffect(() => {
+    if (initialMessagesRef.current) {
       useAgentStore.getState().setPendingMessages(null);
     }
-    return (msgs as UIMessage[] | undefined) ?? undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on mount
   }, []);
 
   // Transport created ONCE -- body reads latest store values per-request

@@ -36,16 +36,28 @@ export type ImportStoreState = {
   reset: () => void;
 };
 
-const initialState = {
-  step: "upload" as ImportStep,
-  file: null as File | null,
-  fileId: null as string | null,
-  headers: [] as string[],
-  previewRows: [] as Record<string, string>[],
+const initialState: Pick<
+  ImportStoreState,
+  | "step"
+  | "file"
+  | "fileId"
+  | "headers"
+  | "previewRows"
+  | "totalRows"
+  | "mappings"
+  | "validationResults"
+  | "importResult"
+  | "isProcessing"
+> = {
+  step: "upload",
+  file: null,
+  fileId: null,
+  headers: [],
+  previewRows: [],
   totalRows: 0,
-  mappings: [] as FieldMapping[],
-  validationResults: [] as ImportPreviewRow[],
-  importResult: null as ImportResult | null,
+  mappings: [],
+  validationResults: [],
+  importResult: null,
   isProcessing: false,
 };
 

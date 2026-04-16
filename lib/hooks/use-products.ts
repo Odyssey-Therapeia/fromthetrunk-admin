@@ -22,13 +22,26 @@ type UseProductsOptions = {
   stockStatus?: string;
 };
 
+// Admin catalogs are expected to be small enough to fit in one page; we raise
+// the client-side cap and forward filter params so the API can honour them
+// once server-side filtering lands. Filters are still applied locally as a
+// fallback to ensure results stay correct for any unsupported param.
+const ADMIN_PRODUCT_PAGE_CAP = 1000;
+
 export function useProducts(options: UseProductsOptions = {}) {
   return useQuery({
     queryKey: ["admin", "products", options],
     queryFn: async (): Promise<ProductListItem[]> => {
       const params = new URLSearchParams();
       params.set("includeDrafts", "true");
-      params.set("limit", "200");
+      params.set("limit", String(ADMIN_PRODUCT_PAGE_CAP));
+      if (options.search) params.set("search", options.search);
+      if (options.status && options.status !== "all") {
+        params.set("status", options.status);
+      }
+      if (options.stockStatus && options.stockStatus !== "all") {
+        params.set("stockStatus", options.stockStatus);
+      }
 
       const res = await fetch(`/api/v2/products?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load products");

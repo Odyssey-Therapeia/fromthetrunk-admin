@@ -3,7 +3,7 @@ import { z } from "@hono/zod-openapi";
 export const conversationSummarySchema = z.object({
   id: z.string().uuid(),
   title: z.string().nullable(),
-  updatedAt: z.string(),
+  updatedAt: z.string().datetime(),
   productId: z.string().uuid().nullable(),
 });
 

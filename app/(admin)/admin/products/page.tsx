@@ -9,6 +9,12 @@ import { ProductsToolbar } from "@/components/admin/products/products-toolbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProducts, type ProductListItem } from "@/lib/hooks/use-products";
 
+/** Escape a CSV cell per RFC 4180 so commas, quotes, and newlines don't corrupt columns. */
+const escapeCsvCell = (value: unknown): string => {
+  const str = value == null ? "" : String(value);
+  return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
+
 export default function AdminProductsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -62,6 +68,11 @@ export default function AdminProductsPage() {
           throw new Error("Failed to delete");
         }
         toast.success("Product deleted");
+        // Invalidate all product list variants so other filters stay in sync.
+        void queryClient.invalidateQueries({
+          queryKey: ["admin", "products"],
+          exact: false,
+        });
       } catch {
         // Revert on failure
         toast.error("Failed to delete product");
@@ -79,9 +90,19 @@ export default function AdminProductsPage() {
 
       const headers = ["Name", "Slug", "Price (Paise)", "Status", "Stock Status", "Fabric", "Story Title"];
       const rows = data.map((p: Record<string, unknown>) =>
-        [p.name, p.slug, p.pricePaise, p.status, p.stockStatus, p.detailsFabric ?? "", p.storyTitle].join(","),
+        [
+          p.name,
+          p.slug,
+          p.pricePaise,
+          p.status,
+          p.stockStatus,
+          p.detailsFabric ?? "",
+          p.storyTitle,
+        ]
+          .map(escapeCsvCell)
+          .join(","),
       );
-      const csv = [headers.join(","), ...rows].join("\n");
+      const csv = [headers.map(escapeCsvCell).join(","), ...rows].join("\n");
 
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);

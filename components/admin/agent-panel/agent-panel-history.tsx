@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useAgentStore } from "@/lib/store/agent-store";
@@ -36,18 +37,31 @@ export function AgentPanelHistory({ onClose }: AgentPanelHistoryProps) {
       // so the provider remounts and hydrates with the stored messages
       useAgentStore.getState().switchConversation(id, conv?.messages ?? []);
       onClose();
-    } catch {
-      // Fallback: just switch ID without messages
-      useAgentStore.getState().switchConversation(id, []);
-      onClose();
+    } catch (err) {
+      // Preserve the current conversation on transient failures instead of
+      // switching to an empty thread. Surface the error to the user so they
+      // can retry.
+      console.error(
+        `[agent-panel-history] Failed to load conversation ${id}:`,
+        err,
+      );
+      toast.error("Failed to load that conversation. Please try again.");
     } finally {
       setLoadingId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
-    await agentChatAdapter.deleteConversation(id);
-    setConversations((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await agentChatAdapter.deleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error(
+        `[agent-panel-history] Failed to delete conversation ${id}:`,
+        err,
+      );
+      toast.error("Failed to delete conversation.");
+    }
   };
 
   const formatDate = (iso: string) => {

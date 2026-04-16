@@ -42,7 +42,7 @@ export function StepMap() {
       </div>
 
       <div className="rounded-xl border border-border/70">
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 border-b border-border/70 bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="hidden gap-3 border-b border-border/70 bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-[1fr_auto_1fr]">
           <span>CSV Column</span>
           <span>Match</span>
           <span>DB Field</span>
@@ -50,8 +50,8 @@ export function StepMap() {
 
         {mappings.map((mapping, i) => (
           <div
-            key={mapping.csvColumn}
-            className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border/50 px-4 py-2 last:border-b-0"
+            key={`${mapping.csvColumn}-${i}`}
+            className="grid grid-cols-1 items-center gap-3 border-b border-border/50 px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_auto_1fr]"
           >
             <span className="truncate text-sm">{mapping.csvColumn}</span>
             <Badge

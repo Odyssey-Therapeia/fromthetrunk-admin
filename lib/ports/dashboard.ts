@@ -1,7 +1,7 @@
 export type DashboardMetrics = {
   revenue: { totalPaise: number; periodLabel: string };
   orders: { total: number; pending: number };
-  products: { total: number; published: number; drafts: number; lowStock: number };
+  products: { total: number; published: number; drafts: number; reserved: number };
   customers: { total: number; newThisWeek: number };
 };
 

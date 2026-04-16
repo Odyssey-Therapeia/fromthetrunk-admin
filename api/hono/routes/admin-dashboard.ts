@@ -21,8 +21,16 @@ export const registerAdminDashboardRoutes = (
       const adminOrResponse = requireAdmin(c);
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
-      const metrics = await getDashboardMetrics();
-      return c.json(metrics, 200);
+      try {
+        const metrics = await getDashboardMetrics();
+        return c.json(metrics, 200);
+      } catch (err) {
+        console.error("[admin/dashboard] Failed to load metrics:", err);
+        return c.json(
+          { error: "Failed to load dashboard metrics" },
+          500,
+        );
+      }
     },
   );
 
@@ -41,12 +49,20 @@ export const registerAdminDashboardRoutes = (
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const query = c.req.valid("query");
-      const items = await getRecentActivity(query.limit ?? 20);
-      const serialized = items.map((item) => ({
-        ...item,
-        timestamp: item.timestamp.toISOString(),
-      }));
-      return c.json(serialized, 200);
+      try {
+        const items = await getRecentActivity(query.limit ?? 20);
+        const serialized = items.map((item) => ({
+          ...item,
+          timestamp: item.timestamp.toISOString(),
+        }));
+        return c.json(serialized, 200);
+      } catch (err) {
+        console.error("[admin/dashboard] Failed to load activity:", err);
+        return c.json(
+          { error: "Failed to fetch recent activity" },
+          500,
+        );
+      }
     },
   );
 };

@@ -73,11 +73,12 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
         )}
       </div>
 
-      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute right-2 top-2 flex gap-1 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
         <Button
           asChild
           size="icon"
           variant="secondary"
+          aria-label={`Edit ${product.name}`}
           className="h-8 w-8 rounded-full shadow-sm"
         >
           <Link href={`/admin/products/${product.id}`}>
@@ -93,6 +94,7 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
             }}
             size="icon"
             variant="secondary"
+            aria-label={`Duplicate ${product.name}`}
             className="h-8 w-8 rounded-full shadow-sm"
           >
             <Copy className="h-3.5 w-3.5" />
@@ -107,6 +109,7 @@ export function ProductCard({ product, onDuplicate, onDelete }: ProductCardProps
             }}
             size="icon"
             variant="secondary"
+            aria-label={`Delete ${product.name}`}
             className="h-8 w-8 rounded-full shadow-sm"
           >
             <Trash2 className="h-3.5 w-3.5" />

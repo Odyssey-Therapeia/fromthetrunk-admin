@@ -333,19 +333,30 @@ function CreateProductToolUI({
         name?: string;
         slug?: string;
         pricePaise?: number;
+        originalPricePaise?: number;
         storyTitle?: string;
         storyNarrative?: string;
+        storyProvenance?: string;
+        storyEra?: string;
         detailsFabric?: string;
+        detailsLength?: string;
+        detailsWidth?: string;
+        detailsCondition?: string;
+        detailsDesigner?: string;
         confirmationRequired?: boolean;
+        createdProductId?: string;
       }
     | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState(false);
+  const [createdLocal, setCreatedLocal] = useState(false);
+  // Persisted marker wins over local state so remounts don't re-offer creation.
+  const alreadyCreated = Boolean(result?.createdProductId) || createdLocal;
 
   const handleCreate = async () => {
     if (!result?.name || !result?.storyTitle) return;
+    if (alreadyCreated) return;
     setCreating(true);
     try {
       const res = await fetch("/api/v2/products", {
@@ -355,9 +366,16 @@ function CreateProductToolUI({
           name: result.name,
           slug: result.slug || result.name.toLowerCase().replace(/\s+/g, "-"),
           pricePaise: result.pricePaise || 0,
+          originalPricePaise: result.originalPricePaise ?? null,
           storyTitle: result.storyTitle,
           storyNarrative: result.storyNarrative || null,
+          storyProvenance: result.storyProvenance || null,
+          storyEra: result.storyEra || null,
           detailsFabric: result.detailsFabric || null,
+          detailsLength: result.detailsLength || null,
+          detailsWidth: result.detailsWidth || null,
+          detailsCondition: result.detailsCondition || null,
+          detailsDesigner: result.detailsDesigner || null,
           status: "draft",
           stockStatus: "available",
           featured: false,
@@ -366,7 +384,7 @@ function CreateProductToolUI({
         }),
       });
       if (!res.ok) throw new Error("Failed to create product");
-      setCreated(true);
+      setCreatedLocal(true);
       toast.success(`Created: ${result.name}`);
     } catch {
       toast.error("Failed to create product");
@@ -394,7 +412,7 @@ function CreateProductToolUI({
               Price: ₹{(result.pricePaise / 100).toLocaleString("en-IN")}
             </p>
           )}
-          {created ? (
+          {alreadyCreated ? (
             <Button
               size="sm"
               variant="outline"

@@ -22,6 +22,7 @@ import {
 } from "@/db/queries/conversations";
 import { getProduct } from "@/db/queries/products";
 import { toRupees } from "@/db/money";
+import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID } from "@/lib/ports/agent-chat";
 
 export const maxDuration = 120;
 
@@ -35,7 +36,12 @@ const chatRequestSchema = z.object({
   conversationId: z.string().uuid().optional(),
   formContext: productAssistantFormContextSchema.optional(),
   messages: z.array(z.unknown()),
-  modelId: z.string().optional(),
+  modelId: z
+    .string()
+    .refine((val) => ALLOWED_MODEL_IDS.includes(val), {
+      message: "Unsupported modelId",
+    })
+    .optional(),
   productId: z.string().uuid().optional(),
   thinkingEnabled: z.boolean().optional(),
   thinkingEffort: z.enum(["low", "medium", "high", "max"]).optional(),
@@ -162,7 +168,7 @@ export async function POST(req: Request) {
   const systemPrompt = buildSystemPrompt(resolvedFormContext);
 
   try {
-    const selectedModel = modelId || "claude-sonnet-4-6";
+    const selectedModel = modelId || DEFAULT_MODEL_ID;
     const result = streamText({
       model: anthropic(selectedModel),
       providerOptions: {
@@ -186,6 +192,7 @@ export async function POST(req: Request) {
               userId,
               validatedMessages.data,
               productId,
+              selectedModel,
             );
 
             // Auto-generate title from the first user message if none exists

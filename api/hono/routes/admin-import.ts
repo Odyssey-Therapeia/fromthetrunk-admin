@@ -27,6 +27,17 @@ function cleanExpiredCache() {
   }
 }
 
+/** Fetch a cache entry and purge it if expired, returning null on miss/expiry. */
+function getValidCachedFile(fileId: string) {
+  const entry = fileCache.get(fileId);
+  if (!entry) return null;
+  if (entry.expires < Date.now()) {
+    fileCache.delete(fileId);
+    return null;
+  }
+  return entry;
+}
+
 export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
   // Parse uploaded file
   app.openapi(
@@ -119,7 +130,7 @@ export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const { fileId, mappings } = c.req.valid("json");
-      const cached = fileCache.get(fileId);
+      const cached = getValidCachedFile(fileId);
       if (!cached) {
         return c.json(
           { code: "FILE_EXPIRED", message: "File data expired. Re-upload." },
@@ -162,7 +173,7 @@ export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const { fileId, mappings } = c.req.valid("json");
-      const cached = fileCache.get(fileId);
+      const cached = getValidCachedFile(fileId);
       if (!cached) {
         return c.json(
           { code: "FILE_EXPIRED", message: "File data expired. Re-upload." },

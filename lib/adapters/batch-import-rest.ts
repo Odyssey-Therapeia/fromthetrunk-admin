@@ -5,6 +5,48 @@ import type {
   ImportResult,
 } from "@/lib/ports/batch-import";
 
+/** Error thrown by the import adapter that preserves server-side status + payload. */
+export class ImportAdapterError extends Error {
+  status: number;
+  code?: string;
+  body: unknown;
+  constructor(
+    message: string,
+    opts: { status: number; code?: string; body?: unknown },
+  ) {
+    super(message);
+    this.name = "ImportAdapterError";
+    this.status = opts.status;
+    this.code = opts.code;
+    this.body = opts.body;
+  }
+}
+
+async function parseServerError(res: Response, fallback: string): Promise<ImportAdapterError> {
+  let body: unknown = undefined;
+  try {
+    body = await res.json();
+  } catch {
+    try {
+      body = await res.text();
+    } catch {
+      // ignore
+    }
+  }
+  const code =
+    body && typeof body === "object" && "code" in body
+      ? String((body as { code: unknown }).code)
+      : undefined;
+  const serverMessage =
+    body && typeof body === "object" && "error" in body
+      ? String((body as { error: unknown }).error)
+      : undefined;
+  return new ImportAdapterError(
+    `${fallback} (${res.status} ${res.statusText})${serverMessage ? `: ${serverMessage}` : ""}`,
+    { status: res.status, code, body },
+  );
+}
+
 class BatchImportRestAdapter implements BatchImportPort {
   async parseFile(file: File) {
     const formData = new FormData();
@@ -14,7 +56,7 @@ class BatchImportRestAdapter implements BatchImportPort {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to parse file");
+    if (!res.ok) throw await parseServerError(res, "Failed to parse file");
     return res.json();
   }
 
@@ -24,7 +66,7 @@ class BatchImportRestAdapter implements BatchImportPort {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ headers }),
     });
-    if (!res.ok) throw new Error("Failed to suggest mappings");
+    if (!res.ok) throw await parseServerError(res, "Failed to suggest mappings");
     const data = await res.json();
     return data.mappings;
   }
@@ -38,7 +80,7 @@ class BatchImportRestAdapter implements BatchImportPort {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
-    if (!res.ok) throw new Error("Failed to validate rows");
+    if (!res.ok) throw await parseServerError(res, "Failed to validate rows");
     const data = await res.json();
     return data.rows;
   }
@@ -52,7 +94,7 @@ class BatchImportRestAdapter implements BatchImportPort {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
-    if (!res.ok) throw new Error("Failed to execute import");
+    if (!res.ok) throw await parseServerError(res, "Failed to execute import");
     return res.json();
   }
 }

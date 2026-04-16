@@ -20,39 +20,47 @@ export function ImportWizard() {
   return (
     <div className="space-y-6">
       {/* Progress indicator */}
-      <div className="flex items-center gap-2">
-        {STEPS.map((s, i) => (
-          <div key={s.key} className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (s.key === "upload" || (s.key === "map" && step !== "upload")) {
-                  setStep(s.key);
-                }
-              }}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors",
-                step === s.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground",
+      <ol className="flex items-center gap-2">
+        {STEPS.map((s, i) => {
+          const isActive = step === s.key;
+          const isReachable =
+            s.key === "upload" || (s.key === "map" && step !== "upload");
+          return (
+            <li key={s.key} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isReachable) setStep(s.key);
+                }}
+                disabled={!isReachable}
+                aria-disabled={!isReachable}
+                aria-current={isActive ? "step" : undefined}
+                tabIndex={isReachable ? 0 : -1}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
+                  !isReachable && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                {i + 1}
+              </button>
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  isActive ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {s.label}
+              </span>
+              {i < STEPS.length - 1 && (
+                <div className="mx-2 h-px w-8 bg-border" />
               )}
-            >
-              {i + 1}
-            </button>
-            <span
-              className={cn(
-                "text-sm font-medium",
-                step === s.key ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {s.label}
-            </span>
-            {i < STEPS.length - 1 && (
-              <div className="mx-2 h-px w-8 bg-border" />
-            )}
-          </div>
-        ))}
-      </div>
+            </li>
+          );
+        })}
+      </ol>
 
       {/* Step content */}
       {step === "upload" && <StepUpload />}
