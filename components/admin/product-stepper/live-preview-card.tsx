@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatINR, toPaise } from "@/db/money";
@@ -34,12 +36,13 @@ export function LivePreviewCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {coverImage ? (
-          <div className="relative overflow-hidden rounded-md border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+          <div className="relative aspect-[4/5] overflow-hidden rounded-md border">
+            <Image
               alt={previewTitle}
-              className="aspect-[4/5] w-full object-cover"
               src={coverImage.url}
+              fill
+              sizes="320px"
+              className="object-cover"
             />
             {imageCountLabel ? (
               <Badge className="absolute left-2 top-2" variant="secondary">

@@ -10,8 +10,7 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { useUiHaptics } from "@/lib/haptics/use-ui-haptics";
 
-const fallbackHeroImage =
-  "https://images.unsplash.com/photo-1641699862936-be9f49b1c38d?q=80&w=2400&auto=format&fit=crop";
+const fallbackHeroImage = "/media/home-cover.png";
 const heroBlurDataURL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIHZpZXdCb3g9IjAgMCAxNjAwIDkwMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIGZpbGw9IiMzRDJCMUYiLz48cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIGZpbGw9InVybCgjZ3JhZCkiIGZpbGwtb3BhY2l0eT0iMC43NSIvPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZCIgeDE9IjAiIHkxPSIwIiB4Mj0iMTYwMCIgeTI9IjkwMCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIHN0b3AtY29sb3I9IiM2QjFEMUQiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNCODg2MEIiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4=";
 
@@ -71,7 +70,7 @@ export function HeroSection({ content }: HeroSectionProps) {
       <div ref={imageRef} className="absolute inset-0">
         <Image
           src={content?.heroImage ?? fallbackHeroImage}
-          alt="Luxurious vintage saree draped in warm light"
+          alt="Two women in sarees walking through a sunlit garden"
           fill
           priority
           placeholder="blur"

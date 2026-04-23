@@ -29,7 +29,7 @@ export function ProductGallery({ images, alt }: ProductGalleryProps) {
 
   return (
     <div className="space-y-3 lg:sticky lg:top-28 lg:space-y-4">
-      <div className="relative aspect-[4/5] max-h-[44vh] overflow-hidden rounded-2xl bg-card sm:max-h-[50vh] lg:max-h-[70vh] lg:rounded-3xl">
+      <div className="relative aspect-[4/5] max-h-[44vh] overflow-hidden rounded-2xl bg-card sm:max-h-[50vh] lg:max-h-none lg:rounded-3xl">
         <Image
           src={activeImage}
           alt={alt}
@@ -53,7 +53,7 @@ export function ProductGallery({ images, alt }: ProductGalleryProps) {
             aria-pressed={activeImage === image}
             title={`View image ${index + 1} of ${galleryImages.length}`}
           >
-            <Image src={image} alt={alt} fill className="object-cover" />
+            <Image src={image} alt={alt} fill sizes="80px" className="object-cover" />
           </button>
         ))}
       </div>

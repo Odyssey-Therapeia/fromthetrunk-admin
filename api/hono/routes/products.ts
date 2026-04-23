@@ -83,6 +83,8 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       });
       const enriched = products.map((product) => ({
         ...product,
+        coverImageFilename: product.images[0]?.media.filename ?? null,
+        imageCount: product.images.length,
         thumbnailUrl: product.images[0]?.media.url ?? null,
       }));
       return c.json(enriched, 200);

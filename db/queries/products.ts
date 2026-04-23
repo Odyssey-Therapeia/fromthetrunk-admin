@@ -11,6 +11,7 @@ import {
   productTags,
   tags,
 } from "@/db/schema";
+import { DEFAULT_PRODUCT_SORT, type ProductSortOption } from "@/lib/products/sort";
 import { slugify } from "@/lib/utils";
 
 type CollectionRecord = InferSelectModel<typeof collections>;
@@ -31,6 +32,7 @@ export type ListProductsOptions = {
   includeDrafts?: boolean;
   limit?: number;
   offset?: number;
+  sort?: ProductSortOption;
 };
 
 export type CreateProductInput = Omit<
@@ -146,6 +148,7 @@ export const listProducts = async (options: ListProductsOptions = {}): Promise<{
     includeDrafts = false,
     limit = 200,
     offset = 0,
+    sort = DEFAULT_PRODUCT_SORT,
   } = options;
 
   const whereClause = buildWhere([
@@ -153,15 +156,23 @@ export const listProducts = async (options: ListProductsOptions = {}): Promise<{
   ]);
 
   const [rows, [countResult]] = await Promise.all([
-    withRetry(() =>
-      db
+    withRetry(() => {
+      const query = db
         .select()
         .from(products)
         .where(whereClause)
-        .orderBy(desc(products.createdAt))
         .limit(limit)
-        .offset(offset)
-    ),
+        .offset(offset);
+
+      switch (sort) {
+        case "price-low-to-high":
+          return query.orderBy(asc(products.pricePaise), desc(products.createdAt));
+        case "price-high-to-low":
+          return query.orderBy(desc(products.pricePaise), desc(products.createdAt));
+        default:
+          return query.orderBy(desc(products.createdAt));
+      }
+    }),
     withRetry(() =>
       db
         .select({ total: count() })
@@ -268,6 +279,7 @@ export const getProductsByCollection = async (
     includeDrafts = false,
     limit = 200,
     offset = 0,
+    sort = DEFAULT_PRODUCT_SORT,
   } = options;
 
   const [collection] = await withRetry(() =>
@@ -286,15 +298,23 @@ export const getProductsByCollection = async (
   ]);
 
   const [rows, [countResult]] = await Promise.all([
-    withRetry(() =>
-      db
+    withRetry(() => {
+      const query = db
         .select()
         .from(products)
         .where(whereClause)
-        .orderBy(desc(products.createdAt))
         .limit(limit)
-        .offset(offset)
-    ),
+        .offset(offset);
+
+      switch (sort) {
+        case "price-low-to-high":
+          return query.orderBy(asc(products.pricePaise), desc(products.createdAt));
+        case "price-high-to-low":
+          return query.orderBy(desc(products.pricePaise), desc(products.createdAt));
+        default:
+          return query.orderBy(desc(products.createdAt));
+      }
+    }),
     withRetry(() =>
       db
         .select({ total: count() })

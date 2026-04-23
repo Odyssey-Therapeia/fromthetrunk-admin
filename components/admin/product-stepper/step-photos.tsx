@@ -1,13 +1,32 @@
 "use client";
 
 import { put } from "@vercel/blob/client";
-import { Loader2, UploadCloud, XCircle } from "lucide-react";
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import {
+  ArrowDown,
+  ArrowUp,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  Star,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 import type { ProductStepperMedia } from "./types";
 
@@ -37,11 +56,39 @@ export function StepPhotos({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
   const [draggingMediaId, setDraggingMediaId] = useState<null | string>(null);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
+  const [isLoadingMediaLibrary, setIsLoadingMediaLibrary] = useState(false);
+  const [mediaLibrary, setMediaLibrary] = useState<ProductStepperMedia[]>([]);
 
   const imageMediaIds = useMemo(
     () => (form.state.values.imageMediaIds ?? []) as string[],
     [form.state.values.imageMediaIds]
   );
+
+  const fetchMediaRows = useCallback(async () => {
+    const response = await fetch("/api/v2/media");
+    if (!response.ok) {
+      throw new Error("Could not load media library.");
+    }
+
+    return (await response.json()) as ProductStepperMedia[];
+  }, []);
+
+  const refreshMediaLibrary = useCallback(async () => {
+    setIsLoadingMediaLibrary(true);
+    try {
+      const mediaRows = await fetchMediaRows();
+      setMediaLibrary(mediaRows);
+      return mediaRows;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not load media library.";
+      toast.error(message);
+      return [];
+    } finally {
+      setIsLoadingMediaLibrary(false);
+    }
+  }, [fetchMediaRows]);
 
   useEffect(() => {
     if (imageMediaIds.length === 0 || uploaded.length > 0) return;
@@ -49,20 +96,14 @@ export function StepPhotos({
 
     const hydrateExistingMedia = async () => {
       try {
-        const response = await fetch("/api/v2/media");
-        if (!response.ok) return;
-
-        const mediaRows = (await response.json()) as Array<{
-          filename: string;
-          id: string;
-          url: string;
-        }>;
+        const mediaRows = await fetchMediaRows();
         const mediaById = new Map(mediaRows.map((row) => [row.id, row]));
         const ordered = imageMediaIds
           .map((id) => mediaById.get(id))
           .filter((row): row is ProductStepperMedia => Boolean(row));
 
         if (!cancelled) {
+          setMediaLibrary(mediaRows);
           setUploaded(ordered);
         }
       } catch {
@@ -74,7 +115,7 @@ export function StepPhotos({
     return () => {
       cancelled = true;
     };
-  }, [imageMediaIds, setUploaded, uploaded.length]);
+  }, [fetchMediaRows, imageMediaIds, setUploaded, uploaded.length]);
 
   const updateQueueProgress = (id: string, progress: number) => {
     setUploadQueue((current) =>
@@ -92,6 +133,10 @@ export function StepPhotos({
 
   const appendUploaded = (media: ProductStepperMedia) => {
     setUploaded((current) => {
+      if (current.some((item) => item.id === media.id)) {
+        return current;
+      }
+
       const next = [...current, media];
       form.setFieldValue(
         "imageMediaIds",
@@ -173,11 +218,16 @@ export function StepPhotos({
         }
         updateQueueProgress(uploadId, 100);
 
-        const mediaResponse = (await completeResponse.json()) as Omit<ProductStepperMedia, "filename">;
-        appendUploaded({
+        const mediaResponse = (await completeResponse.json()) as ProductStepperMedia;
+        const uploadedMedia = {
           ...mediaResponse,
           filename: file.name,
-        });
+        };
+        appendUploaded(uploadedMedia);
+        setMediaLibrary((current) => [
+          uploadedMedia,
+          ...current.filter((item) => item.id !== uploadedMedia.id),
+        ]);
         toast.success(`${file.name} uploaded.`);
         setUploadQueue((current) => current.filter((item) => item.id !== uploadId));
       }
@@ -198,6 +248,49 @@ export function StepPhotos({
     toast.success("Photo removed.");
   };
 
+  const handleAttachExistingMedia = (media: ProductStepperMedia) => {
+    if (uploaded.some((item) => item.id === media.id)) {
+      toast.info("That image is already attached to this product.");
+      return;
+    }
+
+    appendUploaded(media);
+    toast.success(`${media.filename} attached.`);
+  };
+
+  const handleToggleMediaLibrary = () => {
+    const nextOpen = !isMediaLibraryOpen;
+    setIsMediaLibraryOpen(nextOpen);
+    if (nextOpen && mediaLibrary.length === 0) {
+      void refreshMediaLibrary();
+    }
+  };
+
+  const setCoverMedia = (mediaId: string) => {
+    const sourceIndex = uploaded.findIndex((item) => item.id === mediaId);
+    if (sourceIndex <= 0) return;
+
+    const next = [...uploaded];
+    const [cover] = next.splice(sourceIndex, 1);
+    if (!cover) return;
+    syncUploaded([cover, ...next]);
+    toast.success("Cover image updated.");
+  };
+
+  const moveMedia = (mediaId: string, direction: -1 | 1) => {
+    const sourceIndex = uploaded.findIndex((item) => item.id === mediaId);
+    const targetIndex = sourceIndex + direction;
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= uploaded.length) {
+      return;
+    }
+
+    const next = [...uploaded];
+    const [moved] = next.splice(sourceIndex, 1);
+    if (!moved) return;
+    next.splice(targetIndex, 0, moved);
+    syncUploaded(next);
+  };
+
   const reorderMedia = (targetMediaId: string) => {
     if (!draggingMediaId || draggingMediaId === targetMediaId) return;
     const sourceIndex = uploaded.findIndex((item) => item.id === draggingMediaId);
@@ -206,6 +299,7 @@ export function StepPhotos({
 
     const next = [...uploaded];
     const [moved] = next.splice(sourceIndex, 1);
+    if (!moved) return;
     next.splice(targetIndex, 0, moved);
     syncUploaded(next);
   };
@@ -213,22 +307,106 @@ export function StepPhotos({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Upload Photos</CardTitle>
+        <CardTitle className="text-base">Product Photos</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="@container space-y-4">
         <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-8 text-center">
           <UploadCloud className="h-8 w-8 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">Drag and drop or click to upload</p>
-            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP up to 10MB each</p>
+            <p className="text-sm font-medium">Upload product images</p>
+            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP, or AVIF up to 10MB each</p>
           </div>
           <input
+            accept="image/*"
             className="hidden"
             multiple
             onChange={(event) => void handleUpload(event.target.files)}
             type="file"
           />
         </label>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            className="gap-1.5"
+            onClick={handleToggleMediaLibrary}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <ImagePlus className="h-3.5 w-3.5" />
+            {isMediaLibraryOpen ? "Hide media library" : "Add from media library"}
+          </Button>
+          {isMediaLibraryOpen ? (
+            <Button
+              disabled={isLoadingMediaLibrary}
+              onClick={() => void refreshMediaLibrary()}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {isLoadingMediaLibrary ? "Refreshing..." : "Refresh"}
+            </Button>
+          ) : null}
+        </div>
+
+        {isMediaLibraryOpen ? (
+          <div className="rounded-md border border-border/70 bg-background/70 p-3">
+            {isLoadingMediaLibrary ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading media...
+              </div>
+            ) : mediaLibrary.length > 0 ? (
+              <div className="grid max-h-[360px] gap-3 overflow-y-auto pr-1 @md:grid-cols-2 @3xl:grid-cols-3">
+                {mediaLibrary.map((asset) => {
+                  const alreadyAttached = uploaded.some((item) => item.id === asset.id);
+
+                  return (
+                    <div
+                      className={cn(
+                        "rounded-md border border-border/70 bg-card p-2",
+                        alreadyAttached && "border-primary/60 bg-primary/5",
+                      )}
+                      key={asset.id}
+                    >
+                      <div className="relative aspect-[4/5] overflow-hidden rounded-md border bg-muted/20">
+                        <Image
+                          alt={asset.filename}
+                          src={asset.url}
+                          fill
+                          sizes="(max-width: 768px) 50vw, 220px"
+                          className="object-cover"
+                        />
+                        {alreadyAttached ? (
+                          <Badge className="absolute left-2 top-2 bg-background/90 text-foreground">
+                            Attached
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        <p className="truncate text-xs" title={asset.filename}>
+                          {asset.filename}
+                        </p>
+                        <Button
+                          className="w-full"
+                          disabled={alreadyAttached}
+                          onClick={() => handleAttachExistingMedia(asset)}
+                          size="sm"
+                          type="button"
+                          variant={alreadyAttached ? "secondary" : "outline"}
+                        >
+                          {alreadyAttached ? "Already attached" : "Attach image"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No media assets found.</p>
+            )}
+          </div>
+        ) : null}
 
         {isUploading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -256,14 +434,23 @@ export function StepPhotos({
         ) : null}
 
         {uploaded.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Drag photos to reorder. The first photo is used as the product cover.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Storefront gallery</p>
+                <p className="text-xs text-muted-foreground">
+                  Position 1 is the cover image shown on product cards.
+                </p>
+              </div>
+              <Badge variant="outline">{uploaded.length} attached</Badge>
+            </div>
+            <div className="grid gap-3 @md:grid-cols-2 @3xl:grid-cols-3">
               {uploaded.map((media, index) => (
                 <div
-                  className="group rounded-md border bg-card p-2"
+                  className={cn(
+                    "group rounded-md border bg-card p-2",
+                    index === 0 && "border-primary/70 ring-1 ring-primary/30",
+                  )}
                   draggable
                   key={media.id}
                   onDragEnd={() => setDraggingMediaId(null)}
@@ -271,34 +458,80 @@ export function StepPhotos({
                   onDragStart={() => setDraggingMediaId(media.id)}
                   onDrop={() => reorderMedia(media.id)}
                 >
-                  <div className="relative overflow-hidden rounded-md border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-md border">
+                    <Image
                       alt={media.filename}
-                      className="aspect-[4/5] w-full object-cover"
-                      loading="lazy"
                       src={media.url}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 260px"
+                      className="object-cover"
                     />
-                    <Button
-                      className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
-                      onClick={() => handleRemoveMedia(media.id)}
-                      size="icon"
-                      type="button"
-                      variant="destructive"
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </Button>
+                    {index === 0 ? (
+                      <Badge className="absolute left-2 top-2 gap-1 bg-background/90 text-foreground">
+                        <Star className="h-3 w-3" />
+                        Cover
+                      </Badge>
+                    ) : (
+                      <Button
+                        className="absolute left-2 top-2 h-8 bg-background/90 px-2 text-xs text-foreground hover:bg-background"
+                        onClick={() => setCoverMedia(media.id)}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <Star className="h-3.5 w-3.5" />
+                        Set cover
+                      </Button>
+                    )}
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2 text-xs">
                     <a
-                      className="max-w-[80%] truncate text-primary underline-offset-4 hover:underline"
+                      className="flex max-w-[75%] items-center gap-1 truncate text-primary underline-offset-4 hover:underline"
                       href={media.url}
                       rel="noreferrer"
                       target="_blank"
                     >
-                      {media.filename}
+                      <span className="truncate">{media.filename}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
                     <span className="text-muted-foreground">#{index + 1}</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1">
+                    <Button
+                      aria-label={`Move ${media.filename} up`}
+                      disabled={index === 0}
+                      onClick={() => moveMedia(media.id, -1)}
+                      size="icon"
+                      title="Move earlier"
+                      type="button"
+                      variant="outline"
+                      className="h-8 w-8"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      aria-label={`Move ${media.filename} down`}
+                      disabled={index === uploaded.length - 1}
+                      onClick={() => moveMedia(media.id, 1)}
+                      size="icon"
+                      title="Move later"
+                      type="button"
+                      variant="outline"
+                      className="h-8 w-8"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      aria-label={`Remove ${media.filename}`}
+                      className="ml-auto h-8 w-8"
+                      onClick={() => handleRemoveMedia(media.id)}
+                      size="icon"
+                      title="Remove from product"
+                      type="button"
+                      variant="destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               ))}

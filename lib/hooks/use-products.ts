@@ -8,11 +8,16 @@ export type ProductListItem = {
   slug: string;
   pricePaise: number;
   originalPricePaise: number | null;
+  createdAt?: string;
+  detailsFabric: string | null;
+  detailsDesigner: string | null;
   status: "draft" | "published";
   stockStatus: "available" | "reserved" | "sold";
   storyTitle: string;
   featured: boolean;
   thumbnailUrl: string | null;
+  imageCount: number;
+  coverImageFilename: string | null;
   collection: { id: string; name: string } | null;
 };
 

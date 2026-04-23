@@ -7,11 +7,13 @@ import {
   searchProducts as searchProductsQuery,
 } from "@/db/queries/products";
 import { getGlobal } from "@/db/queries/globals";
+import type { ProductSortOption } from "@/lib/products/sort";
 import type { Product } from "@/types/domain";
 
 type QueryOptions = {
   includeDrafts?: boolean;
   page?: number;
+  sort?: ProductSortOption;
 };
 
 export const getGlobals = async (slug: string, options: QueryOptions = {}) => {
@@ -36,6 +38,7 @@ export const getProducts = async (limit = 200, options: QueryOptions = {}) => {
     includeDrafts: options.includeDrafts,
     limit,
     offset,
+    sort: options.sort,
   });
 
   return {
@@ -60,6 +63,7 @@ export const getProductsByCollection = async (
     includeDrafts: options.includeDrafts,
     limit,
     offset,
+    sort: options.sort,
   });
 
   return {

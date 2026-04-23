@@ -35,7 +35,7 @@ export const mapProductToStepperValues = (product: {
   detailsLength?: null | string;
   detailsWidth?: null | string;
   featured?: boolean;
-  images?: Array<{ media: { id: string } }>;
+  images?: Array<{ media: { id: string }; sortOrder?: number }>;
   name?: string;
   originalPricePaise?: null | number;
   pricePaise?: number;
@@ -54,7 +54,12 @@ export const mapProductToStepperValues = (product: {
   detailsLength: product.detailsLength ?? "",
   detailsWidth: product.detailsWidth ?? "",
   featured: Boolean(product.featured),
-  imageMediaIds: product.images?.map((image) => image.media.id) ?? [],
+  imageMediaIds:
+    product.images
+      ? [...product.images]
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map((image) => image.media.id)
+      : [],
   name: product.name ?? "",
   originalPriceRupees: product.originalPricePaise ? toRupees(product.originalPricePaise) : 0,
   priceRupees: product.pricePaise ? toRupees(product.pricePaise) : 0,

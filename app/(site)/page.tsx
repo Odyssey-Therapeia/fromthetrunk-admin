@@ -8,7 +8,6 @@ import { Newsletter } from "@/components/sections/newsletter";
 import { StoryNarrative } from "@/components/sections/story-narrative";
 import { TrustSignals } from "@/components/sections/trust-signals";
 import { getFeaturedProducts, getGlobals, getProducts } from "@/lib/data/products";
-import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { selectStoryNarrativeImages } from "@/lib/story-narrative-images";
 import type { Product } from "@/types/domain";
 import type { HomePageContent } from "@/types/site-content";
@@ -21,6 +20,8 @@ export const metadata: Metadata = {
     "Curated collection of authenticated, pre-loved luxury sarees. Each one-of-a-kind piece comes with provenance, a story woven in silk, and careful restoration.",
 };
 
+const homeCoverImage = "/media/home-cover.png";
+
 export default async function Home() {
   const { isEnabled: includeDrafts } = await draftMode();
 
@@ -31,10 +32,9 @@ export default async function Home() {
   ]);
 
   const cms = homePage as HomePageContent | null;
-  const heroImage = resolveMediaURL(cms?.heroImage);
   const heroContent = {
     ...cms,
-    heroImage: heroImage ?? undefined,
+    heroImage: homeCoverImage,
   };
 
   const featuredDocs = (featuredProducts?.docs ?? []) as Product[];
