@@ -60,4 +60,12 @@ describe("LivePreviewCard", () => {
     expect(html).toContain("Published");
     expect(html).toContain("line-through");
   });
+
+  it("shows a sold availability badge", () => {
+    const html = renderCard({
+      stockStatus: "sold",
+    });
+
+    expect(html).toContain("Sold");
+  });
 });

@@ -9,11 +9,16 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { toPaise } from "@/db/money";
+import {
+  PRODUCT_STORY_APPLIED_EVENT,
+  type ProductStoryAppliedEventDetail,
+} from "@/lib/products/story-application";
 import { useAgentStore } from "@/lib/store/agent-store";
 import { slugify } from "@/lib/utils";
 
 import { LivePreviewCard } from "./live-preview-card";
 import { hasStepperChanges, serializeStepperValues } from "./autosave";
+import { getAvailabilitySaveFields } from "./availability";
 import { StepDetails } from "./step-details";
 import { StepPhotos } from "./step-photos";
 import { StepPreview } from "./step-preview";
@@ -69,6 +74,7 @@ export function ProductStepper({
     setSaveState("Saving...");
     const currentSnapshot = serializeStepperValues(values);
 
+    const availability = getAvailabilitySaveFields(values);
     const payload = {
       collectionId: values.collectionId.trim() || null,
       detailsCondition: toNullableText(values.detailsCondition),
@@ -87,7 +93,9 @@ export function ProductStepper({
           ? values.slug.trim()
           : slugify(values.storyTitle || values.name || "untitled-product"),
       status: forceDraft ? "draft" : values.status,
-      stockStatus: "available",
+      reservedUntil: availability.reservedUntil,
+      soldAt: availability.soldAt,
+      stockStatus: availability.stockStatus,
       storyEra: toNullableText(values.storyEra),
       storyNarrative: toNullableText(values.storyNarrative),
       storyProvenance: toNullableText(values.storyProvenance),
@@ -163,6 +171,32 @@ export function ProductStepper({
     anchorProduct(activeProductId, name);
     openAgent();
   };
+
+  useEffect(() => {
+    const handleStoryApplied = (event: Event) => {
+      const { detail } = event as CustomEvent<ProductStoryAppliedEventDetail>;
+      if (!detail || detail.productId !== activeProductId) return;
+
+      if (detail.values.storyTitle) {
+        form.setFieldValue("storyTitle", detail.values.storyTitle);
+      }
+      if (detail.values.storyNarrative) {
+        form.setFieldValue("storyNarrative", detail.values.storyNarrative);
+      }
+      if (detail.values.storyProvenance) {
+        form.setFieldValue("storyProvenance", detail.values.storyProvenance);
+      }
+      if (detail.values.storyEra) {
+        form.setFieldValue("storyEra", detail.values.storyEra);
+      }
+      setSaveState("AI story saved");
+    };
+
+    window.addEventListener(PRODUCT_STORY_APPLIED_EVENT, handleStoryApplied);
+    return () => {
+      window.removeEventListener(PRODUCT_STORY_APPLIED_EVENT, handleStoryApplied);
+    };
+  }, [activeProductId, form]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
