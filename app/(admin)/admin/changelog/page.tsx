@@ -9,6 +9,13 @@ export const metadata: Metadata = {
   title: "Changelog",
 };
 
+const releaseDateFormatter = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+});
+
+const formatReleaseDate = (releaseDate: string) =>
+  releaseDateFormatter.format(new Date(`${releaseDate}T00:00:00.000Z`));
+
 export default function AdminChangelogPage() {
   return (
     <div className="space-y-6">
@@ -85,9 +92,12 @@ export default function AdminChangelogPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <AppVersionBadge release={release} href={null} />
-                  <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {release.releaseDate}
-                  </span>
+                  <time
+                    dateTime={release.releaseDate}
+                    className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                  >
+                    {formatReleaseDate(release.releaseDate)}
+                  </time>
                 </div>
                 <h3 className="mt-3 font-serif text-2xl text-foreground">
                   {release.name}

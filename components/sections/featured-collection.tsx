@@ -36,7 +36,13 @@ export function FeaturedCollection({ products, content }: FeaturedCollectionProp
       background: (
         <div className="absolute inset-0">
           {image ? (
-            <Image src={image} alt={product.name} fill className="object-cover" />
+            <Image
+              src={image}
+              alt={product.name}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover"
+            />
           ) : (
             <div className="h-full w-full bg-muted" />
           )}
@@ -63,6 +69,7 @@ export function FeaturedCollection({ products, content }: FeaturedCollectionProp
             src={featureCardImage}
             alt="Heirloom saree detail"
             fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 66vw"
             className="object-cover"
           />
         ) : (

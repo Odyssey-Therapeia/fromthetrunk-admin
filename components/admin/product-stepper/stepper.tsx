@@ -52,6 +52,7 @@ export function ProductStepper({
   const [saveState, setSaveState] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [uploaded, setUploaded] = useState<ProductStepperMedia[]>([]);
+  const aiStoryPendingSaveRef = useRef(false);
   const stepContainerRef = useRef<HTMLDivElement>(null);
 
   const { open: openAgent, anchorProduct } = useAgentStore();
@@ -139,8 +140,17 @@ export function ProductStepper({
       }
 
       lastPersistedSnapshotRef.current = currentSnapshot;
-      setSaveState(forceDraft ? "Draft auto-saved" : "Saved");
-      if (forceDraft) {
+      const didPersistAiStory = aiStoryPendingSaveRef.current;
+      if (didPersistAiStory) {
+        aiStoryPendingSaveRef.current = false;
+      }
+
+      setSaveState(
+        didPersistAiStory ? "AI story saved" : forceDraft ? "Draft auto-saved" : "Saved"
+      );
+      if (didPersistAiStory) {
+        toast.success("AI story saved.", { duration: 1200 });
+      } else if (forceDraft) {
         toast.success("Draft auto-saved.", { duration: 1200 });
       } else if (isCreate) {
         toast.success("Product created.");
@@ -189,7 +199,8 @@ export function ProductStepper({
     if (detail.values.storyEra) {
       setProductFieldValue("storyEra", detail.values.storyEra);
     }
-    setSaveState("AI story saved");
+    aiStoryPendingSaveRef.current = true;
+    setSaveState("AI story updated locally");
   }, [activeProductId, setProductFieldValue]);
 
   useEffect(() => {

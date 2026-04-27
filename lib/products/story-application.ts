@@ -29,6 +29,11 @@ const normalizeStoryValue = (value?: string) => {
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 };
 
+/**
+ * Builds a story patch payload from an AI draft, omitting empty fields.
+ * @param result AI-generated draft story fields.
+ * @returns A story patch payload containing only normalized present values.
+ */
 export const buildStoryPatchPayload = (
   result: StoryDraftResult | undefined,
 ): StoryPatchPayload => {
@@ -46,5 +51,10 @@ export const buildStoryPatchPayload = (
   return payload;
 };
 
+/**
+ * Checks whether a story patch payload contains at least one field.
+ * @param payload Story patch payload to inspect.
+ * @returns True when the payload contains one or more story fields.
+ */
 export const hasStoryPatchPayload = (payload: StoryPatchPayload) =>
   Object.keys(payload).length > 0;

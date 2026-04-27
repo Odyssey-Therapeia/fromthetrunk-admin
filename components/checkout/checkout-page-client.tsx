@@ -337,12 +337,17 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         <SelectValue placeholder="Choose a saved address..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {savedAddresses.map((addr) => (
-                          <SelectItem key={addr.id} value={addr.id}>
-                            {addr.label || addr.name || addr.line1}, {addr.city}
-                            {addr.isDefault ? " (Default)" : ""}
-                          </SelectItem>
-                        ))}
+                        {savedAddresses.map((addr) => {
+                          const savedAddressLabel =
+                            addr.label || addr.name || addr.line1 || "Saved address";
+                          return (
+                            <SelectItem key={addr.id} value={addr.id}>
+                              {savedAddressLabel}
+                              {addr.city ? `, ${addr.city}` : ""}
+                              {addr.isDefault ? " (Default)" : ""}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>

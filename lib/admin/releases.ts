@@ -5,7 +5,7 @@ export type AdminReleaseHighlight = {
 };
 
 export type AdminReleaseChangeGroup = {
-  items: string[];
+  items: [string, ...string[]];
   title: string;
 };
 

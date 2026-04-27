@@ -1,5 +1,6 @@
 import type { Product } from "@/types/domain";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
+import { getProductDisplayDetails } from "@/lib/products/display-details";
 
 const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
 
@@ -9,6 +10,7 @@ const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com"
  */
 export function productJsonLd(product: Product): Record<string, unknown> {
   const image = resolveMediaURL(product.images?.[0]);
+  const displayDetails = getProductDisplayDetails(product);
 
   return {
     "@context": "https://schema.org",
@@ -16,7 +18,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     name: product.name,
     description:
       product.storyNarrative ??
-      `${product.name}: ${product.detailsFabric ?? "Heirloom"} saree.`,
+      `${product.name}: ${displayDetails.fabric ?? "Heirloom"} saree.`,
     ...(image ? { image } : {}),
     brand: {
       "@type": "Brand",
@@ -41,8 +43,8 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     ...(product.detailsCondition
       ? { itemCondition: "https://schema.org/UsedCondition" }
       : {}),
-    ...(product.detailsFabric
-      ? { material: product.detailsFabric }
+    ...(displayDetails.fabric
+      ? { material: displayDetails.fabric }
       : {}),
   };
 }

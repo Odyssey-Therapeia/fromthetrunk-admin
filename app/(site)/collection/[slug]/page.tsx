@@ -75,12 +75,14 @@ export default async function SareePage({ params }: ProductPageProps) {
     (item) => item.slug !== product.slug
   );
   const productOccasions = new Set(product.tags.map((tag) => tag.name));
-  const normalizedFabric = product.detailsFabric?.toLowerCase() ?? "";
+  const normalizedFabric = displayDetails.fabric.toLowerCase();
   const normalizedEra = product.storyEra?.toLowerCase() ?? "";
 
   const rankedRelated = relatedPool
     .map((candidate) => {
+      const candidateDisplayDetails = getProductDisplayDetails(candidate);
       const candidateOccasions = new Set(candidate.tags.map((tag) => tag.name));
+      const candidateFabric = candidateDisplayDetails.fabric.toLowerCase();
       let score = 0;
 
       if (
@@ -93,8 +95,7 @@ export default async function SareePage({ params }: ProductPageProps) {
 
       if (
         normalizedFabric &&
-        candidate.detailsFabric &&
-        candidate.detailsFabric.toLowerCase() === normalizedFabric
+        candidateFabric === normalizedFabric
       ) {
         score += 2;
       }
@@ -106,7 +107,7 @@ export default async function SareePage({ params }: ProductPageProps) {
         }
       }
 
-      return { candidate, score };
+      return { candidate, displayDetails: candidateDisplayDetails, score };
     })
     .sort((a, b) => b.score - a.score);
 
@@ -120,13 +121,12 @@ export default async function SareePage({ params }: ProductPageProps) {
   const sameFabricMatch = Boolean(
     topRecommendation &&
       normalizedFabric &&
-      topRecommendation.candidate.detailsFabric?.toLowerCase() ===
-        normalizedFabric
+      topRecommendation.displayDetails.fabric.toLowerCase() === normalizedFabric
   );
   const recommendationEyebrow = sameEraMatch
     ? "From the same era"
     : sameFabricMatch
-      ? `Similar ${product.detailsFabric ?? "weaves"}`
+      ? `Similar ${displayDetails.fabric}`
       : "You May Also Love";
   const recommendationTitle = sameEraMatch
     ? "Curated pieces from the same chapter"
