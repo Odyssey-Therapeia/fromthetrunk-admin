@@ -141,9 +141,11 @@ export default function AdminChangelogPage() {
       <CurrentReleaseSection release={currentAdminRelease} />
 
       <div className="space-y-4">
-        {adminReleases.map((release) => (
-          <ReleaseHistoryCard key={release.version} release={release} />
-        ))}
+        {adminReleases
+          .filter((release) => release.version !== currentAdminRelease.version)
+          .map((release) => (
+            <ReleaseHistoryCard key={release.version} release={release} />
+          ))}
       </div>
     </div>
   );

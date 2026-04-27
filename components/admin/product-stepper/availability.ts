@@ -36,6 +36,16 @@ export const productStockStatusOptions: Array<{
 
 const currentIsoTimestamp = (now: Date) => now.toISOString();
 
+/**
+ * Validates an optional reservation expiry timestamp.
+ *
+ * @param value - ISO timestamp string or null for an open-ended manual hold.
+ * @param now - Reference time used for deterministic tests. Defaults to the current time.
+ * @returns An admin-facing error string for invalid or past timestamps, otherwise undefined.
+ *
+ * Core invariant: a reservation expiry is optional, but if present it must parse
+ * as a date and it must be strictly in the future.
+ */
 export const validateReservedUntil = (
   value: null | string,
   now = new Date()
@@ -55,6 +65,19 @@ export const validateReservedUntil = (
   return undefined;
 };
 
+/**
+ * Computes the timestamp changes required when an admin changes stock status.
+ *
+ * @param current - Current product availability fields from the form state.
+ * @param stockStatus - Target availability selected by the admin.
+ * @param now - Reference time used when marking a product sold. Defaults to the current time.
+ * @returns A side-effect-free availability snapshot for the new status.
+ *
+ * Core invariants:
+ * - available clears both reservation and sold timestamps.
+ * - sold clears reservation data and preserves or creates soldAt.
+ * - reserved clears soldAt and preserves the current reservation expiry when present.
+ */
 export function applyStockStatusChange(
   current: ProductAvailabilityFields,
   stockStatus: ProductStockStatus,
@@ -83,6 +106,18 @@ export function applyStockStatusChange(
   };
 }
 
+/**
+ * Normalizes availability fields before saving a product.
+ *
+ * @param values - Product availability values from the admin form.
+ * @returns A normalized availability payload with impossible timestamp
+ * combinations removed.
+ *
+ * Core invariants:
+ * - available products cannot keep reservedUntil or soldAt.
+ * - sold products cannot keep reservedUntil.
+ * - reserved products cannot keep soldAt.
+ */
 export function getAvailabilitySaveFields(
   values: ProductAvailabilityFields
 ): ProductAvailabilityFields {

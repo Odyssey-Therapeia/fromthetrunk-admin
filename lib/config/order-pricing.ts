@@ -2,6 +2,18 @@ type NumberEnvOptions = {
   allowZero?: boolean;
 };
 
+/**
+ * Reads a numeric environment override with a safe fallback.
+ *
+ * @param name - Environment variable name to read from process.env.
+ * @param fallback - Number to use when the environment variable is missing or blank.
+ * @param options - Parsing options. `allowZero` defaults to true.
+ * @returns The parsed finite number, or the fallback when the variable is empty.
+ *
+ * Accepted inputs are standard numeric strings such as "0.12", "500", or
+ * "25000". The function throws when the value is not finite, negative, or zero
+ * while `allowZero` is false.
+ */
 const parseNumberEnv = (
   name: string,
   fallback: number,
@@ -24,6 +36,17 @@ const parseNumberEnv = (
   return value;
 };
 
+/**
+ * Reads a decimal-rate environment override.
+ *
+ * @param name - Environment variable name to read from process.env.
+ * @param fallback - Decimal rate to use when the environment variable is missing or blank.
+ * @returns A finite decimal rate in the inclusive range 0 to 1.
+ *
+ * Accepted inputs include values such as "0", "0.05", "0.12", and "1". The
+ * function throws for the same invalid number cases as `parseNumberEnv`, and
+ * also throws when the parsed rate is greater than 1.
+ */
 const parseRateEnv = (name: string, fallback: number) => {
   const value = parseNumberEnv(name, fallback);
 
