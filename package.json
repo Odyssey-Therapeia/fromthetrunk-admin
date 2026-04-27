@@ -1,6 +1,6 @@
 {
   "name": "ftt-fromthetrunk",
-  "version": "1.0.0",
+  "version": "0.26.2",
   "description": "Curated collection of pre-loved luxury sarees with provenance.",
   "main": "index.js",
   "scripts": {

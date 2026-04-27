@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { GST_RATE, SHIPPING_TIERS, type ShippingMethod } from "@/lib/config/order-pricing";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
@@ -38,14 +39,6 @@ interface CheckoutPageClientProps {
 interface FormErrors {
   [key: string]: string | undefined;
 }
-
-const GST_RATE = 0.12;
-
-const SHIPPING_TIERS = {
-  freeThreshold: 25000,
-  standard: 500,
-  express: 1200,
-};
 
 declare global {
   interface Window {
@@ -67,7 +60,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("standard");
 
   const { data: savedAddresses } = useQuery({
     queryKey: ["checkout-addresses"],
@@ -126,6 +119,10 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
     subtotal >= SHIPPING_TIERS.freeThreshold ? 0 : SHIPPING_TIERS[shippingMethod];
   const taxAmount = Math.round(subtotal * GST_RATE);
   const total = subtotal + shippingCost + taxAmount;
+  const taxRateLabel = new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 2,
+    style: "percent",
+  }).format(GST_RATE);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -344,12 +341,17 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         <SelectValue placeholder="Choose a saved address..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {savedAddresses.map((addr) => (
-                          <SelectItem key={addr.id} value={addr.id}>
-                            {addr.label || addr.name || addr.line1} — {addr.city}
-                            {addr.isDefault ? " (Default)" : ""}
-                          </SelectItem>
-                        ))}
+                        {savedAddresses.map((addr) => {
+                          const savedAddressLabel =
+                            addr.label || addr.name || addr.line1 || "Saved address";
+                          return (
+                            <SelectItem key={addr.id} value={addr.id}>
+                              {savedAddressLabel}
+                              {addr.city ? `, ${addr.city}` : ""}
+                              {addr.isDefault ? " (Default)" : ""}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -387,7 +389,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       />
                       <div>
                         <p className="text-sm font-bold text-foreground">Standard Delivery</p>
-                        <p className="text-xs text-foreground/60 mt-1">5–7 business days</p>
+                        <p className="text-xs text-foreground/60 mt-1">5 to 7 business days</p>
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
@@ -406,7 +408,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       />
                       <div>
                         <p className="text-sm font-bold text-foreground">Express Delivery</p>
-                        <p className="text-xs text-foreground/60 mt-1">2–3 business days</p>
+                        <p className="text-xs text-foreground/60 mt-1">2 to 3 business days</p>
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
@@ -489,7 +491,9 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-foreground/60">Estimated Tax (12%)</span>
+                        <span className="text-foreground/60">
+                          Estimated Tax ({taxRateLabel})
+                        </span>
                         <span className="font-medium text-foreground">{formatCurrency(taxAmount)}</span>
                       </div>
                     </div>

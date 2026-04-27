@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   DollarSign,
   Package,
@@ -12,6 +13,7 @@ import { AppVersionBadge } from "@/components/admin/app-version-badge";
 import { MetricCard } from "@/components/admin/dashboard/metric-card";
 import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { StockAlerts } from "@/components/admin/dashboard/stock-alerts";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatINR } from "@/db/money";
 import { currentAdminRelease } from "@/lib/admin/releases";
@@ -55,6 +57,24 @@ export default function AdminDashboardPage() {
           </div>
           <AppVersionBadge release={currentAdminRelease} showLabel tone="dark" />
         </div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {currentAdminRelease.changes.map((group) => (
+            <div
+              key={group.title}
+              className="rounded-xl border border-border/70 bg-background/65 p-4"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                {group.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {group.items[0]}
+              </p>
+            </div>
+          ))}
+        </div>
+        <Button asChild variant="outline" size="sm" className="mt-4 rounded-full">
+          <Link href="/admin/changelog">View full changelog</Link>
+        </Button>
       </section>
 
       {/* Quick actions near the top for easy access */}

@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Our Story",
   description:
-    "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems — bridging the gap between vintage charm and modern luxury.",
+    "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems, bridging the gap between vintage charm and modern luxury.",
 };
 
 export default function OurStoryPage() {

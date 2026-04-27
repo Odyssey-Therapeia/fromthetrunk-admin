@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "How It Works",
   description:
-    "Give your saree a second story. From sourcing to doorstep delivery — every piece is cared for with love and respect for its heritage.",
+    "Give your saree a second story. From sourcing to doorstep delivery, every piece is cared for with love and respect for its heritage.",
 };
 
 export default async function HowItWorksPage() {

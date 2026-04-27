@@ -175,7 +175,7 @@ export function SearchBar() {
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                          —
+                          -
                         </div>
                       )}
                     </div>
@@ -184,7 +184,7 @@ export function SearchBar() {
                         {product.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {product.detailsFabric ?? "Heirloom"} ·{" "}
+                        {product.detailsFabric ?? "Heirloom"},{" "}
                         {formatCurrency(product.pricePaise / 100)}
                       </p>
                     </div>

@@ -93,7 +93,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               </h3>
               <p className="mt-0.5 truncate text-[10px] @sm:text-xs uppercase tracking-[0.12em] @sm:tracking-[0.2em] text-muted-foreground">
                 <span>{product.detailsFabric ?? "Heirloom"}</span>
-                <span className="hidden @sm:inline"> · One of a kind</span>
+                <span className="hidden @sm:inline">, one of a kind</span>
               </p>
             </div>
             <ArrowUpRight className="mt-0.5 hidden @sm:block h-5 w-5 shrink-0 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />

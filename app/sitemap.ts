@@ -6,6 +6,7 @@ import { listProducts } from "@/db/queries/products";
 export const dynamic = "force-dynamic";
 
 const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
+const STATIC_PAGE_LAST_MODIFIED = new Date("2026-04-27T00:00:00.000Z");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [{ rows: products }, collections] = await Promise.all([
@@ -16,49 +17,55 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "daily",
       priority: 1,
     },
     {
       url: `${baseUrl}/collection`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "daily",
       priority: 0.9,
     },
     {
       url: `${baseUrl}/our-story`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/how-it-works`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/privacy-policy`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/terms-of-service`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/return-policy`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${baseUrl}/shipping-policy`,
-      lastModified: new Date(),
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/packing`,
+      lastModified: STATIC_PAGE_LAST_MODIFIED,
       changeFrequency: "yearly",
       priority: 0.3,
     },

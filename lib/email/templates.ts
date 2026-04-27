@@ -155,7 +155,7 @@ export function orderConfirmationEmail(order: EmailOrder): {
   `;
 
   return {
-    subject: `Order Confirmed — #${orderId} | From the Trunk`,
+    subject: `Order Confirmed - #${orderId} | From the Trunk`,
     html: wrapper(content),
   };
 }
@@ -184,7 +184,7 @@ export function orderShippedEmail(
   `;
 
   return {
-    subject: `Your Order Has Shipped — #${orderId} | From the Trunk`,
+    subject: `Your Order Has Shipped - #${orderId} | From the Trunk`,
     html: wrapper(content),
   };
 }
@@ -202,7 +202,7 @@ export function welcomeEmail(name: string): {
     </p>
     <p style="font-size:14px;color:${brandStyles.muted};line-height:1.6;">
       Thank you for joining our community. Each saree in our collection is a
-      one-of-a-kind piece with its own story — authenticated, restored, and
+      one-of-a-kind piece with its own story: authenticated, restored, and
       ready for a new chapter.
     </p>
     <p style="font-size:14px;color:${brandStyles.muted};line-height:1.6;">

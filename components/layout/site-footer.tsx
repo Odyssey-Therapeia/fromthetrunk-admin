@@ -16,6 +16,7 @@ const footerLinks = [
     title: "Customer Care",
     links: [
       { href: "/shipping-policy", label: "Shipping" },
+      { href: "/packing", label: "Packing" },
       { href: "/return-policy", label: "Returns & Refunds" },
       { href: "/how-it-works", label: "Authentication" },
     ],
@@ -25,7 +26,6 @@ const footerLinks = [
     links: [
       { href: "/privacy-policy", label: "Privacy Policy" },
       { href: "/terms-of-service", label: "Terms of Service" },
-      { href: "/return-policy", label: "Return Policy" },
     ],
   },
 ];

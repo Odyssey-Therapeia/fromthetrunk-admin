@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type ToolCallMessagePartStatus,
   useAssistantToolUI,
@@ -10,6 +10,14 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  buildStoryPatchPayload,
+  hasStoryPatchPayload,
+  PRODUCT_STORY_APPLIED_EVENT,
+  type ProductStoryAppliedEventDetail,
+  type StoryDraftResult,
+} from "@/lib/products/story-application";
+import { useAgentStore } from "@/lib/store/agent-store";
 import { cn } from "@/lib/utils";
 
 function ToolCallWrapper({
@@ -98,14 +106,25 @@ function DraftStoryToolUI({
   result,
   status,
 }: {
-  result: {
-    storyTitle?: string;
-    storyNarrative?: string;
-    storyProvenance?: string;
-    storyEra?: string;
-  } | undefined;
+  result: StoryDraftResult | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
+  const { anchoredProductId, anchoredProductName } = useAgentStore();
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const patchPayload = buildStoryPatchPayload(result);
+  const canApply = Boolean(anchoredProductId) && hasStoryPatchPayload(patchPayload);
+
+  useEffect(() => {
+    setApplied(false);
+  }, [
+    anchoredProductId,
+    result?.storyEra,
+    result?.storyNarrative,
+    result?.storyProvenance,
+    result?.storyTitle,
+  ]);
+
   const handleCopy = () => {
     const text = [
       result?.storyTitle,
@@ -119,6 +138,56 @@ function DraftStoryToolUI({
       () => toast.success("Story copied to clipboard"),
       () => toast.error("Failed to copy"),
     );
+  };
+
+  const handleApply = async () => {
+    if (!anchoredProductId) {
+      toast.error("Anchor a product before saving the story.");
+      return;
+    }
+    if (!hasStoryPatchPayload(patchPayload)) return;
+
+    setApplying(true);
+    try {
+      const response = await fetch(`/api/v2/products/${anchoredProductId}`, {
+        body: JSON.stringify(patchPayload),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+
+      if (!response.ok) {
+        let message = "Failed to save story";
+        try {
+          const data = (await response.json()) as { message?: string };
+          if (data.message) message = data.message;
+        } catch {
+          // no-op
+        }
+        throw new Error(message);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent<ProductStoryAppliedEventDetail>(
+          PRODUCT_STORY_APPLIED_EVENT,
+          {
+            detail: {
+              productId: anchoredProductId,
+              values: patchPayload,
+            },
+          },
+        ),
+      );
+      setApplied(true);
+      toast.success(
+        anchoredProductName
+          ? `Saved story to ${anchoredProductName}.`
+          : "Story saved to product.",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save story");
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -144,15 +213,35 @@ function DraftStoryToolUI({
               <span className="font-medium">Era:</span> {result.storyEra}
             </p>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopy}
-            type="button"
-            className="mt-1 border-[#444] bg-transparent text-[#ccc] hover:bg-[#333]"
-          >
-            <Copy className="mr-1 h-3 w-3" /> Copy
-          </Button>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCopy}
+              type="button"
+              className="border-[#444] bg-transparent text-[#ccc] hover:bg-[#333]"
+            >
+              <Copy className="mr-1 h-3 w-3" /> Copy
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleApply}
+              disabled={!canApply || applying || applied}
+              type="button"
+              title={anchoredProductId ? undefined : "Anchor a product to save"}
+              className="bg-[#c9a96e] text-[#1a1a1a] hover:bg-[#b8984e] disabled:bg-[#333] disabled:text-[#777]"
+            >
+              {applied ? (
+                <>
+                  <Check className="mr-1 h-3 w-3" /> Applied
+                </>
+              ) : applying ? (
+                "Applying..."
+              ) : (
+                "Apply to Product"
+              )}
+            </Button>
+          </div>
         </div>
       ) : null}
     </ToolCallWrapper>
@@ -453,7 +542,7 @@ export function AgentToolUIRegistrations() {
     toolName: "draftStory",
     render: ({ result, status }) => (
       <DraftStoryToolUI
-        result={result as Record<string, string> | undefined}
+        result={result as StoryDraftResult | undefined}
         status={status as ToolCallMessagePartStatus | undefined}
       />
     ),

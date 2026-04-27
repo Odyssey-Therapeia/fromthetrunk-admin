@@ -61,7 +61,7 @@ export function CartDrawer() {
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-semibold text-foreground">
-              {hasHydrated ? formatCurrency(subtotal) : "—"}
+              {hasHydrated ? formatCurrency(subtotal) : "-"}
             </span>
           </div>
           {canCheckout ? (

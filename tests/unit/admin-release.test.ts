@@ -22,9 +22,17 @@ const createMemoryStorage = (): ReleaseSeenStorage & { values: Map<string, strin
 
 describe("admin release metadata", () => {
   it("defines the current release announcement", () => {
-    expect(currentAdminRelease.version).toBe("0.25.0");
+    expect(currentAdminRelease.version).toBe("0.26.2");
+    expect(currentAdminRelease.name).toBe("The Living Story Preview");
     expect(currentAdminRelease.showAnnouncement).toBe(true);
     expect(currentAdminRelease.highlights.length).toBeGreaterThanOrEqual(4);
+    expect(currentAdminRelease.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Added" }),
+        expect.objectContaining({ title: "Updated" }),
+        expect.objectContaining({ title: "Fixed" }),
+      ]),
+    );
   });
 });
 

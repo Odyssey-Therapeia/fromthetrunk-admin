@@ -6,7 +6,6 @@ import Link from "next/link";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { Button } from "@/components/ui/button";
 import { useUiHaptics } from "@/lib/haptics/use-ui-haptics";
 
@@ -78,24 +77,25 @@ export function HeroSection({ content }: HeroSectionProps) {
           blurDataURL={heroBlurDataURL}
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-luxury-fade" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/88 via-black/52 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/18" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-20 pt-32">
-        <ScrollReveal className="max-w-2xl space-y-6">
-          <p className="text-xs uppercase tracking-[0.5em] text-amber-100/80">
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-20 pt-32 md:pt-36">
+        <div className="max-w-2xl space-y-6 drop-shadow-2xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.5em] text-white/78">
             {content?.heroEyebrow ?? "From the Trunk"}
           </p>
           <h1 className="font-serif text-4xl leading-tight tracking-wide text-white md:text-6xl">
             {content?.heroTitle ?? "Pre-loved luxury sarees with provenance."}
           </h1>
-          <p className="text-lg text-amber-100/80 md:text-xl">
+          <p className="max-w-xl text-lg leading-8 text-white/86 md:text-xl">
             {content?.heroSubtitle ??
               "Curated heirloom pieces, authenticated and restored with care, each carrying the story that made it timeless."}
           </p>
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal delay={0.15} className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-4">
           <Button
             asChild
             className="rounded-full px-8 py-6 text-sm transition hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0"
@@ -113,9 +113,9 @@ export function HeroSection({ content }: HeroSectionProps) {
               {content?.secondaryCtaLabel ?? "Read the Story"}
             </Link>
           </Button>
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal delay={0.3} className="max-w-md">
+        <div className="max-w-md">
           <div className="rounded-2xl border border-white/25 bg-white/15 p-6 text-sm text-amber-50/80 shadow-soft backdrop-blur-md">
             <p className="text-xs uppercase tracking-[0.4em] text-amber-100/60">
               {content?.heroCardEyebrow ?? "New Arrivals"}
@@ -129,7 +129,7 @@ export function HeroSection({ content }: HeroSectionProps) {
                 "Limited drops every fortnight. Reserve your piece early."}
             </p>
           </div>
-        </ScrollReveal>
+        </div>
       </div>
     </section>
   );

@@ -34,6 +34,12 @@ export const metadata: Metadata = {
 
 const ITEMS_PER_PAGE = 12;
 
+const shortSortLabels: Record<ProductSortOption, string> = {
+  latest: "Newest",
+  "price-low-to-high": "Low to High",
+  "price-high-to-low": "High to Low",
+};
+
 type CollectionPageProps = {
   searchParams:
     | Promise<{ collection?: string | string[]; page?: string; sort?: string | string[] }>
@@ -106,7 +112,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   const filterDescription =
     activeCollection?.description ??
     cms?.filtersBody ??
-    "Move through curated edits by story, mood, and provenance without losing your place in the catalog.";
+    "Choose an edit, then sort the drop.";
   const previewImages = items
     .map((product) => ({
       name: product.name,
@@ -136,7 +142,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:space-y-7 sm:px-6 sm:py-9 lg:space-y-4 lg:py-6">
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)] lg:items-start">
-        <ScrollReveal className="relative isolate min-h-[430px] overflow-hidden rounded-[1.75rem] border border-border/60 bg-trunk-brown shadow-soft sm:min-h-[400px] lg:min-h-[320px]">
+        <div className="relative isolate min-h-[430px] overflow-hidden rounded-[1.75rem] border border-border/60 bg-trunk-brown shadow-soft sm:min-h-[400px] lg:min-h-[320px]">
           <Image
             src={heroPreviewImage}
             alt={previewImages[0]?.name ?? "Sunlit garden saree curation"}
@@ -185,38 +191,41 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
               </div>
             </div>
           </div>
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal
-          delay={0.1}
-          className="rounded-[1.5rem] border border-border/60 bg-card/90 p-4 shadow-soft backdrop-blur"
-        >
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
-                Curated filters
-              </p>
-              <h2 className="font-serif text-2xl text-foreground">
-                {activeCollection?.name ?? cms?.filtersTitle ?? "Browse by collection"}
-              </h2>
-              <p className="text-sm leading-5 text-muted-foreground">{filterDescription}</p>
+        <div className="rounded-[1.5rem] border border-border/60 bg-card/92 p-4 shadow-soft backdrop-blur">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.32em] text-muted-foreground">
+                  Filters
+                </p>
+                <h2 className="mt-1 truncate font-serif text-2xl text-foreground">
+                  {activeCollection?.name ?? cms?.filtersTitle ?? "All collections"}
+                </h2>
+              </div>
+              <div className="rounded-full border border-border/70 bg-background/75 px-3 py-1 text-xs text-muted-foreground">
+                {items.length}/{totalDocs}
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-border/60 bg-background/80 p-3 lg:hidden 2xl:block">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-                Curation note
-              </p>
-              <p className="mt-1.5 text-sm leading-5 text-foreground">
-                Authenticated pieces, photographed in detail, and released in small drops.
-              </p>
-            </div>
+            <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
+              {filterDescription}
+            </p>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-                  Browse edit
+                  Edit
                 </p>
-                <p className="text-xs text-muted-foreground">{activeCollectionLabel}</p>
+                {activeCollectionSlug || activeSort !== DEFAULT_PRODUCT_SORT ? (
+                  <Link
+                    href="/collection"
+                    className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Reset
+                  </Link>
+                ) : null}
               </div>
               <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                 <Link
@@ -252,7 +261,9 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                 <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
                   Sort
                 </p>
-                <p className="text-xs text-muted-foreground">{activeSortLabel}</p>
+                <p className="text-xs text-muted-foreground">
+                  {shortSortLabels[activeSort]}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {PRODUCT_SORT_OPTIONS.map((option) => (
@@ -266,7 +277,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                         : "border-border/70 bg-background/70 text-muted-foreground hover:border-trunk-gold/40 hover:text-foreground",
                     )}
                   >
-                    <span>{option.label}</span>
+                    <span>{shortSortLabels[option.value]}</span>
                     {activeSort === option.value ? (
                       <span className="h-2 w-2 rounded-full bg-trunk-gold" />
                     ) : null}
@@ -276,11 +287,10 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
             </div>
 
             <p className="rounded-xl bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-              Showing {items.length} of {totalDocs} curated piece{totalDocs === 1 ? "" : "s"},
-              sorted by {activeSortLabel.toLowerCase()}.
+              {activeCollectionLabel}, {activeSortLabel}
             </p>
           </div>
-        </ScrollReveal>
+        </div>
       </section>
 
       <section className="flex flex-col gap-3 border-y border-border/60 py-2 sm:flex-row sm:items-end sm:justify-between">

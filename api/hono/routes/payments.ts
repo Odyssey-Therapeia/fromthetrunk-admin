@@ -11,7 +11,8 @@ import { orders, products } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import { orderConfirmationEmail } from "@/lib/email/templates";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
-import { getRazorpayInstance, GST_RATE, SHIPPING_TIERS, verifyPaymentSignature } from "@/lib/payments/razorpay";
+import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
+import { getRazorpayInstance, verifyPaymentSignature } from "@/lib/payments/razorpay";
 
 const toShippingCostPaise = (subtotalPaise: number, shippingMethod: "express" | "standard") => {
   const freeThresholdPaise = SHIPPING_TIERS.freeThreshold * 100;

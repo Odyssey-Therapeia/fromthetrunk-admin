@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateOrderTotals, GST_RATE, SHIPPING_TIERS } from "@/lib/payments/razorpay";
+import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
+import { calculateOrderTotals } from "@/lib/payments/razorpay";
 
 describe("calculateOrderTotals", () => {
   it("calculates standard shipping + GST for small order", () => {

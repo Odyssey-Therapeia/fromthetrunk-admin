@@ -1,5 +1,44 @@
 # FTT Changelog
 
+## 2026-04-27 - v0.26.2, The Living Story Preview
+
+Detailed implementation notes: [v0.26.2 release notes](./releases/v0.26.2.md).
+
+### Added
+
+- **Interactive Our Why preview**: Rebuilt `/why` as a chaptered, image-led
+  story experience with slide controls and browser voiceover playback.
+- **Admin changelog page**: Added `/admin/changelog` so admins can review the
+  detailed fixes and updates for every release.
+- **Clickable version badges**: The version badge in the admin menu, top bar,
+  dashboard, mobile menu, and release announcement now opens the changelog.
+
+### Updated
+
+- **Homepage readability**: Strengthened the hero image overlay and removed
+  above-the-fold reveal dependency so the headline and calls to action are
+  readable immediately.
+- **Customer card polish**: Removed decorative overlay icons from featured
+  collection and how-it-works cards so the saree imagery and text stay calm.
+- **Release card depth**: Expanded the admin release announcement and dashboard
+  latest-update card with grouped release notes.
+
+### Fixed
+
+- **Customer-facing punctuation**: Removed em dashes, en dashes, and visible
+  separator dots from checked storefront surfaces.
+- **Scope clarity**: The collection filter redesign is intentionally held for a
+  separate planning pass rather than being mixed into this release.
+
+### QA Evidence
+
+- TypeScript: `npx tsc --noEmit --pretty false` passed.
+- Unit test: `npm test -- tests/unit/admin-release.test.ts` passed.
+- ESLint: targeted storefront and admin release files passed.
+- Build: `npm run build` passed.
+- Browser QA: `/why`, `/`, `/collection`, `/admin`, and `/admin/changelog`
+  checked at desktop and mobile widths.
+
 ## 2026-04-24 — v0.25.0, The Showroom Release
 
 ### Fixed

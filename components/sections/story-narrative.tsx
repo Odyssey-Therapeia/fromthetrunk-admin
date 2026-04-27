@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Lenis from "lenis";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,7 +26,7 @@ function SplitWords({
       {text.split(" ").map((word, i) => (
         <span
           key={i}
-          className="split-word inline-block opacity-0"
+          className="split-word inline-block"
           aria-hidden="true"
         >
           {word}&nbsp;
@@ -89,6 +88,8 @@ const climaxLines = [
   },
 ];
 
+gsap.registerPlugin(ScrollTrigger);
+
 export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const beatImageIndexes = beats.reduce<{
@@ -130,89 +131,44 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
       return;
     }
 
-    gsap.registerPlugin(ScrollTrigger);
-
-    let lenis: Lenis | null = null;
-    let lenisScrollHandler: null | (() => void) = null;
-    let tickerCallback: null | ((time: number) => void) = null;
     const mm = gsap.matchMedia();
-    if (!embedded) {
-      lenis = new Lenis({ lerp: 0.08, duration: 1.4 });
-      lenisScrollHandler = () => ScrollTrigger.update();
-      tickerCallback = (time) => lenis?.raf(time * 1000);
-      lenis.on("scroll", lenisScrollHandler);
-      gsap.ticker.add(tickerCallback);
-      gsap.ticker.lagSmoothing(0);
-    }
 
     const ctx = gsap.context(() => {
       if (!containerRef.current) return;
 
-      // ──── HERO (standalone only) ────
+      // Hero (standalone only)
       const heroSection = !embedded
         ? containerRef.current.querySelector(".story-hero")
         : null;
       if (heroSection) {
+        gsap.from(
+          heroSection.querySelectorAll(
+            ".hero-eyebrow, .hero-title .split-word, .hero-subtitle"
+          ),
+          {
+            autoAlpha: 0,
+            y: 20,
+            stagger: 0.04,
+            duration: 0.8,
+            ease: "power3.out",
+          }
+        );
+
         mm.add("(min-width: 1024px)", () => {
-          const heroTl = gsap.timeline({
-            scrollTrigger: {
-              trigger: heroSection,
-              start: "top top",
-              end: "+=150%",
-              pin: true,
-              scrub: 0.8,
-            },
-          });
-
-          heroTl
-            .fromTo(
-              heroSection.querySelector(".hero-eyebrow"),
-              { autoAlpha: 0, y: 20 },
-              { autoAlpha: 1, y: 0, duration: 0.3 }
-            )
-            .fromTo(
-              heroSection.querySelectorAll(".hero-title .split-word"),
-              { autoAlpha: 0, y: 30 },
-              { autoAlpha: 1, y: 0, stagger: 0.04, duration: 0.3 },
-              0.1
-            )
-            .fromTo(
-              heroSection.querySelector(".hero-subtitle"),
-              { autoAlpha: 0, y: 20 },
-              { autoAlpha: 1, y: 0, duration: 0.3 },
-              0.6
-            );
-
           gsap.to(heroSection.querySelector(".hero-parallax"), {
-            yPercent: 15,
+            yPercent: 8,
             ease: "none",
             scrollTrigger: {
               trigger: heroSection,
               start: "top top",
-              end: "+=150%",
+              end: "bottom top",
               scrub: true,
             },
           });
         });
-
-        mm.add("(max-width: 1023px)", () => {
-          gsap.fromTo(
-            heroSection.querySelectorAll(
-              ".hero-eyebrow, .hero-title .split-word, .hero-subtitle"
-            ),
-            { autoAlpha: 0, y: 20 },
-            {
-              autoAlpha: 1,
-              y: 0,
-              stagger: 0.05,
-              duration: 0.8,
-              ease: "power3.out",
-            }
-          );
-        });
       }
 
-      // ──── NARRATIVE BEATS ────
+      // Narrative beats
       containerRef.current
         .querySelectorAll<HTMLElement>(".story-beat")
         .forEach((section) => {
@@ -220,211 +176,77 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
           const imageWrap = section.querySelector(".beat-image-wrap");
           const words = section.querySelectorAll(".split-word");
 
-          mm.add("(min-width: 1024px)", () => {
-            const beatTl = gsap.timeline({
+          if (imageWrap) {
+            gsap.from(imageWrap, {
+              autoAlpha: layout === "full-bleed" ? 0.9 : 0.82,
+              y: layout === "full-bleed" ? 0 : 24,
+              scale: layout === "full-bleed" ? 1.03 : 1,
+              duration: 0.8,
+              ease: "power2.out",
               scrollTrigger: {
                 trigger: section,
-                start: "top top",
-                end: "+=200%",
-                pin: true,
-                scrub: 0.6,
+                start: "top 82%",
+                toggleActions: "play none none none",
               },
+              immediateRender: false,
             });
+          }
 
-            if (layout === "text-only-dark") {
-              beatTl
-                .fromTo(
-                  section,
-                  { backgroundColor: "var(--background)" },
-                  { backgroundColor: "#3D2B1F", duration: 0.4 }
-                )
-                .fromTo(
-                  words,
-                  { autoAlpha: 0, y: 15 },
-                  { autoAlpha: 1, y: 0, stagger: 0.03, duration: 0.6 },
-                  0.2
-                );
-            } else if (layout === "full-bleed") {
-              if (imageWrap) {
-                beatTl.fromTo(
-                  imageWrap,
-                  { scale: 1.0 },
-                  { scale: 1.06, duration: 1, ease: "none" },
-                  0
-                );
-              }
-              beatTl.fromTo(
-                words,
-                { autoAlpha: 0, y: 15 },
-                { autoAlpha: 1, y: 0, stagger: 0.03, duration: 0.5 },
-                0.2
-              );
-            } else {
-              if (imageWrap) {
-                const clipFrom =
-                  layout === "image-left"
-                    ? "inset(0 100% 0 0)"
-                    : "inset(0 0 0 100%)";
-                beatTl.fromTo(
-                  imageWrap,
-                  { clipPath: clipFrom },
-                  {
-                    clipPath: "inset(0 0% 0 0%)",
-                    duration: 0.5,
-                    ease: "power2.inOut",
-                  },
-                  0
-                );
-              }
-              beatTl.fromTo(
-                words,
-                { autoAlpha: 0, y: 15 },
-                { autoAlpha: 1, y: 0, stagger: 0.03, duration: 0.5 },
-                0.3
-              );
-            }
-          });
-
-          mm.add("(max-width: 1023px)", () => {
-            if (imageWrap) {
-              gsap.fromTo(
-                imageWrap,
-                { autoAlpha: 0, y: 30 },
-                {
-                  autoAlpha: 1,
-                  y: 0,
-                  duration: 0.8,
-                  ease: "power2.out",
-                  scrollTrigger: {
-                    trigger: section,
-                    start: "top 85%",
-                    toggleActions: "play none none reverse",
-                  },
-                }
-              );
-            }
-            gsap.fromTo(
-              words,
-              { autoAlpha: 0, y: 15 },
-              {
-                autoAlpha: 1,
-                y: 0,
-                stagger: 0.02,
-                duration: 0.6,
-                ease: "power2.out",
-                scrollTrigger: {
-                  trigger: section,
-                  start: "top 80%",
-                  toggleActions: "play none none reverse",
-                },
-              }
-            );
+          gsap.from(words, {
+            autoAlpha: 0,
+            y: 15,
+            stagger: 0.02,
+            duration: 0.6,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: section,
+              start: "top 82%",
+              toggleActions: "play none none none",
+            },
+            immediateRender: false,
           });
         });
 
-      // ──── CLIMAX ────
+      // Climax
       const climaxSection =
         containerRef.current.querySelector(".story-climax");
       if (climaxSection) {
         const climaxItems =
           climaxSection.querySelectorAll<HTMLElement>(".climax-item");
 
-        mm.add("(min-width: 1024px)", () => {
-          const climaxTl = gsap.timeline({
-            scrollTrigger: {
-              trigger: climaxSection,
-              start: "top top",
-              end: "+=250%",
-              pin: true,
-              scrub: 0.5,
-            },
-          });
-
-          climaxItems.forEach((item, i) => {
-            const offset = i * 0.2;
-            climaxTl
-              .fromTo(
-                item,
-                { autoAlpha: 0, scale: 0.85, y: 30 },
-                {
-                  autoAlpha: 1,
-                  scale: 1,
-                  y: 0,
-                  duration: 0.2,
-                  ease: "power3.out",
-                },
-                offset
-              )
-              .to(
-                item,
-                {
-                  autoAlpha: i < climaxItems.length - 1 ? 0 : 1,
-                  scale: i < climaxItems.length - 1 ? 1.05 : 1,
-                  duration: 0.15,
-                },
-                offset + 0.15
-              );
-          });
-
-          climaxTl.fromTo(
-            climaxSection.querySelector(".climax-cta"),
-            { autoAlpha: 0, y: 20 },
-            { autoAlpha: 1, y: 0, duration: 0.15 },
-            0.8
-          );
+        gsap.from(climaxItems, {
+          autoAlpha: 0,
+          y: 20,
+          scale: 0.96,
+          duration: 0.7,
+          stagger: 0.1,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: climaxSection,
+            start: "top 78%",
+            toggleActions: "play none none none",
+          },
+          immediateRender: false,
         });
 
-        mm.add("(max-width: 1023px)", () => {
-          climaxItems.forEach((item, i) => {
-            gsap.fromTo(
-              item,
-              { autoAlpha: 0, y: 20, scale: 0.95 },
-              {
-                autoAlpha: 1,
-                y: 0,
-                scale: 1,
-                duration: 0.7,
-                delay: i * 0.15,
-                ease: "power3.out",
-                scrollTrigger: {
-                  trigger: climaxSection,
-                  start: "top 75%",
-                  toggleActions: "play none none reverse",
-                },
-              }
-            );
-          });
-          gsap.fromTo(
-            climaxSection.querySelector(".climax-cta"),
-            { autoAlpha: 0, y: 20 },
-            {
-              autoAlpha: 1,
-              y: 0,
-              duration: 0.6,
-              delay: 0.6,
-              scrollTrigger: {
-                trigger: climaxSection,
-                start: "top 60%",
-                toggleActions: "play none none reverse",
-              },
-            }
-          );
+        gsap.from(climaxSection.querySelector(".climax-cta"), {
+          autoAlpha: 0,
+          y: 20,
+          duration: 0.6,
+          delay: 0.35,
+          scrollTrigger: {
+            trigger: climaxSection,
+            start: "top 70%",
+            toggleActions: "play none none none",
+          },
+          immediateRender: false,
         });
       }
     }, containerRef);
 
     return () => {
-      if (tickerCallback) {
-        gsap.ticker.remove(tickerCallback);
-      }
-      if (lenis && lenisScrollHandler) {
-        lenis.off("scroll", lenisScrollHandler);
-      }
       mm.revert();
       ctx.revert();
-      lenis?.destroy();
-      lenis = null;
-      gsap.ticker.lagSmoothing(500, 33);
     };
   }, [embedded]);
 
@@ -437,7 +259,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
   return (
     <div ref={containerRef} className="overflow-x-hidden">
       {!embedded && (
-        <section className="story-hero @container relative flex min-h-screen items-end overflow-hidden">
+        <section className="story-hero @container relative flex min-h-[calc(100svh-9rem)] items-end overflow-hidden md:min-h-[calc(100svh-6.625rem)]">
           <div className="hero-parallax absolute inset-0">
             <Image
               src={images[0]}
@@ -470,14 +292,13 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             <section
               key={i}
               data-layout="text-only-dark"
-              className="story-beat flex min-h-screen items-center justify-center px-4 sm:px-6"
-              style={{ backgroundColor: "var(--background)" }}
+              className="story-beat flex min-h-[50svh] items-center justify-center bg-foreground px-4 py-20 sm:min-h-[55svh] sm:px-6 lg:min-h-[60svh]"
             >
               <div className="mx-auto max-w-4xl text-center">
                 {beat.paragraphs.map((p, j) => (
                   <p
                     key={j}
-                    className="font-serif text-3xl leading-snug text-white sm:text-4xl lg:text-6xl"
+                    className="font-serif text-3xl leading-snug text-primary-foreground sm:text-4xl lg:text-6xl"
                     style={{ marginTop: j > 0 ? "2rem" : 0 }}
                   >
                     <SplitWords text={p} />
@@ -493,7 +314,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             <section
               key={i}
               data-layout="full-bleed"
-              className="story-beat relative flex min-h-screen items-center overflow-hidden"
+              className="story-beat relative flex min-h-[60svh] items-center overflow-hidden sm:min-h-[65svh] lg:min-h-[70svh]"
             >
               <div className="beat-image-wrap absolute inset-0">
                 <Image
@@ -525,11 +346,11 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
           <section
             key={i}
             data-layout={beat.layout}
-            className="story-beat grid min-h-screen items-center gap-0 lg:grid-cols-[2fr_3fr]"
+            className="story-beat grid items-center gap-0 lg:min-h-[min(720px,calc(100svh-6.625rem))] lg:grid-cols-[2fr_3fr]"
           >
             <div
               className={cn(
-                "flex items-center px-6 py-16 sm:px-10 lg:min-h-screen lg:py-0",
+                "flex items-center px-4 py-12 sm:px-6 sm:py-16 lg:min-h-[min(720px,calc(100svh-6.625rem))] lg:px-10 lg:py-0",
                 isImageRight ? "lg:order-1" : "lg:order-2"
               )}
             >
@@ -546,7 +367,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             </div>
             <div
               className={cn(
-                "relative min-h-[50vh] overflow-hidden lg:min-h-screen",
+                "relative min-h-[42svh] overflow-hidden sm:min-h-[48svh] lg:min-h-[min(720px,calc(100svh-6.625rem))]",
                 isImageRight ? "lg:order-2" : "lg:order-1"
               )}
             >
@@ -565,16 +386,15 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
       })}
 
       {/* ── Climax ── */}
-      <section className="story-climax flex min-h-screen flex-col items-center justify-center px-4 sm:px-6">
-        <div className="relative mx-auto flex min-h-[60vh] max-w-4xl flex-col items-center justify-center text-center lg:min-h-[70vh]">
+      <section className="story-climax flex min-h-[70svh] flex-col items-center justify-center px-4 py-20 sm:px-6 lg:min-h-[75svh]">
+        <div className="mx-auto flex max-w-4xl flex-col items-center justify-center gap-4 text-center sm:gap-5 lg:gap-6">
           {climaxLines.map((line, i) => (
             <p
               key={i}
               className={cn(
-                "climax-item absolute font-serif leading-tight",
+                "climax-item font-serif leading-tight",
                 line.size,
-                line.muted ? "text-muted-foreground" : "text-foreground",
-                i === 0 && "relative"
+                line.muted ? "text-muted-foreground" : "text-foreground"
               )}
             >
               {line.text}

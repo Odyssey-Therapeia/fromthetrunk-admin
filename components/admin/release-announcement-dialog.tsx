@@ -94,35 +94,57 @@ export function ReleaseAnnouncementDialog({
           </div>
         </div>
 
-        <div className="grid max-h-[50vh] gap-3 overflow-y-auto px-6 py-5 @3xl:grid-cols-2 @3xl:px-8">
-          {release.highlights.map((highlight) => {
-            const Icon = highlightIcons[highlight.area];
+        <div className="max-h-[52vh] space-y-5 overflow-y-auto px-6 py-5 @3xl:px-8">
+          <div className="grid gap-3 @3xl:grid-cols-2">
+            {release.highlights.map((highlight) => {
+              const Icon = highlightIcons[highlight.area];
 
-            return (
-              <article
-                className={cn(
-                  "rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm transition duration-200",
-                  "motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md",
-                )}
-                key={`${highlight.area}-${highlight.title}`}
-              >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    {highlight.area}
-                  </span>
+              return (
+                <article
+                  className={cn(
+                    "rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm transition duration-200",
+                    "motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md",
+                  )}
+                  key={`${highlight.area}-${highlight.title}`}
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      {highlight.area}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {highlight.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {highlight.description}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+
+          <section className="rounded-xl border border-border/70 bg-background/70 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              Release notes
+            </p>
+            <div className="mt-4 grid gap-4 @3xl:grid-cols-3">
+              {release.changes.map((group) => (
+                <div key={group.title}>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {group.title}
+                  </h3>
+                  <ul className="mt-2 list-disc space-y-2 pl-4 text-sm leading-6 text-muted-foreground">
+                    {group.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
                 </div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {highlight.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {highlight.description}
-                </p>
-              </article>
-            );
-          })}
+              ))}
+            </div>
+          </section>
         </div>
 
         <DialogFooter className="border-t border-border/80 bg-background/60 px-6 py-4 @3xl:px-8">
@@ -131,7 +153,7 @@ export function ReleaseAnnouncementDialog({
           </Button>
           <Button asChild type="button" className="gap-2" onClick={closeAndRemember}>
             <Link href={release.demoHref}>
-              Open products
+              {release.demoLabel}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>

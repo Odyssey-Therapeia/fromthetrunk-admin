@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import Razorpay from "razorpay";
 
+import { GST_RATE, SHIPPING_TIERS, type ShippingMethod } from "@/lib/config/order-pricing";
+
 let instance: Razorpay | null = null;
 
 export function getRazorpayInstance(): Razorpay {
@@ -49,23 +51,12 @@ export function verifyPaymentSignature({
   return expectedSignature === signature;
 }
 
-/** GST rate for textile/apparel products in India. */
-export const GST_RATE = 0.12; // 12%
-
-/** Shipping cost tiers in INR. */
-export const SHIPPING_TIERS = {
-  /** Free shipping threshold (in INR) */
-  freeThreshold: 25000,
-  standard: 500,
-  express: 1200,
-} as const;
-
 /**
  * Calculate order totals server-side.
  */
 export function calculateOrderTotals(
   subtotal: number,
-  shippingMethod: "standard" | "express" = "standard"
+  shippingMethod: ShippingMethod = "standard"
 ) {
   const shippingCost =
     subtotal >= SHIPPING_TIERS.freeThreshold ? 0 : SHIPPING_TIERS[shippingMethod];

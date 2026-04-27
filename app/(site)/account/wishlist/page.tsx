@@ -55,7 +55,7 @@ export default function WishlistPage() {
       <div className="space-y-2">
         <h2 className="font-serif text-2xl text-foreground">Wishlist</h2>
         <p className="text-sm text-muted-foreground">
-          Pieces you&apos;ve saved for later. One of a kind — don&apos;t wait too long.
+          Pieces you&apos;ve saved for later. One of a kind, don&apos;t wait too long.
         </p>
       </div>
 
