@@ -54,10 +54,14 @@ const outputDir =
   `./test-results/lighthouse/${
     scope === "public" ? formFactor : `${scope}-${formFactor}`
   }`;
+const parsedRuns = Number.parseInt(process.env.FTT_LHCI_RUNS || "1", 10);
+const numberOfRuns = Number.isFinite(parsedRuns) && parsedRuns > 0 ? parsedRuns : 1;
 const categoryAssertions = {
   "categories:accessibility": ["error", { minScore: 0.9 }],
   "categories:best-practices": ["warn", { minScore: 0.85 }],
-  ...(scope === "admin" ? {} : { "categories:seo": ["warn", { minScore: 0.85 }] }),
+  ...(scope === "public"
+    ? { "categories:seo": ["warn", { minScore: 0.85 }] }
+    : {}),
   "categories:performance": ["warn", { minScore: 0.5 }],
 };
 
@@ -68,7 +72,7 @@ module.exports = {
       startServerCommand: "npm run serve:lhci",
       startServerReadyPattern: "Ready",
       startServerReadyTimeout: 60_000,
-      numberOfRuns: Number(process.env.FTT_LHCI_RUNS || "1"),
+      numberOfRuns,
       ...(chromePath ? { chromePath } : {}),
       ...(requiresAuth
         ? {

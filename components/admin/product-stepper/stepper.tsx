@@ -75,10 +75,6 @@ export function ProductStepper({
     lastPersistedSnapshotRef.current = serializeStepperValues(mergedInitialValues);
   }, [mergedInitialValues]);
 
-  useEffect(() => {
-    setUploaded(initialMedia);
-  }, [initialMedia, productId]);
-
   const persistProduct = useCallback(async (values: ProductStepperValues, forceDraft: boolean) => {
     setIsSaving(true);
     setSaveState("Saving...");
@@ -182,6 +178,14 @@ export function ProductStepper({
     },
   });
   const setProductFieldValue = form.setFieldValue;
+
+  useEffect(() => {
+    setUploaded(initialMedia);
+    setProductFieldValue(
+      "imageMediaIds",
+      initialMedia.map((media) => media.id)
+    );
+  }, [initialMedia, productId, setProductFieldValue]);
 
   const handleAiAssist = () => {
     const name =

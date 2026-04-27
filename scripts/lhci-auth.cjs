@@ -21,6 +21,7 @@ module.exports = async function authenticateForLighthouse(browser, context) {
     const password = getRequiredEnv("FTT_LHCI_AUTH_PASSWORD");
     const origin = new URL(context.url).origin;
     const callbackPath = process.env.FTT_LHCI_AUTH_CALLBACK_PATH || "/admin";
+    const expectedPathPrefix = new URL(callbackPath, origin).pathname;
     const signInUrl = `${origin}/account/sign-in?callbackUrl=${encodeURIComponent(
       callbackPath
     )}`;
@@ -33,13 +34,17 @@ module.exports = async function authenticateForLighthouse(browser, context) {
       await page.type("#password", password);
       await page.click('button[type="submit"]');
       await page.waitForFunction(
-        () => window.location.pathname.startsWith("/admin"),
-        { timeout: 20_000 }
+        (pathPrefix) => window.location.pathname.startsWith(pathPrefix),
+        { timeout: 20_000 },
+        expectedPathPrefix
       );
     } finally {
       await page.close();
     }
-  })();
+  })().catch((error) => {
+    loginPromise = undefined;
+    throw error;
+  });
 
   await loginPromise;
 };

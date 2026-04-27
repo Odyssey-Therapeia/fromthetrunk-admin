@@ -88,7 +88,7 @@ Core variables include:
 | `npm run lhci:admin:mobile` | Run authenticated Lighthouse CI against admin pages with mobile settings |
 | `npm run lhci:admin:desktop` | Run authenticated Lighthouse CI against admin pages with desktop settings |
 | `npm run verify` | Run unit tests, lint, and production build |
-| `npm run verify:ux` | Run the production build plus mobile and desktop Lighthouse CI |
+| `npm run verify:ux` | Run the production build plus public and authenticated-admin Lighthouse CI (mobile + desktop) |
 | `npm run agent:check` | Required full agent gate for UI work: tests, lint, build, and Lighthouse CI |
 | `npm run lint` | Run ESLint |
 | `npm test` | Run Vitest suite |

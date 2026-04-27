@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 
 import { ProductSimilarPanel } from "@/components/admin/product-similar-panel";
 import { ProductStepper } from "@/components/admin/product-stepper/stepper";
-import { mapProductToStepperValues } from "@/components/admin/product-stepper/types";
+import {
+  mapProductToStepperValues,
+  type ProductStepperMedia,
+} from "@/components/admin/product-stepper/types";
 import { getProduct } from "@/db/queries/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 
@@ -33,9 +36,7 @@ export default async function EditProductPage({
         url,
       };
     })
-    .filter((media): media is { filename: string; id: string; url: string } =>
-      Boolean(media)
-    );
+    .filter((media): media is ProductStepperMedia => Boolean(media));
 
   return (
     <div className="space-y-6">
