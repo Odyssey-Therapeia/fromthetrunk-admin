@@ -114,6 +114,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.24",
+    "chrome-launcher": "^0.13.4",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "husky": "^9.1.7",
