@@ -82,6 +82,16 @@ const getErrorMessage = (error: unknown) => (
   typeof error === "string" ? error : undefined
 );
 
+const isProductStockStatus = (value: unknown): value is ProductStockStatus => (
+  typeof value === "string" && value in productStockStatusLabels
+);
+
+const isPublishingStatus = (
+  value: unknown
+): value is ProductStepperValues["status"] => (
+  value === "draft" || value === "published"
+);
+
 type AvailabilityFieldsProps = {
   form: ProductStepperForm;
   onStockStatusChange: (stockStatus: ProductStockStatus) => void;
@@ -103,7 +113,11 @@ function AvailabilityFields({
     <div className="space-y-2 @md:col-span-2">
       <Label htmlFor="stock-status">Availability</Label>
       <Select
-        onValueChange={(value) => onStockStatusChange(value as ProductStockStatus)}
+        onValueChange={(value) => {
+          if (isProductStockStatus(value)) {
+            onStockStatusChange(value);
+          }
+        }}
         value={stockStatus}
       >
         <SelectTrigger id="stock-status">
@@ -250,7 +264,11 @@ export function StepPricing({
             <AvailabilityFields
               form={form}
               onStockStatusChange={handleStockStatusChange}
-              stockStatus={field.state.value as ProductStockStatus}
+              stockStatus={
+                isProductStockStatus(field.state.value)
+                  ? field.state.value
+                  : "available"
+              }
             />
           )}
         </form.Field>
@@ -260,9 +278,11 @@ export function StepPricing({
             <div className="space-y-2">
               <Label>Publishing status</Label>
               <Select
-                onValueChange={(value) =>
-                  field.handleChange(value as ProductStepperValues["status"])
-                }
+                onValueChange={(value) => {
+                  if (isPublishingStatus(value)) {
+                    field.handleChange(value);
+                  }
+                }}
                 value={field.state.value}
               >
                 <SelectTrigger>

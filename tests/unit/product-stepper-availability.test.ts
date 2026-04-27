@@ -85,6 +85,23 @@ describe("product stepper availability", () => {
     });
   });
 
+  it("adds a sold timestamp during save normalization when one is missing", () => {
+    const values = getAvailabilitySaveFields(
+      {
+        reservedUntil: "2026-04-25T09:00:00.000Z",
+        soldAt: null,
+        stockStatus: "sold",
+      },
+      new Date("2026-04-27T10:00:00.000Z")
+    );
+
+    expect(values).toEqual({
+      reservedUntil: null,
+      soldAt: "2026-04-27T10:00:00.000Z",
+      stockStatus: "sold",
+    });
+  });
+
   it("clears sold and reserved timestamps when returning to available", () => {
     const values = applyStockStatusChange(
       {

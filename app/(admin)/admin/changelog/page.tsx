@@ -18,8 +18,15 @@ const releaseDateFormatter = new Intl.DateTimeFormat("en-IN", {
   timeZone: "UTC",
 });
 
-const formatReleaseDate = (releaseDate: string) =>
-  releaseDateFormatter.format(new Date(`${releaseDate}T00:00:00.000Z`));
+const formatReleaseDate = (releaseDate: string) => {
+  const parsedDate = new Date(`${releaseDate}T00:00:00.000Z`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return releaseDate;
+  }
+
+  return releaseDateFormatter.format(parsedDate);
+};
 
 function ChangelogHeader() {
   return (

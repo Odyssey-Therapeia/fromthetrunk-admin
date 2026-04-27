@@ -110,16 +110,19 @@ export function applyStockStatusChange(
  * Normalizes availability fields before saving a product.
  *
  * @param values - Product availability values from the admin form.
+ * @param now - Reference time used when sold stock has no soldAt timestamp.
+ * Defaults to the current time.
  * @returns A normalized availability payload with impossible timestamp
  * combinations removed.
  *
  * Core invariants:
  * - available products cannot keep reservedUntil or soldAt.
- * - sold products cannot keep reservedUntil.
+ * - sold products cannot keep reservedUntil and must have soldAt.
  * - reserved products cannot keep soldAt.
  */
 export function getAvailabilitySaveFields(
-  values: ProductAvailabilityFields
+  values: ProductAvailabilityFields,
+  now = new Date()
 ): ProductAvailabilityFields {
   if (values.stockStatus === "available") {
     return {
@@ -132,7 +135,7 @@ export function getAvailabilitySaveFields(
   if (values.stockStatus === "sold") {
     return {
       reservedUntil: null,
-      soldAt: values.soldAt,
+      soldAt: values.soldAt || currentIsoTimestamp(now),
       stockStatus: "sold",
     };
   }

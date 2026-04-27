@@ -5,7 +5,8 @@ type NumberEnvOptions = {
 /**
  * Reads a numeric environment override with a safe fallback.
  *
- * @param name - Environment variable name to read from process.env.
+ * @param name - Environment variable name used in validation errors.
+ * @param rawValue - Direct process.env value read at the export call site.
  * @param fallback - Number to use when the environment variable is missing or blank.
  * @param options - Parsing options. `allowZero` defaults to true.
  * @returns The parsed finite number, or the fallback when the variable is empty.
@@ -16,10 +17,10 @@ type NumberEnvOptions = {
  */
 const parseNumberEnv = (
   name: string,
+  rawValue: string | undefined,
   fallback: number,
   { allowZero = true }: NumberEnvOptions = {}
 ) => {
-  const rawValue = process.env[name];
   const value =
     rawValue && rawValue.trim().length > 0 ? Number(rawValue) : fallback;
 
@@ -39,7 +40,8 @@ const parseNumberEnv = (
 /**
  * Reads a decimal-rate environment override.
  *
- * @param name - Environment variable name to read from process.env.
+ * @param name - Environment variable name used in validation errors.
+ * @param rawValue - Direct process.env value read at the export call site.
  * @param fallback - Decimal rate to use when the environment variable is missing or blank.
  * @returns A finite decimal rate in the inclusive range 0 to 1.
  *
@@ -47,8 +49,12 @@ const parseNumberEnv = (
  * function throws for the same invalid number cases as `parseNumberEnv`, and
  * also throws when the parsed rate is greater than 1.
  */
-const parseRateEnv = (name: string, fallback: number) => {
-  const value = parseNumberEnv(name, fallback);
+const parseRateEnv = (
+  name: string,
+  rawValue: string | undefined,
+  fallback: number
+) => {
+  const value = parseNumberEnv(name, rawValue, fallback);
 
   if (value > 1) {
     throw new Error(`${name} must be a decimal rate between 0 and 1.`);
@@ -58,18 +64,36 @@ const parseRateEnv = (name: string, fallback: number) => {
 };
 
 /** GST rate for textile and apparel products in India. */
-export const GST_RATE = parseRateEnv("NEXT_PUBLIC_FTT_GST_RATE", 0.12);
+export const GST_RATE = parseRateEnv(
+  "NEXT_PUBLIC_FTT_GST_RATE",
+  process.env.NEXT_PUBLIC_FTT_GST_RATE,
+  0.12
+);
 
 /** Shipping cost tiers in INR. */
 export const SHIPPING_TIERS = {
   /** Free shipping threshold in INR. */
-  freeThreshold: parseNumberEnv("NEXT_PUBLIC_FTT_SHIPPING_FREE_THRESHOLD", 25000),
-  standard: parseNumberEnv("NEXT_PUBLIC_FTT_SHIPPING_STANDARD", 500, {
-    allowZero: false,
-  }),
-  express: parseNumberEnv("NEXT_PUBLIC_FTT_SHIPPING_EXPRESS", 1200, {
-    allowZero: false,
-  }),
+  freeThreshold: parseNumberEnv(
+    "NEXT_PUBLIC_FTT_SHIPPING_FREE_THRESHOLD",
+    process.env.NEXT_PUBLIC_FTT_SHIPPING_FREE_THRESHOLD,
+    25000
+  ),
+  standard: parseNumberEnv(
+    "NEXT_PUBLIC_FTT_SHIPPING_STANDARD",
+    process.env.NEXT_PUBLIC_FTT_SHIPPING_STANDARD,
+    500,
+    {
+      allowZero: false,
+    }
+  ),
+  express: parseNumberEnv(
+    "NEXT_PUBLIC_FTT_SHIPPING_EXPRESS",
+    process.env.NEXT_PUBLIC_FTT_SHIPPING_EXPRESS,
+    1200,
+    {
+      allowZero: false,
+    }
+  ),
 } as const;
 
 export type ShippingMethod = Exclude<keyof typeof SHIPPING_TIERS, "freeThreshold">;
