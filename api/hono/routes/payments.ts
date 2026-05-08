@@ -12,7 +12,12 @@ import { sendEmail } from "@/lib/email/send";
 import { orderConfirmationEmail } from "@/lib/email/templates";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
-import { getRazorpayInstance, verifyPaymentSignature } from "@/lib/payments/razorpay";
+import {
+  getRazorpayInstance,
+  isRazorpayAuthError,
+  RAZORPAY_MIN_AMOUNT_PAISE,
+  verifyPaymentSignature,
+} from "@/lib/payments/razorpay";
 
 const toShippingCostPaise = (subtotalPaise: number, shippingMethod: "express" | "standard") => {
   const freeThresholdPaise = SHIPPING_TIERS.freeThreshold * 100;
@@ -104,21 +109,54 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const taxAmountPaise = Math.round(subtotalPaise * GST_RATE);
       const totalPaise = subtotalPaise + shippingCostPaise + taxAmountPaise;
 
-      const razorpay = getRazorpayInstance();
-      const razorpayOrder = await razorpay.orders.create({
-        amount: totalPaise,
-        currency: "INR",
-        notes: {
-          userId: authUserOrResponse.id,
-        },
-        receipt: `ftt_${Date.now()}`,
-      });
+      if (totalPaise < RAZORPAY_MIN_AMOUNT_PAISE) {
+        return c.json(
+          {
+            code: "AMOUNT_TOO_LOW",
+            message: "Razorpay orders must be at least 100 paise.",
+          },
+          400
+        );
+      }
+
+      let razorpayOrderId: string;
+      try {
+        const razorpay = getRazorpayInstance();
+        const razorpayOrder = await razorpay.orders.create({
+          amount: totalPaise,
+          currency: "INR",
+          notes: {
+            userId: authUserOrResponse.id,
+          },
+          receipt: `ftt_${Date.now()}`,
+        });
+        razorpayOrderId = razorpayOrder.id;
+      } catch (error) {
+        if (isRazorpayAuthError(error)) {
+          return c.json(
+            {
+              code: "RAZORPAY_AUTH_FAILED",
+              message: "Razorpay authentication failed.",
+            },
+            401
+          );
+        }
+
+        console.error("[payments:create-order] Razorpay order creation failed:", error);
+        return c.json(
+          {
+            code: "RAZORPAY_ORDER_CREATE_FAILED",
+            message: "Unable to create Razorpay order.",
+          },
+          500
+        );
+      }
 
       const order = await createOrder({
         items: normalizedItems,
         paymentGateway: "razorpay",
         paymentStatus: "pending",
-        razorpayOrderId: razorpayOrder.id,
+        razorpayOrderId,
         shippingCity: body.shippingAddress.city,
         shippingCostPaise,
         shippingCountry: body.shippingAddress.country,
@@ -141,10 +179,12 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
       return c.json(
         {
           amountPaise: totalPaise,
+          amount: totalPaise,
           currency: "INR",
+          order_id: razorpayOrderId,
           orderId: order.id,
-          razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-          razorpayOrderId: razorpayOrder.id,
+          razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID,
+          razorpayOrderId,
         },
         200
       );
@@ -181,6 +221,22 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (authUserOrResponse instanceof Response) return authUserOrResponse;
 
       const body = c.req.valid("json");
+      const order = await getOrder(body.orderId);
+      if (!order) {
+        return c.json({ code: "ORDER_NOT_FOUND", message: "Order not found." }, 404);
+      }
+
+      if (order.userId !== authUserOrResponse.id) {
+        return c.json({ code: "FORBIDDEN", message: "Order does not belong to this user." }, 403);
+      }
+
+      if (order.razorpayOrderId !== body.razorpayOrderId) {
+        return c.json(
+          { code: "ORDER_ID_MISMATCH", message: "Payment does not match this order." },
+          400
+        );
+      }
+
       const isValid = verifyPaymentSignature({
         orderId: body.razorpayOrderId,
         paymentId: body.razorpayPaymentId,
@@ -190,9 +246,15 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
         return c.json({ code: "INVALID_SIGNATURE", message: "Payment verification failed." }, 400);
       }
 
-      const order = await getOrder(body.orderId);
-      if (!order) {
-        return c.json({ code: "ORDER_NOT_FOUND", message: "Order not found." }, 404);
+      if (order.paymentStatus === "paid" && order.paymentId === body.razorpayPaymentId) {
+        return c.json(
+          {
+            orderId: body.orderId,
+            status: order.status,
+            verified: true,
+          },
+          200
+        );
       }
 
       const productIds = order.items

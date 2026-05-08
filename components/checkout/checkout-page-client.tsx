@@ -42,12 +42,56 @@ interface FormErrors {
 
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => {
+    Razorpay: new (options: RazorpayOptions) => {
       open: () => void;
-      on: (event: string, handler: (response: Record<string, unknown>) => void) => void;
+      on: (event: "payment.failed", handler: (response: RazorpayFailureResponse) => void) => void;
     };
   }
 }
+
+type CreatePaymentOrderResponse = {
+  amount?: number;
+  amountPaise: number;
+  currency: string;
+  order_id?: string;
+  orderId: string;
+  razorpayKeyId?: string;
+  razorpayOrderId: string;
+};
+
+type RazorpaySuccessResponse = {
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+};
+
+type RazorpayFailureResponse = {
+  error?: {
+    description?: string;
+    reason?: string;
+  };
+};
+
+type RazorpayOptions = {
+  amount: number;
+  currency: string;
+  description: string;
+  handler: (response: RazorpaySuccessResponse) => Promise<void>;
+  key: string;
+  modal: {
+    ondismiss: () => void;
+  };
+  name: string;
+  order_id: string;
+  prefill: {
+    contact: string;
+    email: string;
+    name: string;
+  };
+  theme: {
+    color: string;
+  };
+};
 
 export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const router = useRouter();
@@ -60,6 +104,8 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isPaymentScriptReady, setIsPaymentScriptReady] = useState(false);
+  const [paymentScriptError, setPaymentScriptError] = useState<string | null>(null);
   const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("standard");
 
   const { data: savedAddresses } = useQuery({
@@ -104,12 +150,40 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   }, [session?.user?.email]);
 
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
+    if (window.Razorpay) {
+      setIsPaymentScriptReady(true);
+      return;
+    }
+
+    const scriptSrc = "https://checkout.razorpay.com/v1/checkout.js";
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${scriptSrc}"]`);
+    const wasExistingScript = Boolean(script);
+
+    if (!script) {
+      script = document.createElement("script");
+      script.src = scriptSrc;
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
+    const handleLoad = () => {
+      setPaymentScriptError(null);
+      setIsPaymentScriptReady(true);
+    };
+    const handleError = () => {
+      setIsPaymentScriptReady(false);
+      setPaymentScriptError("Payment system could not load. Please refresh and try again.");
+    };
+
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleError);
+
     return () => {
-      document.body.removeChild(script);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+      if (!wasExistingScript && script.parentElement) {
+        script.parentElement.removeChild(script);
+      }
     };
   }, []);
 
@@ -150,6 +224,14 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
     setError(null);
 
     try {
+      if (paymentScriptError) {
+        throw new Error(paymentScriptError);
+      }
+
+      if (!isPaymentScriptReady || !window.Razorpay) {
+        throw new Error("Payment system is still loading. Please try again in a moment.");
+      }
+
       const orderPayload = {
         items: items.map((item) => ({
           productId: item.id,
@@ -179,14 +261,15 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         throw new Error(errorData?.message || "Unable to create order.");
       }
 
-      const orderData = await createResponse.json();
-
-      if (!window.Razorpay) {
-        throw new Error("Payment system is loading. Please try again.");
+      const orderData = (await createResponse.json()) as CreatePaymentOrderResponse;
+      const razorpayKeyId =
+        orderData.razorpayKeyId ?? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      if (!razorpayKeyId) {
+        throw new Error("Razorpay key is not configured.");
       }
 
-      const options: Record<string, unknown> = {
-        key: orderData.razorpayKeyId,
+      const options: RazorpayOptions = {
+        key: razorpayKeyId,
         amount: orderData.amountPaise,
         currency: orderData.currency,
         name: "FTT Luxury Group",
@@ -200,21 +283,32 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         theme: {
           color: "#6B1D1D",
         },
-        handler: async (response: Record<string, unknown>) => {
+        handler: async (response) => {
           try {
+            const {
+              razorpay_order_id: razorpayOrderId,
+              razorpay_payment_id: razorpayPaymentId,
+              razorpay_signature: razorpaySignature,
+            } = response;
+
+            if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+              throw new Error("Razorpay returned an incomplete payment response.");
+            }
+
             const verifyResponse = await fetch("/api/v2/payments/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 orderId: orderData.orderId,
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
+                razorpayOrderId,
+                razorpayPaymentId,
+                razorpaySignature,
               }),
             });
 
             if (!verifyResponse.ok) {
-              throw new Error("Payment verification failed.");
+              const errorData = await verifyResponse.json().catch(() => null);
+              throw new Error(errorData?.message || "Payment verification failed.");
             }
 
             clearCart();
@@ -234,8 +328,12 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", () => {
-        setError("Payment failed. Please try again.");
+      rzp.on("payment.failed", (response) => {
+        const message =
+          response.error?.description ||
+          response.error?.reason ||
+          "Payment failed. Please try again.";
+        setError(message);
         setIsSubmitting(false);
       });
       rzp.open();

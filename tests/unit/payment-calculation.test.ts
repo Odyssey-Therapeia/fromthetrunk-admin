@@ -1,7 +1,8 @@
+import crypto from "crypto";
 import { describe, expect, it } from "vitest";
 
 import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
-import { calculateOrderTotals } from "@/lib/payments/razorpay";
+import { calculateOrderTotals, verifyPaymentSignature } from "@/lib/payments/razorpay";
 
 describe("calculateOrderTotals", () => {
   it("calculates standard shipping + GST for small order", () => {
@@ -49,5 +50,46 @@ describe("calculateOrderTotals", () => {
 
     // At exactly the threshold, shipping should be free
     expect(result.shippingCost).toBe(0);
+  });
+});
+
+describe("verifyPaymentSignature", () => {
+  const withRazorpaySecret = (secret: string, test: () => void) => {
+    const originalSecret = process.env.RAZORPAY_KEY_SECRET;
+    process.env.RAZORPAY_KEY_SECRET = secret;
+    try {
+      test();
+    } finally {
+      if (originalSecret === undefined) {
+        delete process.env.RAZORPAY_KEY_SECRET;
+      } else {
+        process.env.RAZORPAY_KEY_SECRET = originalSecret;
+      }
+    }
+  };
+
+  it("accepts a valid Razorpay order/payment HMAC", () => {
+    withRazorpaySecret("test_secret", () => {
+      const orderId = "order_test";
+      const paymentId = "pay_test";
+      const signature = crypto
+        .createHmac("sha256", "test_secret")
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
+
+      expect(verifyPaymentSignature({ orderId, paymentId, signature })).toBe(true);
+    });
+  });
+
+  it("rejects a mismatched Razorpay signature", () => {
+    withRazorpaySecret("test_secret", () => {
+      expect(
+        verifyPaymentSignature({
+          orderId: "order_test",
+          paymentId: "pay_test",
+          signature: "0".repeat(64),
+        })
+      ).toBe(false);
+    });
   });
 });
