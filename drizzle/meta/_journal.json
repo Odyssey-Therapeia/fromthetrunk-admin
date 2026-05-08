@@ -15,6 +15,13 @@
       "when": 1776105383475,
       "tag": "0001_absurd_mandrill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778259000000,
+      "tag": "0003_orders_legacy_checkout_sync",
+      "breakpoints": true
     }
   ]
 }
