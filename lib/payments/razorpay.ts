@@ -3,7 +3,25 @@ import Razorpay from "razorpay";
 
 import { GST_RATE, SHIPPING_TIERS, type ShippingMethod } from "@/lib/config/order-pricing";
 
+export const RAZORPAY_MIN_AMOUNT_PAISE = 100;
+
 let instance: Razorpay | null = null;
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
+
+const readNumber = (value: unknown, key: string): number | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+  const raw = record[key];
+  return typeof raw === "number" ? raw : null;
+};
+
+export function isRazorpayAuthError(error: unknown): boolean {
+  const directStatus = readNumber(error, "statusCode");
+  const nestedStatus = readNumber(asRecord(error)?.error, "statusCode");
+  return directStatus === 401 || nestedStatus === 401;
+}
 
 export function getRazorpayInstance(): Razorpay {
   if (!instance) {
@@ -48,7 +66,10 @@ export function verifyPaymentSignature({
     .update(body)
     .digest("hex");
 
-  return expectedSignature === signature;
+  const expected = Buffer.from(expectedSignature, "hex");
+  const received = Buffer.from(signature, "hex");
+
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 /**
