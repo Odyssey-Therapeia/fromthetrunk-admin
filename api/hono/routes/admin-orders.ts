@@ -6,7 +6,7 @@ import { idParamSchema } from "@/api/hono/schemas/common";
 import { orderStatusPatchSchema } from "@/api/hono/schemas/orders";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
-import { addOrderEvent, getOrder, updateOrderStatus } from "@/db/queries/orders";
+import { getOrder, updateOrderStatus } from "@/db/queries/orders";
 import { orders } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import { orderShippedEmail } from "@/lib/email/templates";
@@ -56,7 +56,6 @@ export const registerAdminOrderRoutes = (app: OpenAPIHono<HonoBindings>) => {
         .update(orders)
         .set({ updatedAt: new Date() })
         .where(eq(orders.id, id));
-      await addOrderEvent(id, body.note ?? "Status updated by admin", body.status, null);
 
       if (body.status === "shipped" && order.shippingEmail) {
         const email = orderShippedEmail(
