@@ -243,7 +243,6 @@ export const orders = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id")
-      .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     subtotalPaise: integer("subtotal_paise").notNull(),
     shippingCostPaise: integer("shipping_cost_paise").notNull().default(0),

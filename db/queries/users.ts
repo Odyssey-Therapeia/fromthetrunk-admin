@@ -1,7 +1,7 @@
 import { desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
-import { getFirstRow } from "@/db/results";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 
 type AddressRecord = InferSelectModel<typeof addresses>;
@@ -14,6 +14,12 @@ export type UserWithDefaultAddress = UserRecord & {
 export type UpdateUserInput = Partial<
   Omit<InferInsertModel<typeof users>, "createdAt" | "id" | "updatedAt">
 >;
+
+export type CheckoutCustomerInput = {
+  email: string;
+  name?: string | null;
+  phone?: string | null;
+};
 
 const hydrateUsers = async (rows: UserRecord[]): Promise<UserWithDefaultAddress[]> => {
   if (rows.length === 0) return [];
@@ -83,6 +89,52 @@ export const getUserByEmail = async (email: string): Promise<UserWithDefaultAddr
   if (!row) return null;
   const [hydrated] = await hydrateUsers([row]);
   return hydrated ?? null;
+};
+
+export const getOrCreateCheckoutCustomer = async ({
+  email,
+  name,
+  phone,
+}: CheckoutCustomerInput): Promise<UserWithDefaultAddress | null> => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await getUserByEmail(normalizedEmail);
+  if (existing) {
+    if (existing.passwordHash) return null;
+    return existing;
+  }
+
+  try {
+    const created = requireFirstRow(
+      await db
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          metadata: {
+            source: "checkout",
+          },
+          name: name?.trim() || null,
+          phone: phone?.trim() || null,
+          role: "customer",
+          updatedAt: new Date(),
+        })
+        .returning(),
+      "Failed to create checkout customer."
+    );
+
+    const [hydrated] = await hydrateUsers([created]);
+    if (!hydrated) {
+      throw new Error("Failed to load checkout customer.");
+    }
+
+    return hydrated;
+  } catch (error) {
+    const raced = await getUserByEmail(normalizedEmail);
+    if (raced) {
+      if (raced.passwordHash) return null;
+      return raced;
+    }
+    throw error;
+  }
 };
 
 export const updateUser = async (
