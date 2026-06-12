@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
-import { addOrderEvent } from "@/db/queries/orders";
+import { addOrderEvent, getOrder } from "@/db/queries/orders";
 import { orders, products } from "@/db/schema";
+import { completePaidOrder } from "@/lib/orders/complete-paid-order";
 
 type RazorpayWebhookEvent = {
   event: string;
@@ -15,6 +16,14 @@ type RazorpayWebhookEvent = {
         id?: string;
         method?: string;
         order_id?: string;
+      };
+    };
+    payment_link?: {
+      entity?: {
+        id?: string;
+        reference_id?: string;
+        short_url?: string;
+        status?: string;
       };
     };
     refund?: {
@@ -35,6 +44,16 @@ const findOrderByRazorpayOrderId = async (razorpayOrderId: string) => {
   return order ?? null;
 };
 
+const findOrderByRazorpayReference = async (razorpayReference: string) => {
+  const [order] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.razorpayOrderId, razorpayReference))
+    .limit(1);
+
+  return order ? getOrder(order.id) : null;
+};
+
 const findOrderByPaymentId = async (paymentId: string) => {
   const [order] = await db
     .select()
@@ -43,6 +62,36 @@ const findOrderByPaymentId = async (paymentId: string) => {
     .limit(1);
 
   return order ?? null;
+};
+
+const releaseOrderReservation = async (orderId: string, eventNote: string) => {
+  const order = await getOrder(orderId);
+  if (!order || order.paymentStatus === "paid") return;
+
+  const productIds = order.items
+    .map((item) => item.productId)
+    .filter((id): id is string => Boolean(id));
+
+  if (productIds.length > 0) {
+    await db
+      .update(products)
+      .set({
+        reservedUntil: null,
+        stockStatus: "available",
+        updatedAt: new Date(),
+      })
+      .where(and(inArray(products.id, productIds), eq(products.stockStatus, "reserved")));
+  }
+
+  await db
+    .update(orders)
+    .set({
+      paymentStatus: "failed",
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, order.id));
+
+  await addOrderEvent(order.id, eventNote, order.status, null);
 };
 
 export const registerWebhookRoutes = (app: OpenAPIHono<HonoBindings>) => {
@@ -79,7 +128,9 @@ export const registerWebhookRoutes = (app: OpenAPIHono<HonoBindings>) => {
         .createHmac("sha256", webhookSecret)
         .update(rawBody)
         .digest("hex");
-      if (expectedSignature !== signature) {
+      const expectedBuf = Buffer.from(expectedSignature);
+      const actualBuf = Buffer.from(signature);
+      if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
         return c.json(
           {
             code: "INVALID_SIGNATURE",
@@ -91,6 +142,35 @@ export const registerWebhookRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const event = JSON.parse(rawBody) as RazorpayWebhookEvent;
       switch (event.event) {
+        case "payment_link.paid": {
+          const payment = event.payload?.payment?.entity;
+          const paymentLink = event.payload?.payment_link?.entity;
+          if (!payment?.id || !paymentLink?.id) break;
+
+          const order = await findOrderByRazorpayReference(paymentLink.id);
+          if (!order) break;
+
+          await completePaidOrder({
+            orderId: order.id,
+            paymentId: payment.id,
+            paymentMethod: payment.method ?? "razorpay_payment_link",
+            paymentReference: paymentLink.id,
+            paymentUrl: paymentLink.short_url,
+            source: "Razorpay payment link webhook",
+          });
+          break;
+        }
+        case "payment_link.cancelled":
+        case "payment_link.expired": {
+          const paymentLink = event.payload?.payment_link?.entity;
+          if (!paymentLink?.id) break;
+
+          const order = await findOrderByRazorpayReference(paymentLink.id);
+          if (!order) break;
+
+          await releaseOrderReservation(order.id, `Webhook ${event.event}`);
+          break;
+        }
         case "payment.captured": {
           const payment = event.payload?.payment?.entity;
           if (!payment?.order_id || !payment.id) break;
@@ -98,19 +178,12 @@ export const registerWebhookRoutes = (app: OpenAPIHono<HonoBindings>) => {
           const order = await findOrderByRazorpayOrderId(payment.order_id);
           if (!order) break;
 
-          await db
-            .update(orders)
-            .set({
-              paymentId: payment.id,
-              paymentMethod: payment.method ?? "razorpay",
-              paymentStatus: "paid",
-              status: "confirmed",
-              updatedAt: new Date(),
-            })
-            .where(eq(orders.id, order.id));
-
-          await addOrderEvent(order.id, "Webhook payment.captured", "confirmed", {
+          await completePaidOrder({
+            orderId: order.id,
             paymentId: payment.id,
+            paymentMethod: payment.method ?? "razorpay",
+            paymentReference: payment.order_id,
+            source: "Razorpay payment.captured webhook",
           });
           break;
         }
@@ -129,16 +202,7 @@ export const registerWebhookRoutes = (app: OpenAPIHono<HonoBindings>) => {
             })
             .where(eq(orders.id, order.id));
 
-          await db
-            .update(products)
-            .set({
-              reservedUntil: null,
-              stockStatus: "available",
-              updatedAt: new Date(),
-            })
-            .where(eq(products.stockStatus, "reserved"));
-
-          await addOrderEvent(order.id, "Webhook payment.failed", order.status, null);
+          await releaseOrderReservation(order.id, "Webhook payment.failed");
           break;
         }
         case "refund.processed": {
