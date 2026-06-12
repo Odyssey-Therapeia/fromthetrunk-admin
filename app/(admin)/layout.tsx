@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import "../globals.css";
 import { AdminSidebar } from "@/components/admin/sidebar";
@@ -59,6 +60,7 @@ export default async function AdminLayout({
           />
           <AgentPanelProvider />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Cormorant_Garamond, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import "../globals.css";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <SiteFooter />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
