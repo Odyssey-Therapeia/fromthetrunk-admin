@@ -1,71 +1,25 @@
-"use client";
-
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { formatINR } from "@/db/money";
+import { getOrder } from "@/db/queries/orders";
 
-type OrderEvent = {
-  createdAt: string;
-  id: string;
-  note: string;
-  payload: null | Record<string, unknown>;
-  status: string;
+import { OrderStatusEditor } from "./order-status-editor";
+
+type AdminOrderDetailPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
 };
 
-type OrderItem = {
-  id: string;
-  name: string;
-  pricePaise: number;
-  productId: null | string;
-  quantity: number;
-};
+type EventPayload = null | Record<string, unknown>;
 
-type Order = {
-  createdAt: string;
-  events: OrderEvent[];
-  id: string;
-  items: OrderItem[];
-  paymentGateway: null | string;
-  paymentId: null | string;
-  paymentMethod: null | string;
-  paymentStatus: string;
-  razorpayOrderId: null | string;
-  shippingCity: null | string;
-  shippingCountry: null | string;
-  shippingEmail: null | string;
-  shippingLine1: null | string;
-  shippingLine2: null | string;
-  shippingName: null | string;
-  shippingPhone: null | string;
-  shippingPostalCode: null | string;
-  shippingState: null | string;
-  status: "pending" | "confirmed" | "shipped" | "delivered";
-  subtotalPaise: number;
-  taxAmountPaise: number;
-  totalPaise: number;
-  updatedAt: string;
-};
-
-const statusOptions: Array<Order["status"]> = ["pending", "confirmed", "shipped", "delivered"];
-
-const formatDateTime = (value: string) =>
+const formatDateTime = (value: Date | string | null | undefined) =>
   value
     ? new Intl.DateTimeFormat("en-IN", {
         dateStyle: "medium",
@@ -90,8 +44,8 @@ const badgeClassName = (status: string) => {
   }
 };
 
-const payloadSummary = (payload: OrderEvent["payload"]) => {
-  if (!payload) return null;
+const payloadSummary = (payload: EventPayload) => {
+  if (!payload || typeof payload !== "object") return null;
 
   const paymentId = typeof payload.paymentId === "string" ? payload.paymentId : null;
   const paymentReference =
@@ -99,94 +53,26 @@ const payloadSummary = (payload: OrderEvent["payload"]) => {
   const paymentLinkId =
     typeof payload.paymentLinkId === "string" ? payload.paymentLinkId : null;
 
-  return [paymentId, paymentReference, paymentLinkId].filter(Boolean).join(" · ") || null;
+  return [paymentId, paymentReference, paymentLinkId].filter(Boolean).join(" | ") || null;
 };
 
-export default function AdminOrderDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
-  const [statusDraft, setStatusDraft] = useState<null | Order["status"]>(null);
-  const [note, setNote] = useState("");
-  const [statusError, setStatusError] = useState<null | string>(null);
-  const [isSavingStatus, setIsSavingStatus] = useState(false);
+export default async function AdminOrderDetailPage({
+  params,
+}: AdminOrderDetailPageProps) {
+  const { id } = await params;
+  const order = await getOrder(id);
 
-  const loadOrder = async (): Promise<Order> => {
-    const response = await fetch(`/api/v2/orders/${id}`);
-    if (!response.ok) {
-      throw new Error("Unable to load order.");
-    }
-    return (await response.json()) as Order;
-  };
-
-  const {
-    data: order,
-    error,
-    isLoading,
-    isRefetching,
-    refetch,
-  } = useQuery({
-    enabled: Boolean(id),
-    queryFn: loadOrder,
-    queryKey: ["admin-order", id],
-  });
-
-  if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading order...</p>;
+  if (!order) {
+    notFound();
   }
 
-  if (error || !order) {
-    return (
-      <div className="space-y-4">
-        <Button asChild size="sm" variant="ghost">
-          <Link href="/admin/orders">
-            <ArrowLeft />
-            Back to orders
-          </Link>
-        </Button>
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {error instanceof Error ? error.message : "Order not found."}
-        </div>
-      </div>
-    );
-  }
-
-  const selectedStatus = statusDraft ?? order.status;
-  const subtotal = order.items.reduce(
+  const items = order.items ?? [];
+  const events = order.events ?? [];
+  const subtotal = items.reduce(
     (sum, item) => sum + item.pricePaise * item.quantity,
     0
   );
   const shippingPaise = Math.max(order.totalPaise - subtotal - order.taxAmountPaise, 0);
-
-  const handleSaveStatus = async () => {
-    setIsSavingStatus(true);
-    setStatusError(null);
-
-    try {
-      const response = await fetch(`/api/v2/admin/orders/${order.id}/status`, {
-        body: JSON.stringify({
-          note: note.trim() || undefined,
-          status: selectedStatus,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "PATCH",
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || "Unable to update order status.");
-      }
-
-      setStatusDraft(null);
-      setNote("");
-      await refetch();
-    } catch (saveError) {
-      setStatusError(saveError instanceof Error ? saveError.message : "Unable to update status.");
-    } finally {
-      setIsSavingStatus(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -203,7 +89,7 @@ export default function AdminOrderDetailPage() {
               Order #{order.id.slice(0, 8).toUpperCase()}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Created {formatDateTime(order.createdAt)} · Updated {formatDateTime(order.updatedAt)}
+              Created {formatDateTime(order.createdAt)} | Updated {formatDateTime(order.updatedAt)}
             </p>
           </div>
         </div>
@@ -214,16 +100,6 @@ export default function AdminOrderDetailPage() {
           <Badge className={badgeClassName(order.paymentStatus)} variant="outline">
             {order.paymentStatus}
           </Badge>
-          <Button
-            disabled={isRefetching}
-            onClick={() => void refetch()}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <RefreshCw className={isRefetching ? "animate-spin" : ""} />
-            Refresh
-          </Button>
         </div>
       </div>
 
@@ -234,24 +110,28 @@ export default function AdminOrderDetailPage() {
               <CardTitle>Items</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {order.items.map((item) => (
-                <div
-                  className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
-                  key={item.id}
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">{item.name}</p>
-                    {item.productId && (
-                      <p className="mt-1 font-mono text-xs text-muted-foreground">
-                        {item.productId}
-                      </p>
-                    )}
+              {items.length > 0 ? (
+                items.map((item) => (
+                  <div
+                    className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    key={item.id}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">{item.name}</p>
+                      {item.productId && (
+                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                          {item.productId}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {item.quantity} x {formatINR(item.pricePaise)}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {item.quantity} x {formatINR(item.pricePaise)}
-                  </p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No items recorded.</p>
+              )}
               <Separator />
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">
@@ -283,16 +163,16 @@ export default function AdminOrderDetailPage() {
               <CardTitle>Timeline</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {order.events.length > 0 ? (
-                order.events.map((event) => {
-                  const payload = payloadSummary(event.payload);
+              {events.length > 0 ? (
+                events.map((event) => {
+                  const payload = payloadSummary(event.payload as EventPayload);
                   return (
                     <div className="rounded-lg border border-border p-4" key={event.id}>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="text-sm font-medium">{event.note}</p>
                           {payload && (
-                            <p className="mt-1 font-mono text-xs text-muted-foreground">
+                            <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                               {payload}
                             </p>
                           )}
@@ -315,6 +195,15 @@ export default function AdminOrderDetailPage() {
         </div>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Update status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OrderStatusEditor initialStatus={order.status} orderId={order.id} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Customer</CardTitle>
@@ -368,47 +257,6 @@ export default function AdminOrderDetailPage() {
                   {order.razorpayOrderId ?? "-"}
                 </p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Update status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  onValueChange={(value) => setStatusDraft(value as Order["status"])}
-                  value={selectedStatus}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((statusOption) => (
-                      <SelectItem key={statusOption} value={statusOption}>
-                        {statusOption}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Note</Label>
-                <Input onChange={(event) => setNote(event.target.value)} value={note} />
-              </div>
-
-              {statusError && <p className="text-sm text-destructive">{statusError}</p>}
-
-              <Button
-                disabled={isSavingStatus || selectedStatus === order.status}
-                onClick={handleSaveStatus}
-                type="button"
-              >
-                {isSavingStatus ? "Saving..." : "Save status"}
-              </Button>
             </CardContent>
           </Card>
         </div>
