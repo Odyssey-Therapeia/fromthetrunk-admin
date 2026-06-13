@@ -18,7 +18,8 @@ Findings doc: catalogue every visual section on the current site (home, story, c
 
 ### P3-03: Public renderer route
 `app/(site)/[...slug]/page.tsx`: slug → published version → render; 404 on draft/missing; ISR/cache tags + revalidate-on-publish; generateMetadata from page SEO fields (reuse P1-17 truncation helper). Ladder: +L3, L4 (public page).
-- [ ]
+- [x] (2026-06-14, 5ac8bcc, "catch-all + resolve-page.ts: no draft-leak / no route-shadow (both mutation-proven load-bearing), renders via validated renderBlock, metadata safe-empty no-throw, ISR unstable_cache tag page:<slug>; 14 tests (670 suite); ACCEPT-WITH-MINORS. L3/L4 → #G-P3.")
+- [ ] P3-03a: tighten resolve-page guard tests (shipped draft/reserved tests pass via incidental paths — add a draft-WITH-version test exercising the status!=='published' guard + a published-page-at-reserved-slug test; both must fail if the guard is removed). Add 'collections' to reserved-slugs for consistency. Wire revalidateTag on publish = P3-06.
 
 ### P3-04: Pages admin — list/create/SEO
 Admin CRUD over pages (schema-form for SEO/settings), version history list with restore. Ladder: +L3.
