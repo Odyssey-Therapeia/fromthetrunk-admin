@@ -149,9 +149,18 @@
   - [x] emergency-fix slice committed (527bc02) — razorpay/recipients/proxy/checkout/confirmation; this UNBLOCKED the build (committed payments.ts imported undefined razorpay symbols → HEAD didn't compile).
   - [x] P1-test+migration slice committed (da16792) — payment-calc + json-ld tests, drizzle 0002 meta.
   - [x] Xeno NOT extracted-to-commit but EXCISED (a6676a9) — `git rm --cached` xeno-slack-agent + test + example; the untracked `lib/xeno/*` carries confidential data (real names, channel ID `C0B4S6V22LE`, 3rd-party email) → cannot ship. Files kept local for the socket bridge. Redaction list in STATE. Productionizing = #G-DOMAIN/#G-P1 follow-up.
-  - [x] PR sprint-abe→development opened (#35); stale #28 (sprint-abe→main, "Lighthouse") closed/superseded.
-  - [ ] `git merge origin/main` (sprint-abe is 9 behind) + resolve conflicts + re-run ladder. **Working tree still dirty**: admin-labs slice (admin/orders/page.tsx +526, nav-items, app/(admin)/admin/labs, components/admin/labs, app/api/admin), saree-try-on (lib/adapters/openai-saree-try-on + port + test), docs (.env.production.example has channel ID `C0B4S6V22LE` — redact before commit; docs/internal has local path + names), tooling-kit (.claude/.agents/.codex/.state) — DECIDE per-slice ship-to-main before/after the merge.
-  - [ ] PR development→main; then #G-P1 deploy gate.
+  - [x] PR sprint-abe→development (#35) opened AND MERGED (merge 6f371a9, functional CI green); stale #28 (sprint-abe→main, "Lighthouse") closed/superseded.
+  - [ ] **MAIN LEG — `development → main`** (next focused pass): merge `origin/main` (9 commits: #34 vercel-analytics, #32 admin-orders-crash + server-render, #30 razorpay-order-db-compat, #29 razorpay-hardening) into `development`. Trial merge done + ABORTED clean (no resolution applied). **Conflict map (25 hunks / 7 files)** + decisions:
+    - `app/(site)/layout.tsx` (2): **take ours** — P1-18 (Analytics+SpeedInsights+GTM) is a superset of main #34's bare Analytics.
+    - `app/(admin)/layout.tsx` (auto-merged, KEPT main's admin `<Analytics/>`): **remove it** — user decision: storefront-only analytics (delete import L5 + `<Analytics />` L76).
+    - `drizzle/meta/_journal.json` (1): known drift trap — `0002_agent_panel.sql` is out-of-band (never journaled); main idx2=`0003_orders_legacy_checkout_sync`, ours idx2=`0002_nullable-order-userid`. **Include BOTH** (4 entries, order by `when`: main's 0003 when=1778259000000 first, ours when=1781307955796 second) and note 0003 has no snapshot. Full drizzle-meta reconciliation = separate task (pre-existing drift); does NOT block build (next build doesn't read journal).
+    - `lib/payments/razorpay.ts` (3), `api/hono/routes/payments.ts` (5), `components/checkout/checkout-page-client.tsx` (2): money path — **reconcile, do NOT blind-take-ours**. Ours = P1-04/08/13 + emergency fix; main = #29 razorpay hardening + #30 legacy-DB compat. Must KEEP main's legacy-DB-compat (prod has legacy order rows) AND our emergency-fix/P1 logic. Verify with payment-calc + payments-route + webhooks-route tests after.
+    - `api/hono/routes/admin-orders.ts` (2): keep P1-05 isStatusChange guard + main's crash-fix.
+    - `app/(admin)/admin/orders/[id]/page.tsx` (10): per plan — keep main's SERVER component, port the P1-05 status editor as a client island.
+    - Dirty admin-orders LIST rewrite (`app/(admin)/admin/orders/page.tsx` +526, uncommitted) → **take main's** (user); rewrite stays in working tree for a later packet, not in this merge.
+    - Experimental/internal slices stay OFF prod main (user default): admin-labs, saree-try-on, ftt-hr-gmail-workflow, docs/internal, tooling-kit (.claude/.agents/.codex/.state).
+    - After resolve: clean-worktree `tsc`+`vitest` verify, push `development`, open `development→main` PR.
+  - [ ] #G-P1 deploy gate (prod promotion = user) + live guest-checkout smoke.
 
 ### #G-P1: USER CHECKPOINT — deploy & live smoke
 Present: diff summary, ladder evidence, preview-deploy guest-checkout e2e run (Playwright against preview URL: browse → checkout → payment link created), the Deno-app/Xeno relocation question, #G-DOMAIN tee-up. User approves prod promotion. Post-deploy: live smoke + confirm guest checkout works in production.
