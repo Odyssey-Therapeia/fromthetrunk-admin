@@ -160,6 +160,23 @@ export const products = pgTable(
     detailsWidth: text("details_width"),
     detailsCondition: text("details_condition"),
     detailsDesigner: text("details_designer"),
+    /**
+     * P4-01: Product type FK — nullable until all products are assigned a type.
+     * Forward-referenced: productTypes is declared above products in schema order.
+     * The migration adds this column with ADD COLUMN IF NOT EXISTS and the FK
+     * via a DO-block (idempotent; required because ADD CONSTRAINT IF NOT EXISTS
+     * is invalid Postgres syntax).
+     */
+    typeId: uuid("type_id").references((): AnyPgColumn => productTypes.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * P4-01: Attribute storage — JSON object keyed by attribute slug.
+     * Validated at the application layer via buildTypeZodSchema() from
+     * lib/catalog/type-schema.ts. Default {} means "no attributes yet".
+     * Dual-written alongside details* columns until P4-07 retires those columns.
+     */
+    attributes: jsonb("attributes").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -542,6 +559,39 @@ export const events = pgTable(
     eventIdUnique: uniqueIndex("events_event_id_unique").on(table.eventId),
     typeIdx: index("events_type_idx").on(table.type),
     occurredAtIdx: index("events_occurred_at_idx").on(table.occurredAt),
+  })
+);
+
+// ── P4-01: Product types + attribute validation ──────────────────────────────
+
+/**
+ * P4-01: Product type taxonomy.
+ *
+ * Each row defines a named product type (e.g. "preloved-saree", "blouse",
+ * "accessory") with a serialised attribute_defs array that drives:
+ *   1. Runtime zod validation via lib/catalog/type-schema.ts::buildTypeZodSchema()
+ *   2. The admin attribute form via SchemaFormField (P2-02) — same defs, no per-type UI code
+ *
+ * attribute_defs shape: AttributeDef[] (see lib/catalog/type-schema.ts).
+ * slug is unique — used as a stable external identifier.
+ */
+export const productTypes = pgTable(
+  "product_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    /**
+     * attribute_defs: AttributeDef[] — serialised as JSON.
+     * Each entry: { key, meta: FieldMeta, required: boolean }.
+     * Consumed by buildTypeZodSchema() and SchemaFormField.
+     */
+    attributeDefs: jsonb("attribute_defs").$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex("product_types_slug_unique").on(table.slug),
   })
 );
 
