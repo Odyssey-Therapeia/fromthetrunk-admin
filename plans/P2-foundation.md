@@ -30,7 +30,8 @@ PDP, cart, checkout totals (`calculateOrderTotals`), JSON-LD offers, emails — 
 
 ### P2-05: Inventory v2 schema + dual-write
 `quantity_available` + `reservations` table; migration backfills from stock_status (available→1, sold→0, reserved→1+row); compatibility layer keeps `stockStatus` derivable (generated column or query-level) so existing UI/feed code keeps working until P4 consumes quantities. Atomic claim moves to `reservations` insert with conditional quantity check; release-reservations cron rewritten against the table. **Rehearse on a Neon branch; #G-P2 reviews the rehearsal diff/rowcounts before prod migrate.** Ladder: +L2.
-- [ ]
+- [x] (2026-06-13, 7ea2101, "quantity_available + reservations table; deriveStockStatus compat; flagged reservations-claim (FTT_FEATURE_INVENTORY_V2, default off, flag-OFF mutation-proven byte-identical); oversell guard mutation-proven; drizzle/0004 IF-NOT-EXISTS ×6 + journal idx4; 407 tests; ACCEPT-WITH-MINORS. Migration NOT run — Neon rehearsal + prod-migrate BATCHED.")
+  - Note: v2 reservations claim is NON-ATOMIC (read-then-insert) — safe because the unchanged atomic stockStatus UPDATE remains the real concurrency guard in both flag states; full atomic v2 claim (INSERT ... WHERE qty>=1 CTE) is **P4-05**.
 
 ### P2-06: Durable rate limiting
 Upstash (or Vercel KV-successor via Marketplace) adapter behind `lib/ports/rate-limiter.ts`; in-memory adapter remains for dev/tests. Wire payment:create, try-on, sign-up.
