@@ -1,0 +1,12 @@
+{
+  "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+  "prevId": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "version": "7",
+  "dialect": "postgresql",
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "_comment": "P4-03: Adds rules (jsonb nullable) to collections; adds collection_products junction table. Full table list is inherited from 0007_snapshot — only deltas are noted here. drizzle-kit generate is bypassed (hand-authored)."
+}

@@ -295,6 +295,53 @@ export const searchProducts = async (
   return hydrateProducts(rows);
 };
 
+/**
+ * getProductsByIds — resolve PUBLISHED products by a list of ids.
+ *
+ * Used by the collection render path (getCollectionProductIds -> getProductsByIds)
+ * and by the product-grid block source="manual" (productIds are UUIDs).
+ *
+ * - Empty list short-circuits to [] (no DB call).
+ * - Only published products are returned (public path).
+ * - Order is STABLE: rows are returned in the order of the input `ids`.
+ *   Ids that resolve to nothing (missing / unpublished) are dropped.
+ */
+export const getProductsByIds = async (
+  ids: string[],
+  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+): Promise<ProductWithRelations[]> => {
+  if (ids.length === 0) return [];
+
+  const whereClause = buildWhere([
+    inArray(products.id, ids),
+    ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
+  ]);
+
+  const rows = await withRetry(() =>
+    db.select().from(products).where(whereClause)
+  );
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  // Preserve the caller's order; drop ids that resolved to nothing.
+  const ordered = ids
+    .map((id) => byId.get(id))
+    .filter((row): row is ProductRecord => Boolean(row));
+
+  return hydrateProducts(ordered);
+};
+
+/**
+ * getProductsByCollection — PUBLIC collection resolution.
+ *
+ * P4-03 REPAIR: resolves the UNION of manual (collection_products) + smart
+ * (evaluateRules) + legacy (products.collectionId) members via
+ * getCollectionProductIds, then hydrates rows via getProductsByIds. The old
+ * legacy-only collectionId filter missed manual + smart members and is gone.
+ *
+ * Sort / pagination are applied in-memory over the resolved id set so the
+ * public surfaces (collection detail, collection listing, product-grid) keep
+ * their existing sort/limit/offset semantics.
+ */
 export const getProductsByCollection = async (
   collectionSlug: string,
   options: ListProductsOptions = {}
@@ -308,7 +355,7 @@ export const getProductsByCollection = async (
 
   const [collection] = await withRetry(() =>
     db
-      .select({ id: collections.id })
+      .select({ id: collections.id, rules: collections.rules })
       .from(collections)
       .where(eq(collections.slug, collectionSlug))
       .limit(1)
@@ -316,31 +363,43 @@ export const getProductsByCollection = async (
 
   if (!collection) return { rows: [], totalCount: 0 };
 
-  const whereClause = buildWhere([
-    eq(products.collectionId, collection.id),
-    ...(includeDrafts ? [] : [eq(products.status, "published")]),
-  ]);
+  const { getCollectionProductIds } = await import("@/db/queries/collections");
+  const ids = await getCollectionProductIds(collection);
 
-  const [rows, [countResult]] = await Promise.all([
-    withRetry(() => {
-      const query = db
-        .select()
-        .from(products)
-        .where(whereClause)
-        .limit(limit)
-        .offset(offset);
+  const rows = await getProductsByIds(ids, { includeDrafts });
 
-      return query.orderBy(...getProductSortOrder(sort));
-    }),
-    withRetry(() =>
-      db
-        .select({ total: count() })
-        .from(products)
-        .where(whereClause)
-    ),
-  ]);
+  const sorted = sortProductsInMemory(rows, sort);
+  const totalCount = sorted.length;
+  const paged = sorted.slice(offset, offset + limit);
 
-  return { rows: await hydrateProducts(rows), totalCount: countResult?.total ?? 0 };
+  return { rows: paged, totalCount };
+};
+
+/**
+ * In-memory product sort mirroring getProductSortOrder()'s column semantics.
+ * Applied to the resolved id set (collection union) where a single SQL ORDER BY
+ * is not available because ids come from a UNION of three sources.
+ */
+const sortProductsInMemory = (
+  rows: ProductWithRelations[],
+  sort: ProductSortOption
+): ProductWithRelations[] => {
+  const byCreatedDesc = (a: ProductWithRelations, b: ProductWithRelations) =>
+    b.createdAt.getTime() - a.createdAt.getTime();
+
+  const copy = [...rows];
+  switch (sort) {
+    case "price-low-to-high":
+      return copy.sort(
+        (a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b)
+      );
+    case "price-high-to-low":
+      return copy.sort(
+        (a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b)
+      );
+    default:
+      return copy.sort(byCreatedDesc);
+  }
 };
 
 async function uniqueSlug(base: string): Promise<string> {

@@ -56,10 +56,17 @@ vi.mock("@/lib/data/products", () => ({
   getProductBySlug: vi
     .fn()
     .mockResolvedValue(makeMockProduct("id-1", "banarasi-silk")),
+  // P4-03 REPAIR / P3-02a: source=manual resolves UUIDs by id, not by slug.
+  getProductsByIds: vi
+    .fn()
+    .mockResolvedValue([
+      makeMockProduct("123e4567-e89b-12d3-a456-426614174000", "banarasi-silk"),
+      makeMockProduct("123e4567-e89b-12d3-a456-426614174001", "kanjivaram-gold"),
+    ]),
 }));
 
 const { productGridBlock } = await import("@/lib/content/blocks/product-grid");
-const { getFeaturedProducts, getProductsByCollection, getProductBySlug } =
+const { getFeaturedProducts, getProductsByCollection, getProductsByIds } =
   await import("@/lib/data/products");
 
 describe("Product-grid block", () => {
@@ -227,7 +234,7 @@ describe("Product-grid block", () => {
       expect(getProductsByCollection).toHaveBeenCalledWith("banarasi", 3);
     });
 
-    it("calls getProductBySlug for each id when source=manual", async () => {
+    it("resolves UUIDs via getProductsByIds when source=manual (P3-02a)", async () => {
       const uuid1 = "123e4567-e89b-12d3-a456-426614174000";
       const uuid2 = "123e4567-e89b-12d3-a456-426614174001";
       const validProps = productGridBlock.propsSchema.parse({
@@ -235,7 +242,7 @@ describe("Product-grid block", () => {
         productIds: [uuid1, uuid2],
       });
       await productGridBlock.Renderer(validProps as Record<string, unknown>);
-      expect(getProductBySlug).toHaveBeenCalledTimes(2);
+      expect(getProductsByIds).toHaveBeenCalledWith([uuid1, uuid2]);
     });
   });
 });

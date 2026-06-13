@@ -7,6 +7,7 @@ import {
   getFeaturedProducts as getFeaturedProductsQuery,
   getProductBySlug as getProductBySlugQuery,
   getProductsByCollection as getProductsByCollectionQuery,
+  getProductsByIds as getProductsByIdsQuery,
   listProducts as listProductsQuery,
   searchProducts as searchProductsQuery,
 } from "@/db/queries/products";
@@ -100,6 +101,18 @@ export const getProductBySlug = async (slug: string, options: QueryOptions = {})
   });
 
   return result;
+};
+
+/**
+ * getProductsByIds — resolve published products by id, preserving input order.
+ * P3-02a / P4-03 REPAIR: used by product-grid source="manual" (UUIDs) and the
+ * collection union resolution path.
+ */
+export const getProductsByIds = async (
+  ids: string[],
+  options: Pick<QueryOptions, "includeDrafts"> = {}
+): Promise<Product[]> => {
+  return getProductsByIdsQuery(ids, { includeDrafts: options.includeDrafts });
 };
 
 export const searchProducts = async (

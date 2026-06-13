@@ -57,6 +57,13 @@
       "when": 1750080000000,
       "tag": "0007_product_types",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1750170000000,
+      "tag": "0008_collections",
+      "breakpoints": true
     }
   ]
 }

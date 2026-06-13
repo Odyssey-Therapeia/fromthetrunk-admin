@@ -110,6 +110,22 @@ export const mediaAssets = pgTable(
   })
 );
 
+/**
+ * P4-03: Smart-collection rule shape.
+ *
+ * Each condition is ANDed with the others (v1).
+ *   type           — matches if product.typeId resolves to a productType whose slug === value.
+ *   tag            — matches if the product has a tag whose slug === value.
+ *                    Forward-compatible: if no tags exist the condition simply matches nothing.
+ *   price-range    — matches if pricePaise is between min and max (inclusive).
+ *   attribute-equals — matches if product.attributes[key] === value (string comparison).
+ */
+export type CollectionRuleCondition =
+  | { type: "type"; value: string }
+  | { type: "tag"; value: string }
+  | { type: "price-range"; min: number; max: number }
+  | { type: "attribute-equals"; key: string; value: string };
+
 export const collections = pgTable(
   "collections",
   {
@@ -119,6 +135,12 @@ export const collections = pgTable(
     description: text("description"),
     featured: boolean("featured").notNull().default(false),
     heroMediaId: uuid("hero_media_id").references(() => mediaAssets.id, { onDelete: "set null" }),
+    /**
+     * P4-03: Smart-collection rules — nullable JSON array of CollectionRuleCondition[].
+     * null means "manual only" (no smart matching).
+     * Non-null means "smart: AND all conditions to build candidate set; union with manual members".
+     */
+    rules: jsonb("rules").$type<CollectionRuleCondition[] | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -186,6 +208,34 @@ export const products = pgTable(
     collectionIdx: index("products_collection_idx").on(table.collectionId),
     statusIdx: index("products_status_idx").on(table.status),
     stockStatusIdx: index("products_stock_status_idx").on(table.stockStatus),
+  })
+);
+
+/**
+ * P4-03: Manual collection membership.
+ *
+ * Composite PK (collection_id, product_id) — one row per explicit product↔collection pin.
+ * Smart collections also use this table: getCollectionProductIds() unions manual rows
+ * with smart-rule matches.
+ */
+export const collectionProducts = pgTable(
+  "collection_products",
+  {
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.collectionId, table.productId],
+      name: "collection_products_pkey",
+    }),
+    collectionIdx: index("collection_products_collection_idx").on(table.collectionId),
+    productIdx: index("collection_products_product_idx").on(table.productId),
   })
 );
 

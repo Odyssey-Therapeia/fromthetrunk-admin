@@ -1,16 +1,28 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 
 import { requireAdmin } from "@/api/hono/middleware/auth";
-import { collectionInputSchema, collectionPatchSchema } from "@/api/hono/schemas/collections";
+import {
+  addProductToCollectionSchema,
+  collectionInputSchema,
+  collectionPatchSchema,
+} from "@/api/hono/schemas/collections";
 import { errorSchema, idParamSchema, slugParamSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
 import {
+  addProductToCollection,
   createCollection,
   deleteCollection,
   getCollectionBySlug,
   listCollections,
+  removeProductFromCollection,
   updateCollection,
 } from "@/db/queries/collections";
+
+const collectionProductParamSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+});
 
 export const registerCollectionRoutes = (app: OpenAPIHono<HonoBindings>) => {
   app.openapi(
@@ -152,6 +164,80 @@ export const registerCollectionRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const deleted = await deleteCollection(id);
       if (!deleted) {
         return c.json({ code: "COLLECTION_NOT_FOUND", message: "Collection not found." }, 404);
+      }
+
+      return c.json({ success: true }, 200);
+    }
+  );
+
+  // ── P4-03: Manual product membership ─────────────────────────────────────
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/{id}/products",
+      request: {
+        params: idParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: addProductToCollectionSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "Product added to collection" },
+        403: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Forbidden",
+        },
+      },
+      tags: ["Collections"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+      const { productId } = c.req.valid("json");
+
+      await addProductToCollection(id, productId);
+      return c.json({ success: true }, 200);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/{id}/products/{productId}",
+      request: {
+        params: collectionProductParamSchema,
+      },
+      responses: {
+        200: { description: "Product removed from collection" },
+        403: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Forbidden",
+        },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Membership not found",
+        },
+      },
+      tags: ["Collections"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id, productId } = c.req.valid("param");
+
+      const removed = await removeProductFromCollection(id, productId);
+      if (!removed) {
+        return c.json(
+          { code: "MEMBERSHIP_NOT_FOUND", message: "Product membership not found." },
+          404
+        );
       }
 
       return c.json({ success: true }, 200);

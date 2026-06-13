@@ -5,7 +5,7 @@ import {
   getFeaturedProducts,
   getProducts,
   getProductsByCollection,
-  getProductBySlug,
+  getProductsByIds,
 } from "@/lib/data/products";
 import { ProductCard } from "@/components/product/product-card";
 import type { Product } from "@/types/domain";
@@ -59,16 +59,10 @@ async function fetchProducts(props: ProductGridBlockProps): Promise<Product[]> {
   }
 
   if (source === "manual" && productIds && productIds.length > 0) {
-    // Fetch each product by slug (productIds stores UUIDs, resolved via getProductBySlug
-    // which accepts slugs; for UUIDs we fetch all and filter by id for v1).
-    // NOTE: productIds stores media/product UUIDs. getProductBySlug works on slugs.
-    // For v1, resolve by fetching all published products and filtering by id.
-    const slugResults = await Promise.all(
-      productIds.map((id) => getProductBySlug(id))
-    );
-    return slugResults
-      .filter((p): p is Product => p !== null)
-      .slice(0, limit);
+    // P3-02a / P4-03 REPAIR: productIds are product UUIDs. Resolve them by id
+    // (preserving order) via getProductsByIds — not by slug.
+    const docs = await getProductsByIds(productIds);
+    return docs.slice(0, limit);
   }
 
   // Fallback: fetch featured products
