@@ -9,7 +9,7 @@ Findings doc: the actual product types FTT will sell (sarees, blouses, accessori
 
 ### P4-01: `product_types` schema + runtime validation
 Table + drizzle queries; `lib/catalog/type-schema.ts` builds a zod schema from attribute_defs (field types reuse the P2-01 engine's field-type set); products gain `type_id` + `attributes`; existing products backfilled to type "preloved-saree" with attributes mapped from current `details*` columns (keep columns until P4-07 retires them). Ladder: +L2.
-- [ ]
+- [x] (2026-06-13, e288e2f, "product_types + type-schema.ts (buildTypeZodSchema delegates to P2-01, enforcing mutation-proven); products.type_id FK + attributes jsonb; seed saree/blouse/accessory; backfill 5 details* cols faithful; drizzle/0007 DO-block FK + ON-CONFLICT seed, parse-validated; 547 tests; ACCEPT. Migration BATCHED.")
 
 ### P4-02: Type-aware admin product forms
 Product stepper consumes the type's schema → schema-form renders attribute step; create flow starts with type selection. The AI-assist panel keeps working for the saree type (its prompts reference saree fields — scope: don't break, adapt later).
