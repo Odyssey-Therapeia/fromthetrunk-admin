@@ -43,7 +43,8 @@ Upstash (or Vercel KV-successor via Marketplace) adapter behind `lib/ports/rate-
 
 ### P2-08: Payload excision
 Remove 5 `@payloadcms/*` packages + `payload`, `payload.config.ts`, `payload:*` scripts; archive `scripts/migrate-payload-to-drizzle.ts` under `scripts/archive/`; drop `--legacy-peer-deps` from CI; also delete unused `lenis`. **Verify**: `npm ci` without the flag; `npm run verify` green; bundle/install delta recorded.
-- [ ]
+- [x] (2026-06-13, d07da87, "removed @payloadcms/*+payload+lenis; payload.config.ts deleted; migrate script archived; --legacy-peer-deps gone (.npmrc + both CI workflows); nodemailer ^8→^7; added undici DIRECT dep (it was a payload transitive that db/index.ts imports — repair after REJECT); npm ci no-flag exit0, build green 31/31, 459 tests; -304 pkgs/-263M. ACCEPT")
+- [ ] P2-08a: remove the now-dead `migrate:payload-to-drizzle` + `seed:payload` package.json script entries (no payload-package import, cosmetic); `.cursor/environment.json` still has `--legacy-peer-deps` (local IDE config, out of CI scope).
 
 ### P2-09: Structured logger
 `lib/log.ts` (level, namespace, JSON in prod) replacing the 16 ad-hoc console.* in lib/+api/; onError (P1-09) routes through it.
