@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 
 import type {
@@ -7,8 +9,14 @@ import type {
 } from "@tanstack/react-form";
 
 import { Button } from "@/components/ui/button";
+import {
+  productDetailsSchema,
+  detailsFullWidthKeys,
+} from "@/components/admin/schema-form/product-details.schema";
+import { SchemaForm } from "@/components/admin/schema-form/schema-form";
 import { SchemaFormField } from "@/components/admin/schema-form/schema-form-field";
 
+import type { FormSchema } from "@/lib/forms/types";
 import type { ProductStepperValues } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -42,78 +50,11 @@ type StepDetailsProps = {
 };
 
 // ---------------------------------------------------------------------------
-// Field key type — all details-step fields that appear in ProductStepperValues
+// Standard field keys rendered via SchemaForm (all except tagsCsv which has
+// a custom Suggest Tags button alongside it).
 // ---------------------------------------------------------------------------
 
-type DetailsFieldKey =
-  | "name"
-  | "slug"
-  | "collectionId"
-  | "detailsFabric"
-  | "detailsDesigner"
-  | "detailsLength"
-  | "detailsWidth"
-  | "detailsCondition"
-  | "tagsCsv";
-
-// ---------------------------------------------------------------------------
-// Metadata for each field (label + placeholder; no Zod needed here —
-// validation is TanStack's concern at submit time via buildZodSchema)
-// ---------------------------------------------------------------------------
-
-type FieldConfig = {
-  label: string;
-  placeholder?: string;
-  description?: string;
-  /** When true, the field spans both grid columns on md+ screens. */
-  fullWidth?: boolean;
-};
-
-const fieldConfigs: Record<DetailsFieldKey, FieldConfig> = {
-  name: {
-    label: "Internal name",
-    placeholder: "Kanjeevaram Silk - Gold Border",
-    fullWidth: true,
-  },
-  slug: {
-    label: "Slug",
-    placeholder: "kanjeevaram-silk-gold-border",
-    description: "URL-safe identifier. Auto-generated from story title if blank.",
-  },
-  collectionId: {
-    label: "Collection ID",
-    placeholder: "UUID (optional)",
-  },
-  detailsFabric: {
-    label: "Fabric",
-    placeholder: "Pure Silk",
-  },
-  detailsDesigner: {
-    label: "Designer",
-    placeholder: "Nalli / Heritage House",
-  },
-  detailsLength: {
-    label: "Length",
-    placeholder: 'e.g. 5.5"',
-  },
-  detailsWidth: {
-    label: "Width",
-    placeholder: 'e.g. 44"',
-  },
-  detailsCondition: {
-    label: "Condition",
-    placeholder: "Excellent / Restored",
-  },
-  tagsCsv: {
-    label: "Tag IDs (comma separated)",
-    placeholder: "1, 2, 7",
-    description: "Enter numeric tag IDs separated by commas.",
-    fullWidth: true,
-  },
-};
-
-// Plain text fields rendered via SchemaFormField (no special UI)
-const textFieldKeys: DetailsFieldKey[] = [
+const standardFieldKeys = [
   "name",
   "slug",
   "collectionId",
@@ -122,7 +63,15 @@ const textFieldKeys: DetailsFieldKey[] = [
   "detailsLength",
   "detailsWidth",
   "detailsCondition",
-];
+] as const satisfies ReadonlyArray<keyof ProductStepperValues>;
+
+// Sub-schema for the 8 standard fields — derived from productDetailsSchema.
+// productDetailsSchema is the single source of truth; this is a projection.
+const standardSchema: FormSchema = {
+  fields: Object.fromEntries(
+    standardFieldKeys.map((key) => [key, productDetailsSchema.fields[key]])
+  ),
+};
 
 // ---------------------------------------------------------------------------
 // Component
@@ -167,41 +116,57 @@ export function StepDetails({ form }: StepDetailsProps) {
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Build values and errors maps from the TanStack form state.
+  // All field metadata is sourced from productDetailsSchema (single source of
+  // truth) — no hand-assembled meta objects here.
+  // -------------------------------------------------------------------------
+
+  const formValues = form.state.values as Record<string, unknown>;
+
+  const standardValues: Record<string, unknown> = Object.fromEntries(
+    standardFieldKeys.map((key) => [key, formValues[key] ?? ""])
+  );
+
+  const standardErrors: Record<string, string> = {};
+  for (const key of standardFieldKeys) {
+    const firstError = form.state.fieldMeta[key]?.errors[0];
+    if (firstError !== undefined) {
+      standardErrors[key] = String(firstError);
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {textFieldKeys.map((key) => {
-        const config = fieldConfigs[key];
-        return (
-          <form.Field key={key} name={key}>
-            {(field) => (
-              <div className={config.fullWidth ? "md:col-span-2" : undefined}>
-                <SchemaFormField
-                  fieldKey={key}
-                  meta={{
-                    type: "text",
-                    label: config.label,
-                    placeholder: config.placeholder,
-                    description: config.description,
-                  }}
-                  value={field.state.value}
-                  error={
-                    field.state.meta.errors[0] !== undefined
-                      ? String(field.state.meta.errors[0])
-                      : undefined
-                  }
-                  formValues={form.state.values as Record<string, unknown>}
-                  onBlur={field.handleBlur}
-                  onChange={(v) => field.handleChange(v as string)}
-                />
-              </div>
-            )}
-          </form.Field>
-        );
-      })}
+      {/* Standard fields — schema-driven via SchemaForm + productDetailsSchema.
+          Field layout (full-width) is specified via getFieldClassName. */}
+      <SchemaForm
+        schema={standardSchema}
+        values={standardValues}
+        errors={standardErrors}
+        className="contents"
+        getFieldClassName={(key) =>
+          detailsFullWidthKeys.has(key) ? "md:col-span-2" : undefined
+        }
+        onChange={(key, value) => {
+          form.setFieldValue(
+            key as keyof ProductStepperValues,
+            value as ProductStepperValues[keyof ProductStepperValues]
+          );
+        }}
+        onBlur={(key) => {
+          const fieldInfo = form.getFieldInfo(key as keyof ProductStepperValues);
+          if (fieldInfo?.instance) {
+            fieldInfo.instance.handleBlur();
+          }
+        }}
+      />
 
-      {/* tagsCsv — text field with custom "Suggest Tags" UI */}
+      {/* tagsCsv — metadata from productDetailsSchema (no inline meta);
+          has a custom "Suggest Tags" button as additional UI. */}
       <form.Field name="tagsCsv">
         {(field) => {
+          const tagFieldMeta = productDetailsSchema.fields["tagsCsv"].meta;
           const tagError =
             field.state.meta.errors[0] !== undefined
               ? String(field.state.meta.errors[0])
@@ -212,15 +177,10 @@ export function StepDetails({ form }: StepDetailsProps) {
               <div className="flex items-center justify-between gap-3">
                 <SchemaFormField
                   fieldKey="tagsCsv"
-                  meta={{
-                    type: "text",
-                    label: "Tag IDs (comma separated)",
-                    placeholder: "1, 2, 7",
-                    description: "Enter numeric tag IDs separated by commas.",
-                  }}
+                  meta={tagFieldMeta}
                   value={field.state.value}
                   error={tagError}
-                  formValues={form.state.values as Record<string, unknown>}
+                  formValues={formValues}
                   onBlur={field.handleBlur}
                   onChange={(v) => field.handleChange(v as string)}
                 />
