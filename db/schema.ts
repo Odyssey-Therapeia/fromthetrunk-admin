@@ -142,6 +142,15 @@ export const products = pgTable(
     stockStatus: stockStatusEnum("stock_status").notNull().default("available"),
     reservedUntil: timestamp("reserved_until", { withTimezone: true }),
     soldAt: timestamp("sold_at", { withTimezone: true }),
+    /**
+     * P2-05: Inventory v2 — quantity available for the product.
+     * Backfilled from stock_status: available=>1, sold=>0, reserved=>1.
+     * Dual-written alongside stockStatus in all reserve/sell/release paths.
+     * Default 1 mirrors the "one-of-one" nature of FTT inventory.
+     * The reservations table tracks in-flight holds; this column is the
+     * source of truth for the v2 conditional claim.
+     */
+    quantityAvailable: integer("quantity_available").notNull().default(1),
     storyTitle: text("story_title").notNull(),
     storyNarrative: text("story_narrative"),
     storyProvenance: text("story_provenance"),
@@ -476,5 +485,37 @@ export const siteConfig = pgTable(
   },
   (table) => ({
     slugUnique: uniqueIndex("site_config_slug_unique").on(table.slug),
+  })
+);
+
+/**
+ * P2-05: Inventory v2 — in-flight reservation rows.
+ *
+ * A reservation is created when a buyer claims a product (create-order path,
+ * FTT_FEATURE_INVENTORY_V2=true). It acts as a distributed hold: the claim
+ * succeeds only if quantity_available >= qty at insert time. Reservations are
+ * promoted to "sold" on payment completion or expired by the cron job.
+ *
+ * The existing stock_status column on products remains the read source for all
+ * UI/feed code (compat layer: deriveStockStatus in db/inventory.ts).
+ */
+export const reservations = pgTable(
+  "reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    qty: integer("qty").notNull().default(1),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    orderIdx: index("reservations_order_idx").on(table.orderId),
+    productIdx: index("reservations_product_idx").on(table.productId),
+    expiresAtIdx: index("reservations_expires_at_idx").on(table.expiresAt),
   })
 );

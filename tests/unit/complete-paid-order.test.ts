@@ -21,6 +21,14 @@ vi.mock("@/db", () => ({
 vi.mock("@/db/schema", () => ({
   orders: { id: "id", paymentStatus: "paymentStatus" },
   products: { id: "id" },
+  reservations: { id: "id", orderId: "orderId", productId: "productId" },
+}));
+
+vi.mock("@/db/queries/reservations", () => ({
+  releaseReservationsByOrder: vi.fn().mockResolvedValue(undefined),
+  releaseReservationsByProducts: vi.fn().mockResolvedValue(undefined),
+  insertReservation: vi.fn().mockResolvedValue({ id: "res-1" }),
+  expireReservations: vi.fn().mockResolvedValue({ deleted: 0 }),
 }));
 
 vi.mock("@/db/queries/orders", () => ({

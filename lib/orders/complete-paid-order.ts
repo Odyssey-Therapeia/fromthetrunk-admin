@@ -2,6 +2,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { db } from "@/db";
 import { addOrderEvent, getOrder } from "@/db/queries/orders";
+import { releaseReservationsByOrder } from "@/db/queries/reservations";
 import { orders, products } from "@/db/schema";
 import { getOrderNotificationRecipients } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/send";
@@ -116,9 +117,14 @@ export async function completePaidOrder(input: CompletePaidOrderInput) {
         reservedUntil: null,
         soldAt: new Date(),
         stockStatus: "sold",
+        // Dual-write: quantity_available set to 0 on sale (v2 state mirrors stockStatus)
+        quantityAvailable: 0,
         updatedAt: new Date(),
       })
       .where(inArray(products.id, productIds));
+
+    // Dual-write: release reservation rows now that the order is paid
+    await releaseReservationsByOrder(input.orderId);
   }
 
   await addOrderEvent(input.orderId, `${input.source} payment confirmed`, "confirmed", {

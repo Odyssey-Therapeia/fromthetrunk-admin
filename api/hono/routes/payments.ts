@@ -7,10 +7,12 @@ import { createPaymentOrderSchema, verifyPaymentSchema } from "@/api/hono/schema
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { addOrderEvent, createOrder, getOrder } from "@/db/queries/orders";
+import { insertReservation, releaseReservationsByProducts } from "@/db/queries/reservations";
 import { getOrCreateCheckoutCustomer } from "@/db/queries/users";
 import { orders, products } from "@/db/schema";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { GST_RATE } from "@/lib/config/order-pricing";
+import { isInventoryV2 } from "@/lib/config/flags";
 import { createOrderAccessToken } from "@/lib/orders/order-access-token";
 import { completePaidOrder } from "@/lib/orders/complete-paid-order";
 import {
@@ -240,11 +242,56 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const reservedUntil = new Date(
         Date.now() + RAZORPAY_PAYMENT_LINK_HOLD_MINUTES * 60 * 1000
       );
+
+      // ── Inventory claim ──────────────────────────────────────────────────
+      // FLAG OFF (default): existing stock_status atomic claim — EXACTLY as before.
+      // FLAG ON: reservations-based quantity check (defence-in-depth pre-check),
+      //   then falls through to the same stock_status update for the actual atomic
+      //   claim (full atomic SQL claim deferred to P4-05).
+      // Dual-write (quantity_available + reservations table) occurs in BOTH paths.
+
+      if (isInventoryV2()) {
+        // Pre-check: ensure quantity_available >= 1 for every product.
+        // Throws "QUANTITY_INSUFFICIENT" if any product has qty=0.
+        for (const productId of productIds) {
+          try {
+            await insertReservation({
+              orderId: order.id,
+              productId,
+              qty: 1,
+              expiresAt: reservedUntil,
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg === "QUANTITY_INSUFFICIENT") {
+              // Clean up any reservations already inserted for earlier products
+              await releaseReservationsByProducts(productIds.slice(0, productIds.indexOf(productId)));
+              await db
+                .update(orders)
+                .set({ paymentStatus: "failed", updatedAt: new Date() })
+                .where(eq(orders.id, order.id));
+              return c.json(
+                {
+                  code: "ITEM_UNAVAILABLE",
+                  message: "One or more pieces in your bag are no longer available.",
+                },
+                409
+              );
+            }
+            throw err;
+          }
+        }
+      }
+
+      // Atomic stock_status claim (both flag OFF and flag ON use this as the
+      // primary concurrency guard; it is unchanged from the pre-P2-05 code).
       const reservedRows = await db
         .update(products)
         .set({
           reservedUntil,
           stockStatus: "reserved",
+          // Dual-write: quantity_available stays at 1 during reserve phase
+          // (the reservation row tracks the hold; qty drops to 0 only on sold).
           updatedAt: new Date(),
         })
         .where(
@@ -273,6 +320,11 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
               updatedAt: new Date(),
             })
             .where(inArray(products.id, reservedProductIds));
+        }
+
+        // Dual-write: release any reservations rows we inserted in the v2 path
+        if (isInventoryV2()) {
+          await releaseReservationsByProducts(productIds);
         }
 
         await db
@@ -324,6 +376,11 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
             updatedAt: new Date(),
           })
           .where(inArray(products.id, productIds));
+
+        // Dual-write: release reservation rows on Razorpay failure
+        if (isInventoryV2()) {
+          await releaseReservationsByProducts(productIds);
+        }
 
         await db
           .update(orders)

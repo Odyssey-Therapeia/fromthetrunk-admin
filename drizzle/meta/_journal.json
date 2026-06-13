@@ -29,6 +29,13 @@
       "when": 1781307955796,
       "tag": "0002_nullable-order-userid",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1749810000000,
+      "tag": "0004_inventory_v2",
+      "breakpoints": true
     }
   ]
 }

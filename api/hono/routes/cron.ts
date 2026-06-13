@@ -3,6 +3,7 @@ import { and, eq, isNotNull, lt } from "drizzle-orm";
 
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
+import { expireReservations } from "@/db/queries/reservations";
 import { products } from "@/db/schema";
 import { verifyBearerSecret } from "@/lib/http/verify-secret";
 
@@ -58,6 +59,8 @@ export const registerCronRoutes = (app: OpenAPIHono<HonoBindings>) => {
           .set({
             reservedUntil: null,
             stockStatus: "available",
+            // Dual-write: restore quantity_available to 1 when reservation expires
+            quantityAvailable: 1,
             updatedAt: new Date(),
           })
           .where(
@@ -69,11 +72,16 @@ export const registerCronRoutes = (app: OpenAPIHono<HonoBindings>) => {
           );
       }
 
+      // Dual-write: also expire reservation table rows (always runs, flag-agnostic)
+      const now = new Date();
+      const { deleted: reservationsDeleted } = await expireReservations(now);
+
       return c.json(
         {
           checked: expiredRows.length,
           ok: true,
           released: expiredRows.length,
+          reservationsExpired: reservationsDeleted,
           timestamp: new Date().toISOString(),
         },
         200
