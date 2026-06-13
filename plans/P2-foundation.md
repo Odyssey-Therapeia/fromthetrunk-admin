@@ -25,7 +25,8 @@ Present the options with numbers: (a) display GST-inclusive everywhere (sticker 
 
 ### P2-04: Implement chosen GST pricing site-wide
 PDP, cart, checkout totals (`calculateOrderTotals`), JSON-LD offers, emails — one consistent number; unit tests for the new math everywhere money renders. **Depends**: P2-03. Ladder: +L2, L3.
-- [ ]
+- [x] (2026-06-13, 7307d4e, "behind FTT_FEATURE_GST_INCLUSIVE; calculateOrderTotals consolidated as single charge source, payments.ts+orders.ts routed through it (killed dead-code REJECT); flag-OFF mutation-proven byte-identical to prod; regression-lock route tests; 392 tests; ACCEPT-WITH-MINORS")
+- [ ] P2-04a: checkout-page-client shows server-computed totals (currently flag-OFF estimate; flag is not NEXT_PUBLIC so client can't read it). Needed before the GST flag flip so the UI matches the charged amount. (Flag-flip + the ×1.12 price-value decision are BATCHED FOR USER.)
 
 ### P2-05: Inventory v2 schema + dual-write
 `quantity_available` + `reservations` table; migration backfills from stock_status (available→1, sold→0, reserved→1+row); compatibility layer keeps `stockStatus` derivable (generated column or query-level) so existing UI/feed code keeps working until P4 consumes quantities. Atomic claim moves to `reservations` insert with conditional quantity check; release-reservations cron rewritten against the table. **Rehearse on a Neon branch; #G-P2 reviews the rehearsal diff/rowcounts before prod migrate.** Ladder: +L2.
