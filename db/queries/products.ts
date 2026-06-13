@@ -67,7 +67,8 @@ const getProductSortOrder = (sort: ProductSortOption): SQL<unknown>[] => {
   }
 };
 
-const hydrateProducts = async (rows: ProductRecord[]): Promise<ProductWithRelations[]> => {
+/** @internal exported for use by the postgres-catalog-search adapter (P4-04) */
+export const hydrateProducts = async (rows: ProductRecord[]): Promise<ProductWithRelations[]> => {
   if (rows.length === 0) return [];
 
   const productIds = rows.map((row) => row.id);

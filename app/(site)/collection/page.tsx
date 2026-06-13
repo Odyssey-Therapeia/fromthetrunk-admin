@@ -9,8 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   getCollections,
   getGlobals,
-  getProducts,
-  getProductsByCollection,
 } from "@/lib/data/products";
 import {
   DEFAULT_PRODUCT_SORT,
@@ -20,6 +18,7 @@ import {
   type ProductSortOption,
 } from "@/lib/products/sort";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
+import { searchProducts } from "@/lib/ports/catalog-search";
 import type { Collection, Product } from "@/types/domain";
 import type { CollectionPageContent } from "@/types/site-content";
 import { cn } from "@/lib/utils";
@@ -42,69 +41,141 @@ const shortSortLabels: Record<ProductSortOption, string> = {
 
 type CollectionPageProps = {
   searchParams:
-    | Promise<{ collection?: string | string[]; page?: string; sort?: string | string[] }>
-    | { collection?: string | string[]; page?: string; sort?: string | string[] };
+    | Promise<{
+        collection?: string | string[];
+        page?: string;
+        sort?: string | string[];
+        type?: string | string[];
+        fabric?: string | string[];
+        priceMin?: string;
+        priceMax?: string;
+        availability?: string;
+        tags?: string | string[];
+      }>
+    | {
+        collection?: string | string[];
+        page?: string;
+        sort?: string | string[];
+        type?: string | string[];
+        fabric?: string | string[];
+        priceMin?: string;
+        priceMax?: string;
+        availability?: string;
+        tags?: string | string[];
+      };
+};
+
+/** Coerce string | string[] -> string | undefined */
+const firstStr = (v: string | string[] | undefined): string | undefined =>
+  Array.isArray(v) ? v[0] : v;
+
+/** Coerce string | string[] -> string[] */
+const toArray = (v: string | string[] | undefined): string[] => {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
 };
 
 export default async function CollectionPage({ searchParams }: CollectionPageProps) {
   const { isEnabled: includeDrafts } = await draftMode();
   const resolvedSearchParams = await Promise.resolve(searchParams);
+
   const collectionQuery = resolvedSearchParams?.collection;
-  const requestedCollectionSlug = Array.isArray(collectionQuery)
-    ? collectionQuery[0]
-    : collectionQuery;
+  const requestedCollectionSlug = firstStr(collectionQuery);
   const activeSort = parseProductSort(resolvedSearchParams?.sort);
   const currentPage = Math.max(1, parseInt(resolvedSearchParams?.page ?? "1", 10));
+
+  // Catalog filters (P4-04)
+  const activeType = firstStr(resolvedSearchParams?.type);
+  const activeFabric = firstStr(resolvedSearchParams?.fabric);
+  const activePriceMin = resolvedSearchParams?.priceMin
+    ? parseInt(resolvedSearchParams.priceMin, 10)
+    : undefined;
+  const activePriceMax = resolvedSearchParams?.priceMax
+    ? parseInt(resolvedSearchParams.priceMax, 10)
+    : undefined;
+  const activeAvailability = resolvedSearchParams?.availability === "true";
+  const activeTags = toArray(resolvedSearchParams?.tags);
+
+  // Determine if any catalog filter is active
+  const hasFilters =
+    !!activeType ||
+    !!activeFabric ||
+    typeof activePriceMin === "number" ||
+    typeof activePriceMax === "number" ||
+    activeAvailability ||
+    activeTags.length > 0;
 
   const collectionPagePromise = getGlobals("collectionPage", { includeDrafts });
   const visibleCollectionsPromise = getCollections({
     includeDrafts,
     onlyWithProducts: true,
   });
-  const allCollectionsPromise = requestedCollectionSlug
-    ? getCollections({ includeDrafts })
-    : visibleCollectionsPromise;
-  const defaultProductsPromise = requestedCollectionSlug
-    ? null
-    : getProducts(ITEMS_PER_PAGE, {
-        includeDrafts,
-        page: currentPage,
-        sort: activeSort,
-      });
-  const [
-    collectionPage,
-    visibleCollectionsResult,
-    allCollectionsResult,
-    defaultProductsResult,
-  ] = await Promise.all([
+
+  const [collectionPage, visibleCollectionsResult] = await Promise.all([
     collectionPagePromise,
     visibleCollectionsPromise,
-    allCollectionsPromise,
-    defaultProductsPromise,
   ]);
 
   const cms = collectionPage as CollectionPageContent | null;
   const collections = (visibleCollectionsResult?.docs ?? []) as Collection[];
-  const allCollections = (allCollectionsResult?.docs ?? []) as Collection[];
-  const activeCollection = allCollections.find(
-    (collection) => collection.slug === requestedCollectionSlug
+  const activeCollection = collections.find(
+    (c) => c.slug === requestedCollectionSlug
   );
   const activeCollectionSlug = activeCollection?.slug;
-  const productsResult = activeCollectionSlug
-    ? await getProductsByCollection(activeCollectionSlug, ITEMS_PER_PAGE, {
-        includeDrafts,
-        page: currentPage,
-        sort: activeSort,
-      })
-    : defaultProductsResult ??
-      (await getProducts(ITEMS_PER_PAGE, {
-        includeDrafts,
-        page: currentPage,
-        sort: activeSort,
-      }));
-  const items = (productsResult?.docs ?? []) as Product[];
 
-  const totalDocs = (productsResult as { totalDocs?: number })?.totalDocs ?? items.length;
+  // Use searchProducts when catalog filters are active, otherwise fall back
+  // to the collection-aware listing path.
+  let items: Product[] = [];
+  let totalDocs = 0;
+  let facets = { fabric: {} as Record<string, number>, type: {} as Record<string, number>, availability: {} as Record<string, number>, tags: {} as Record<string, number> };
+
+  if (hasFilters) {
+    // P4-04: filtered search via catalog-search port
+    const result = await searchProducts({
+      type: activeType,
+      fabric: activeFabric,
+      priceMin: activePriceMin,
+      priceMax: activePriceMax,
+      availability: activeAvailability || undefined,
+      tags: activeTags.length > 0 ? activeTags : undefined,
+    });
+
+    // Apply sort + pagination in-memory (same pattern as getProductsByCollection)
+    const sorted = sortProductsInMemory(result.products as unknown as Product[], activeSort);
+    totalDocs = sorted.length;
+    const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+    items = sorted.slice(offset, offset + ITEMS_PER_PAGE);
+    facets = result.facets;
+  } else if (activeCollectionSlug) {
+    // Collection-filtered view (no catalog filters)
+    const { getProductsByCollection } = await import("@/lib/data/products");
+    const page = currentPage;
+    const offset = (page - 1) * ITEMS_PER_PAGE;
+    const result = await getProductsByCollection(activeCollectionSlug, ITEMS_PER_PAGE, {
+      includeDrafts,
+      page,
+      sort: activeSort,
+    });
+    items = (result?.docs ?? []) as Product[];
+    totalDocs = (result as { totalDocs?: number })?.totalDocs ?? items.length;
+    // Get facets for the sidebar (no filter active — full catalog counts)
+    const facetResult = await searchProducts({});
+    facets = facetResult.facets;
+  } else {
+    // No filters + no collection — all published products
+    const { getProducts } = await import("@/lib/data/products");
+    const result = await getProducts(ITEMS_PER_PAGE, {
+      includeDrafts,
+      page: currentPage,
+      sort: activeSort,
+    });
+    items = (result?.docs ?? []) as Product[];
+    totalDocs = (result as { totalDocs?: number })?.totalDocs ?? items.length;
+    // Get facets for the sidebar
+    const facetResult = await searchProducts({});
+    facets = facetResult.facets;
+  }
+
   const totalPages = Math.ceil(totalDocs / ITEMS_PER_PAGE);
   const collectionCount = collections.length;
   const activeCollectionLabel = activeCollection?.name ?? "All collections";
@@ -122,6 +193,41 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
     .slice(0, 3);
   const heroPreviewImage = previewImages[0]?.src ?? "/media/home-cover.png";
 
+  const buildUrl = ({
+    collectionSlug = activeCollectionSlug,
+    page,
+    sort = activeSort,
+    type = activeType,
+    fabric = activeFabric,
+    priceMin = activePriceMin,
+    priceMax = activePriceMax,
+    availability = activeAvailability,
+    tags = activeTags,
+  }: {
+    collectionSlug?: string;
+    page?: number;
+    sort?: ProductSortOption;
+    type?: string;
+    fabric?: string;
+    priceMin?: number;
+    priceMax?: number;
+    availability?: boolean;
+    tags?: string[];
+  }) => {
+    const params = new URLSearchParams();
+    if (collectionSlug) params.set("collection", collectionSlug);
+    if (sort !== DEFAULT_PRODUCT_SORT) params.set("sort", sort);
+    if (page && page > 1) params.set("page", String(page));
+    if (type) params.set("type", type);
+    if (fabric) params.set("fabric", fabric);
+    if (typeof priceMin === "number") params.set("priceMin", String(priceMin));
+    if (typeof priceMax === "number") params.set("priceMax", String(priceMax));
+    if (availability) params.set("availability", "true");
+    for (const tag of tags ?? []) params.append("tags", tag);
+    const qs = params.toString();
+    return `/collection${qs ? `?${qs}` : ""}`;
+  };
+
   const buildCollectionUrl = ({
     collectionSlug = activeCollectionSlug,
     page,
@@ -130,14 +236,17 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
     collectionSlug?: string;
     page?: number;
     sort?: ProductSortOption;
-  }) => {
-    const params = new URLSearchParams();
-    if (collectionSlug) params.set("collection", collectionSlug);
-    if (sort !== DEFAULT_PRODUCT_SORT) params.set("sort", sort);
-    if (page && page > 1) params.set("page", String(page));
-    const qs = params.toString();
-    return `/collection${qs ? `?${qs}` : ""}`;
-  };
+  }) => buildUrl({ collectionSlug, page, sort });
+
+  const hasAnyFilter =
+    !!activeCollectionSlug || hasFilters || activeSort !== DEFAULT_PRODUCT_SORT;
+
+  // Fabric options from facets
+  const fabricOptions = Object.entries(facets.fabric).filter(([k]) => k);
+  // Tag options from facets
+  const tagOptions = Object.entries(facets.tags).filter(([k]) => k);
+  // Availability count
+  const availableCount = facets.availability["available"] ?? 0;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:space-y-7 sm:px-6 sm:py-9 lg:space-y-4 lg:py-6">
@@ -193,6 +302,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
           </div>
         </div>
 
+        {/* Filter panel */}
         <div className="rounded-[1.5rem] border border-border/60 bg-card/92 p-4 shadow-soft backdrop-blur">
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
@@ -213,23 +323,28 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
               {filterDescription}
             </p>
 
+            {/* Reset link */}
+            {hasAnyFilter ? (
+              <div className="flex justify-end">
+                <Link
+                  href="/collection"
+                  className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Reset all filters
+                </Link>
+              </div>
+            ) : null}
+
+            {/* Edit / collection filter */}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
                   Edit
                 </p>
-                {activeCollectionSlug || activeSort !== DEFAULT_PRODUCT_SORT ? (
-                  <Link
-                    href="/collection"
-                    className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                  >
-                    Reset
-                  </Link>
-                ) : null}
               </div>
               <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                 <Link
-                  href={buildCollectionUrl({ collectionSlug: undefined })}
+                  href={buildUrl({ collectionSlug: undefined })}
                   className={cn(
                     "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
                     !activeCollectionSlug
@@ -242,7 +357,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                 {collections.map((collection) => (
                   <Link
                     key={collection.id}
-                    href={buildCollectionUrl({ collectionSlug: collection.slug })}
+                    href={buildUrl({ collectionSlug: collection.slug })}
                     className={cn(
                       "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
                       activeCollectionSlug === collection.slug
@@ -256,6 +371,132 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
               </div>
             </div>
 
+            {/* Fabric filter (from facets) */}
+            {fabricOptions.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                  Fabric
+                </p>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {activeFabric ? (
+                    <Link
+                      href={buildUrl({ fabric: undefined, page: 1 })}
+                      className="shrink-0 rounded-full border border-trunk-gold/60 bg-trunk-gold/15 px-3 py-1 text-xs uppercase tracking-[0.18em] text-foreground shadow-sm transition"
+                    >
+                      {activeFabric} ×
+                    </Link>
+                  ) : null}
+                  {fabricOptions.map(([fab, count]) => (
+                    <Link
+                      key={fab}
+                      href={buildUrl({ fabric: activeFabric === fab ? undefined : fab, page: 1 })}
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
+                        activeFabric === fab
+                          ? "border-trunk-gold/60 bg-trunk-gold/15 text-foreground shadow-sm"
+                          : "border-border/70 bg-background/70 text-muted-foreground hover:border-trunk-gold/40 hover:text-foreground",
+                      )}
+                    >
+                      {fab}
+                      <span className="ml-1 opacity-60">({count})</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Price range filter */}
+            <div className="space-y-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                Price range
+              </p>
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                {[
+                  { label: "Under ₹5k", min: undefined, max: 500000 },
+                  { label: "₹5k – ₹15k", min: 500000, max: 1500000 },
+                  { label: "₹15k – ₹50k", min: 1500000, max: 5000000 },
+                  { label: "₹50k+", min: 5000000, max: undefined },
+                ].map((range) => {
+                  const active =
+                    activePriceMin === range.min && activePriceMax === range.max;
+                  return (
+                    <Link
+                      key={range.label}
+                      href={buildUrl({
+                        priceMin: active ? undefined : range.min,
+                        priceMax: active ? undefined : range.max,
+                        page: 1,
+                      })}
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
+                        active
+                          ? "border-trunk-gold/60 bg-trunk-gold/15 text-foreground shadow-sm"
+                          : "border-border/70 bg-background/70 text-muted-foreground hover:border-trunk-gold/40 hover:text-foreground",
+                      )}
+                    >
+                      {range.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Availability filter */}
+            <div className="space-y-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                Availability
+              </p>
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                <Link
+                  href={buildUrl({ availability: !activeAvailability, page: 1 })}
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
+                    activeAvailability
+                      ? "border-trunk-gold/60 bg-trunk-gold/15 text-foreground shadow-sm"
+                      : "border-border/70 bg-background/70 text-muted-foreground hover:border-trunk-gold/40 hover:text-foreground",
+                  )}
+                >
+                  In stock
+                  {availableCount > 0 ? (
+                    <span className="ml-1 opacity-60">({availableCount})</span>
+                  ) : null}
+                </Link>
+              </div>
+            </div>
+
+            {/* Tags filter (from facets) */}
+            {tagOptions.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
+                  Tags
+                </p>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {tagOptions.map(([tagSlug, count]) => {
+                    const isActive = activeTags.includes(tagSlug);
+                    const nextTags = isActive
+                      ? activeTags.filter((t) => t !== tagSlug)
+                      : [...activeTags, tagSlug];
+                    return (
+                      <Link
+                        key={tagSlug}
+                        href={buildUrl({ tags: nextTags, page: 1 })}
+                        className={cn(
+                          "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
+                          isActive
+                            ? "border-trunk-gold/60 bg-trunk-gold/15 text-foreground shadow-sm"
+                            : "border-border/70 bg-background/70 text-muted-foreground hover:border-trunk-gold/40 hover:text-foreground",
+                        )}
+                      >
+                        {tagSlug}
+                        <span className="ml-1 opacity-60">({count})</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Sort */}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
@@ -269,7 +510,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                 {PRODUCT_SORT_OPTIONS.map((option) => (
                   <Link
                     key={option.value}
-                    href={buildCollectionUrl({ page: 1, sort: option.value })}
+                    href={buildUrl({ page: 1, sort: option.value })}
                     className={cn(
                       "flex items-center gap-2 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.14em] transition",
                       activeSort === option.value
@@ -333,7 +574,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
             <nav className="flex items-center justify-center gap-2" aria-label="Pagination">
               {currentPage > 1 && (
                 <Button asChild variant="outline" size="sm" className="rounded-full">
-                  <Link href={buildCollectionUrl({ page: currentPage - 1 })}>Previous</Link>
+                  <Link href={buildUrl({ page: currentPage - 1 })}>Previous</Link>
                 </Button>
               )}
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
@@ -348,13 +589,13 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                   {page === currentPage ? (
                     <span>{page}</span>
                   ) : (
-                    <Link href={buildCollectionUrl({ page })}>{page}</Link>
+                    <Link href={buildUrl({ page })}>{page}</Link>
                   )}
                 </Button>
               ))}
               {currentPage < totalPages && (
                 <Button asChild variant="outline" size="sm" className="rounded-full">
-                  <Link href={buildCollectionUrl({ page: currentPage + 1 })}>Next</Link>
+                  <Link href={buildUrl({ page: currentPage + 1 })}>Next</Link>
                 </Button>
               )}
             </nav>
@@ -363,4 +604,26 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
       )}
     </div>
   );
+}
+
+// ── In-memory sort (mirrors getProductsByCollection's sort logic) ──────────────
+
+function sortProductsInMemory<T extends { pricePaise: number; createdAt: unknown }>(
+  rows: T[],
+  sort: ProductSortOption
+): T[] {
+  const createdAtMs = (r: T) => {
+    const v = r.createdAt;
+    return v instanceof Date ? v.getTime() : Number(v ?? 0);
+  };
+  const byCreatedDesc = (a: T, b: T) => createdAtMs(b) - createdAtMs(a);
+  const copy = [...rows];
+  switch (sort) {
+    case "price-low-to-high":
+      return copy.sort((a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b));
+    case "price-high-to-low":
+      return copy.sort((a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b));
+    default:
+      return copy.sort(byCreatedDesc);
+  }
 }
