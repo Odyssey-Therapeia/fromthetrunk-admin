@@ -13,7 +13,8 @@ Findings doc: catalogue every visual section on the current site (home, story, c
 
 ### P3-02: Block registry + first 3 renderers
 `lib/content/blocks/registry.ts`; hero, rich-text, product-grid renderers as RSCs consuming theme tokens only. Each block: propsSchema (zod) + Renderer + editorMeta. Unit: registry rejects unknown types; props validated on save AND render (defense in depth).
-- [ ]
+- [x] (2026-06-13, 6d75e31, "closed registry mutation-proven (unknown-type reject + render-time propsSchema validation load-bearing); hero/rich-text/product-grid RSCs tokens-only 0-drift; sanitize-html.ts for rich-text; 65 tests (612 suite); ACCEPT-WITH-MINORS")
+- [ ] P3-02a: product-grid source=manual is broken (productIds are UUIDs but passed to getProductBySlug → empty; documented v1 limit) — add a getProductsByIds query and wire it. Also tighten the rich-text body-required render test (currently passes via a TypeError not the validation guard).
 
 ### P3-03: Public renderer route
 `app/(site)/[...slug]/page.tsx`: slug → published version → render; 404 on draft/missing; ISR/cache tags + revalidate-on-publish; generateMetadata from page SEO fields (reuse P1-17 truncation helper). Ladder: +L3, L4 (public page).
