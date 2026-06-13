@@ -14,7 +14,8 @@ Table + drizzle queries; `lib/catalog/type-schema.ts` builds a zod schema from a
 ### P4-02: Type-aware admin product forms
 Product stepper consumes the type's schema → schema-form renders attribute step; create flow starts with type selection. The AI-assist panel keeps working for the saree type (its prompts reference saree fields — scope: don't break, adapt later).
 **Depends**: P4-01. Ladder: +L3.
-- [ ]
+- [x] (2026-06-14, bdffb1d, "Type-selection + schema-driven Attributes step via SchemaForm+attributeDefsToFormSchema (mutation-proven D3: new def renders+validates, no per-type code); persists typeId+attributes to real columns (mutation-proven); saree AI-assist intact; details* retained; 748 tests; ACCEPT-WITH-MINORS. L3 e2e → #G-P4.")
+- [ ] P4-02a: enforce attribute validation at SAVE (currently DISPLAY-ONLY) — client buildTypeZodSchema gate on submit + server-side validation in product create/update route against the type's attribute_defs (API accepts attributes as z.record without type-schema enforcement → bad data could persist via API). Do before #G-P4.
 
 ### P4-03: Collections (manual + smart)
 `collections`, `collection_products` join, `rules jsonb` (conditions: type, tag, price range, attribute equals) with a tested evaluator in `db/queries/collections.ts`; admin CRUD (schema-form for rules v1 — condition rows, not a query builder); public collection pages render via the P3 product-grid block (`source: collection`). Ladder: +L2, L3.
