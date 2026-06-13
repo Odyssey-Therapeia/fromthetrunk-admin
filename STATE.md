@@ -2,11 +2,23 @@
 > Protocol: `.claude/skills/project-memory`. Read this FIRST every session. Update it before ending any session that did work. Durable info only — git history is the journal, plans/ is the tracker.
 
 ## Current
-- **Programme**: Shopify-parity, planned in `plans/` (master: `plans/000-master-plan.md`).
-- **Active phase**: P1 **COMPLETE** — `plans/P1-stabilize.md`. P1-01..P1-20 done; **#G-P1 PASSED** (user-authorized prod merge 2026-06-13). Only P1-15 (ops) remains. Merged tree verified CI-green: clean-worktree `tsc` clean + **231 tests pass**; all functional CI green on #36.
-- **Branch reality**: **`main` = `b1e9893` (merge of #36)** — now carries ALL P1 + the emergency guest-checkout fix; Xeno excised (no confidential data on main). `development` = `sprint-abe` = `2a2e191`, both contain `main` (converged). Vercel **production deploy of `b1e9893` (dpl_3bEkrnhbrJmh1sGgZfubXnZU2x6d, target=production) triggered** — confirm READY + live guest-checkout smoke.
-- **PRs**: **#36 `development → main` MERGED (b1e9893) — prod.** #35 (sprint-abe→development) MERGED (6f371a9). #28 closed.
-- **Next concrete action**: confirm prod deploy READY + live guest-checkout smoke on www.fromthetrunk.shop (browse→checkout→payment link). Then P1-15 (unpublish "test chiffon" product). **Post-deploy follow-ups** (not blocking): Xeno relocation+redaction before any commit (`lib/xeno/dispatcher.ts` channel ID `C0B4S6V22LE`→env + strip "Meena"/"Rekha"; `context-capsule.ts` name+financial fact; `scripts/onboarding/...` `gkarthik@outlook.com`); admin-orders-LIST rewrite as its own packet (in `git stash` — "P1-20 deferred: admin rewrite + docs/env/nav"); full drizzle-meta reconciliation (0002_agent_panel out-of-band). Then P2.
+- **Programme**: Shopify-parity, planned in `plans/` (master: `plans/000-master-plan.md`). **P1 done + LIVE on prod (`main`=b1e9893).**
+- **Active phase**: **P2 — AUTONOMOUS RUN P2→P6** (user directive 2026-06-13: "do each phase, involve me only on the final push after P6; use workflows/loops/subagents/adversarial agents; spawn as many agents as needed"). See `## Autonomous run` below for the operating contract. All work on `sprint-abe`; no main merges, no prod-applies until the post-P6 push.
+- **Branch reality**: `main` = `b1e9893` (P1 live). `development` = `sprint-abe` diverge as P2+ commits land on sprint-abe; periodic sprint-abe→development PRs for CI only.
+- **Next concrete action**: continue P2 per `plans/P2-foundation.md` via the ship pipeline (scout→worker→verifier→adversarial review) in Workflows. P2 wave-1 (P2-00 spike, P2-10 design-system doc, P2-11 route-test factory) dispatched. Then P2-01 keystone (form engine) → P2-02 renderer; P2-04..P2-09 in dependency order.
+
+## Autonomous run (P2→P6) — operating contract
+Loop: each iteration read STATE + active plan → run next ready packet(s) through ship pipeline via Workflow → clean-worktree verify (tsc+tests) → adversarial review → commit scoped paths to sprint-abe → check plan box + update STATE → continue. 2 failed verify loops → mark packet BLOCKED + record, continue others. Driven by workflow-completion re-invocation + a long fallback wakeup. Stop & notify the user only when all P2–P6 CODE packets are done (gates/prod-applies remain) or a true hard blocker halts all progress.
+**Assumptions made to avoid blocking (confirm at final push):** A1 #G-DOMAIN→canonical `www.fromthetrunk.shop`, .com unwired. A2 P4 types→preloved-saree(backfill)+blouse+accessory, one-of-one, no variants. A3 P5 feeds/adapters built+fixture-tested; console submission+credentials batched. A4 prod migrations built+unit-tested; Neon rehearsal+prod-apply batched. A5 all #G- checkpoints→evidence prepared, batched. A6 external svcs (Upstash P2-06, Sentry P6-07) behind ports w/ in-memory/dev fallback; prod creds batched. A7 no main merges.
+
+## BATCHED FOR USER (the final-push review — populate as the run proceeds)
+- #G-DOMAIN decision (.shop confirmed canonical? wire .com?).
+- Confirm P4 product-type taxonomy (assumed saree+blouse+accessory).
+- P5 external credentials + console submission (GMC, GSC, GA4, Meta, Vercel API token) + GTIN-exemption.
+- Prod migration sign-offs: P2-05 inventory v2, P4-01 backfill, P4-07 column drop (+ full drizzle-meta reconciliation of out-of-band 0002_agent_panel).
+- #G-P2/#G-P3/#G-P4/#G-P5/#G-P6 user checkpoints (evidence prepared per phase).
+- Final consolidation `development → main` + prod deploy(s) for P2–P6.
+- P1 leftovers: P1-15 (unpublish "test chiffon"), Xeno relocation+redaction, admin-orders-LIST rewrite (in `git stash` "P1-20 deferred").
 
 ## Standing facts (verified 2026-06-13)
 - Tests 174/174 pass; tsc clean; lint clean.
