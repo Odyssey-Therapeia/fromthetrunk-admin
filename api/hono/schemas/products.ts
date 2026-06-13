@@ -16,6 +16,12 @@ export const listProductsQuerySchema = z.object({
 });
 
 export const productInputSchema = z.object({
+  /**
+   * P4-02: Attribute values keyed by attribute_defs[n].key.
+   * Stored as jsonb in products.attributes.
+   * Application-layer validation via buildTypeZodSchema() runs before upsert.
+   */
+  attributes: z.record(z.string(), z.unknown()).optional(),
   collectionId: z.string().uuid().nullable().optional(),
   detailsCondition: z.string().nullable().optional(),
   detailsDesigner: z.string().nullable().optional(),
@@ -37,6 +43,8 @@ export const productInputSchema = z.object({
   storyProvenance: z.string().nullable().optional(),
   storyTitle: z.string().min(1),
   tagIds: z.array(z.number().int()).optional(),
+  /** P4-02: UUID of the selected product_types row, or null. */
+  typeId: z.string().uuid().nullable().optional(),
 });
 
 export const productPatchSchema = productInputSchema.partial();

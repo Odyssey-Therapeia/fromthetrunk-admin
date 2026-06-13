@@ -60,12 +60,18 @@ export type AttributeDef = {
  *   FT-08 boolean     → required: z.boolean()         |  optional: z.boolean().optional()
  *   FT-09 image-ref   → required: z.string().uuid()   |  optional: z.string().uuid().optional()
  */
-export function buildTypeZodSchema(
-  attributeDefs: AttributeDef[]
-): z.ZodObject<z.ZodRawShape> {
-  // Build a FormSchema from the AttributeDef array so we can delegate to
-  // lib/forms/buildZodSchema (single zod derivation path).
-  const formSchema: FormSchema = {
+/**
+ * attributeDefsToFormSchema(attributeDefs) → FormSchema
+ *
+ * Converts an array of AttributeDef objects to the FormSchema shape consumed
+ * by SchemaForm. This is the schema-driven path: the admin form renderer
+ * (SchemaForm, P2-02a) calls this to get field metadata + zod validators from
+ * a product type's attribute_defs without any per-type code.
+ *
+ * buildTypeZodSchema() delegates here then calls buildZodSchema() on the result.
+ */
+export function attributeDefsToFormSchema(attributeDefs: AttributeDef[]): FormSchema {
+  return {
     fields: Object.fromEntries(
       attributeDefs.map((def) => {
         const zodValidator = deriveZodValidator(def);
@@ -73,7 +79,14 @@ export function buildTypeZodSchema(
       })
     ),
   };
+}
 
+export function buildTypeZodSchema(
+  attributeDefs: AttributeDef[]
+): z.ZodObject<z.ZodRawShape> {
+  // Build a FormSchema from the AttributeDef array so we can delegate to
+  // lib/forms/buildZodSchema (single zod derivation path).
+  const formSchema = attributeDefsToFormSchema(attributeDefs);
   return buildZodSchema(formSchema);
 }
 

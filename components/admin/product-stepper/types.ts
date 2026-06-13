@@ -30,6 +30,17 @@ export type ProductStepperValues = {
   storyProvenance: string;
   storyTitle: string;
   tagsCsv: string;
+  /**
+   * P4-02: UUID of the selected product_types row.
+   * null when no type has been selected (the "Type" step not yet completed).
+   */
+  typeId: null | string;
+  /**
+   * P4-02: Attribute values keyed by attribute_defs[n].key.
+   * Persisted to products.attributes (jsonb) on save.
+   * Validated at submit time via buildTypeZodSchema(attributeDefs).
+   */
+  attributeValues: Record<string, unknown>;
 };
 
 const toNullableIsoString = (value?: Date | null | string) => {
@@ -38,6 +49,7 @@ const toNullableIsoString = (value?: Date | null | string) => {
 };
 
 export const mapProductToStepperValues = (product: {
+  attributes?: Record<string, unknown> | null;
   collectionId?: null | string;
   detailsCondition?: null | string;
   detailsDesigner?: null | string;
@@ -59,7 +71,9 @@ export const mapProductToStepperValues = (product: {
   storyProvenance?: null | string;
   storyTitle?: string;
   tags?: Array<{ id: number }>;
+  typeId?: null | string;
 }): ProductStepperValues => ({
+  attributeValues: product.attributes ?? {},
   collectionId: product.collectionId ?? "",
   detailsCondition: product.detailsCondition ?? "",
   detailsDesigner: product.detailsDesigner ?? "",
@@ -86,9 +100,11 @@ export const mapProductToStepperValues = (product: {
   storyProvenance: product.storyProvenance ?? "",
   storyTitle: product.storyTitle ?? "",
   tagsCsv: product.tags?.map((tag) => tag.id).join(", ") ?? "",
+  typeId: product.typeId ?? null,
 });
 
 export const defaultStepperValues: ProductStepperValues = {
+  attributeValues: {},
   collectionId: "",
   detailsCondition: "",
   detailsDesigner: "",
@@ -110,4 +126,5 @@ export const defaultStepperValues: ProductStepperValues = {
   storyProvenance: "",
   storyTitle: "",
   tagsCsv: "",
+  typeId: null,
 };
