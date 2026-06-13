@@ -56,14 +56,17 @@
 - **Files**: `api/hono/routes/users.ts` (sign-up), `db/queries/users.ts`, tests.
 - **Spec**: on sign-up where existing row is a passwordless checkout shell (no passwordHash, metadata.source==='checkout') → set passwordHash + role on that row instead of 409 (`EMAIL_ALREADY_REGISTERED`). Registered rows still 409.
 - **Verify**: `npm test` route tests both branches. Ladder: +L2. **Depends**: P1-06.
-- [ ]
+- [x] (2026-06-13, 2e86603, "claimCheckoutShell with AND password_hash IS NULL; 7 tests incl. lost-race→409 and metadata-guard; 219 tests pass")
+- [ ] P1-07a: passwordHash returned in 201 body — strip from all user-returning routes (pre-existing pattern, fix as separate packet).
 
 ### P1-08: Rate-limit identity + reservation cap
 - **Objective**: create-order abuse requires more than a forged header.
 - **Files**: `lib/http/rate-limit.ts`, `api/hono/routes/payments.ts`, tests.
 - **Spec**: key on platform-trusted IP (Vercel `x-real-ip`, fall back to last untrusted hop) instead of first `x-forwarded-for` value (`rate-limit.ts:72-75`); add per-email cap (3 concurrent pending reservations) checked in create-order before reserving. Durable store (Upstash) is P2-08 — this packet is the in-place hardening.
 - **Verify**: `npm test` (forged XFF doesn't reset bucket; 4th pending reservation for same email → 429/409).
-- [ ]
+- [x] (2026-06-13, 0d1adc9, "x-real-ip first then last XFF; cap 3 live pending per email; emailLower normalized; catch block marks paymentStatus=failed; AST-verified tests; 219 pass")
+- [ ] P1-08a: catch block cleanup writes unguarded — original Razorpay error masked if DB fails. Move console.error to top of catch (route to P2-06 packet).
+- [ ] P1-08b: no test for Razorpay link-creation failure path (F3 verified by inspection only). Route to P2-06.
 
 ### P1-09: Stop echoing error.message to clients
 - **Objective**: uncaught exceptions return a generic envelope; details go to logs.
@@ -84,13 +87,13 @@
 - **Files**: `lib/orders/order-access-token.ts`, callers (payments.ts callback URL builder, confirmation page verify), tests.
 - **Spec**: HMAC over `orderId|expiresAt` with expiry (30 days), timing-safe verify (pattern already in file), reject expired. Keep URL param shape (`key`).
 - **Verify**: `npm test` (valid, tampered, expired).
-- [ ]
+- [x] (2026-06-13, 8f42fce, "HMAC over orderId|expiresAt; lastIndexOf pipe parse; expired/old-format/tampered all false; 5 tests; 219 pass")
 
 ### P1-12: Xeno leaves the deploy surface
 - **Objective**: no Slack/Codex agent endpoint or hardcoded business context ships with the storefront.
 - **Files**: delete `app/api/slack/xeno/route.ts`; move `WEAVE_X_CONTEXT`/owner-map out of `lib/ai/xeno-slack-agent.ts` into an untracked local config consumed by `scripts/xeno-slack-socket-bridge.ts` (which stays, runs locally); strip secrets from the child env (allow-list PATH/HOME/codex auth only) while you're in the file.
 - **Verify**: `npx tsc --noEmit`; `npm test` (xeno tests updated); `grep -rn "Question owner map" lib/` → 0 hits; route file absent. **Gate note**: full repo extraction is a #G-P1 question.
-- [ ]
+- [x] (2026-06-13, 3e2aa5c, "route deleted; WEAVE_X_CONTEXT+owner-map → env vars; child env allow-list; 25 xeno tests; 219 pass")
 
 ### P1-13: Constant-time webhook compare
 - **Files**: `api/hono/routes/webhooks.ts:131` area, test.

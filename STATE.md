@@ -3,9 +3,9 @@
 
 ## Current
 - **Programme**: Shopify-parity, planned in `plans/` (master: `plans/000-master-plan.md`).
-- **Active phase**: P1 — `plans/P1-stabilize.md`. P1-01..P1-06, P1-09, P1-13, P1-16 done (see plan). 194 tests pass; tsc clean.
+- **Active phase**: P1 — `plans/P1-stabilize.md`. P1-01..P1-09, P1-11..P1-13, P1-16 done (see plan). 219 tests pass; tsc clean.
 - **Branch reality**: `sprint-abe` carries the unmerged emergency guest-checkout fix (`96e6151`, never merged to main — PR #31 abandoned) + Xeno Slack agent + Drape Room + HR Deno app. Production = `main@caf23bb`, LACKS guest-checkout payment links.
-- **Next concrete action**: Fan out P1-07 (depends P1-06, now done) + P1-10, P1-11, P1-12, P1-14, P1-17 in parallel. Then P1-08 (after P1-07). P1-15 (ops), P1-18 (analytics), P1-19 (route tests, after P1-06+P1-07).
+- **Next concrete action**: Wave 2 — P1-14 alone (conflicts with P1-10/P1-17/P1-18; must run solo). Then Wave 3: P1-10 + P1-17 + P1-18. Wave 4: P1-19. P1-15 (ops, no code).
 
 ## Standing facts (verified 2026-06-13)
 - Tests 174/174 pass; tsc clean; lint clean.
@@ -33,6 +33,13 @@
 - **2026-06-13**: #G-GST resolved — GST-inclusive prices going forward ("for now" — revisit if pricing model changes). pricePaise will be redefined as GST-inclusive in P2-04; `razorpay.ts:182` add-on removed. P2-03 gate closed. Unblocks P5 feed work (Google India requires GST-inclusive prices matching landing page).
 
 ## Log
+### 2026-06-13 — P1-07, P1-08, P1-11, P1-12 executed via ship pipeline (Wave 1)
+- **Changed**: users.ts+queries/users.ts+test (2e86603, P1-07); rate-limit.ts+payments.ts+tests (0d1adc9, P1-08); order-access-token.ts+test (8f42fce, P1-11); xeno-slack-agent.ts+test+.gitignore (3e2aa5c, P1-12).
+- **Verified**: 219/219 pass; tsc clean; fable-reviewer round required 2-loop repair on P1-07/P1-08/P1-12, 1-loop on P1-09.
+- **Decisions**: P1-07 — claimCheckoutShell uses AND password_hash IS NULL predicate (prevents silent credential overwrite on concurrent claims). Spec escalation: unverified account claim design — anyone with the email can claim a checkout shell; accepted as-is pending principal decision. P1-08 — email normalized to lowercase throughout; pending cap uses paymentStatus+time-bound (not just status) to avoid locking out customers who abandoned checkouts. P1-11 — token format change intentionally breaks old permanent tokens (correct — they were the bug). P1-12 — WEAVE_X_CONTEXT moved to env var; test fixtures replaced real names with neutral placeholders.
+- **New failure modes**: P1-08 catch block: if cleanup writes fail, original Razorpay error is masked (console.error runs after — route to P2-06). Drizzle AST inspection uses collectPrimitives WeakSet walker (circular references in PgTable columns).
+- **Next concrete action**: Wave 2 — P1-14 alone (getSiteOrigin() helper, kill fromthetrunk.com fallback).
+
 ### 2026-06-13 — P1-06, P1-09, P1-13, P1-16 executed via ship pipeline
 - **Changed**: db/queries/users.ts+payments.ts+schema+migration (7fdb2f9, P1-06); lib/http/on-uncaught-error.ts+app.ts+test (7ba0754, P1-09); webhooks.ts+test (2e4ce96, P1-13); json-ld-render.test.ts (f23448b, P1-16).
 - **Verified**: 194/194 pass; tsc clean; fable-reviewer ACCEPT on all four (P1-09+P1-06 required repair loops for test theater and migration IF NOT EXISTS).
