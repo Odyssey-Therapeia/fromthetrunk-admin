@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 
-const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
+import { getSiteOrigin } from "@/lib/config/site";
+
+const baseUrl = getSiteOrigin();
 
 export default function robots(): MetadataRoute.Robots {
   return {

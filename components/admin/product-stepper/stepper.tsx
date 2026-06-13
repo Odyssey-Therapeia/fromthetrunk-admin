@@ -2,14 +2,23 @@
 
 import gsap from "gsap";
 import { useForm } from "@tanstack/react-form";
+import { Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { toPaise, toRupees } from "@/db/money";
+import { toPaise } from "@/db/money";
+import {
+  PRODUCT_STORY_APPLIED_EVENT,
+  type ProductStoryAppliedEventDetail,
+} from "@/lib/products/story-application";
+import { useAgentStore } from "@/lib/store/agent-store";
+import { slugify } from "@/lib/utils";
 
 import { LivePreviewCard } from "./live-preview-card";
+import { hasStepperChanges, serializeStepperValues } from "./autosave";
+import { getAvailabilitySaveFields } from "./availability";
 import { StepDetails } from "./step-details";
 import { StepPhotos } from "./step-photos";
 import { StepPreview } from "./step-preview";
@@ -22,18 +31,13 @@ import {
 } from "./types";
 
 type ProductStepperProps = {
+  initialMedia?: ProductStepperMedia[];
   initialValues?: Partial<ProductStepperValues>;
   productId?: string;
 };
 
 const steps = ["Photos", "Details", "Story", "Pricing", "Preview"] as const;
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+const emptyInitialMedia: ProductStepperMedia[] = [];
 
 const toNullableText = (value: string) => {
   const trimmed = value.trim();
@@ -41,6 +45,7 @@ const toNullableText = (value: string) => {
 };
 
 export function ProductStepper({
+  initialMedia = emptyInitialMedia,
   initialValues,
   productId,
 }: ProductStepperProps) {
@@ -49,8 +54,13 @@ export function ProductStepper({
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
-  const [uploaded, setUploaded] = useState<ProductStepperMedia[]>([]);
+  const [uploaded, setUploaded] = useState<ProductStepperMedia[]>(
+    () => initialMedia
+  );
+  const aiStoryPendingSaveRef = useRef(false);
   const stepContainerRef = useRef<HTMLDivElement>(null);
+
+  const { open: openAgent, anchorProduct } = useAgentStore();
 
   const mergedInitialValues = useMemo<ProductStepperValues>(
     () => ({
@@ -59,11 +69,18 @@ export function ProductStepper({
     }),
     [initialValues]
   );
+  const lastPersistedSnapshotRef = useRef(serializeStepperValues(mergedInitialValues));
+
+  useEffect(() => {
+    lastPersistedSnapshotRef.current = serializeStepperValues(mergedInitialValues);
+  }, [mergedInitialValues]);
 
   const persistProduct = useCallback(async (values: ProductStepperValues, forceDraft: boolean) => {
     setIsSaving(true);
     setSaveState("Saving...");
+    const currentSnapshot = serializeStepperValues(values);
 
+    const availability = getAvailabilitySaveFields(values);
     const payload = {
       collectionId: values.collectionId.trim() || null,
       detailsCondition: toNullableText(values.detailsCondition),
@@ -82,7 +99,9 @@ export function ProductStepper({
           ? values.slug.trim()
           : slugify(values.storyTitle || values.name || "untitled-product"),
       status: forceDraft ? "draft" : values.status,
-      stockStatus: "available",
+      reservedUntil: availability.reservedUntil,
+      soldAt: availability.soldAt,
+      stockStatus: availability.stockStatus,
       storyEra: toNullableText(values.storyEra),
       storyNarrative: toNullableText(values.storyNarrative),
       storyProvenance: toNullableText(values.storyProvenance),
@@ -125,8 +144,18 @@ export function ProductStepper({
         router.replace(`/admin/products/${data.id}`);
       }
 
-      setSaveState(forceDraft ? "Draft auto-saved" : "Saved");
-      if (forceDraft) {
+      lastPersistedSnapshotRef.current = currentSnapshot;
+      const didPersistAiStory = aiStoryPendingSaveRef.current;
+      if (didPersistAiStory) {
+        aiStoryPendingSaveRef.current = false;
+      }
+
+      setSaveState(
+        didPersistAiStory ? "AI story saved" : forceDraft ? "Draft auto-saved" : "Saved"
+      );
+      if (didPersistAiStory) {
+        toast.success("AI story saved.", { duration: 1200 });
+      } else if (forceDraft) {
         toast.success("Draft auto-saved.", { duration: 1200 });
       } else if (isCreate) {
         toast.success("Product created.");
@@ -148,9 +177,57 @@ export function ProductStepper({
       await persistProduct(value, false);
     },
   });
+  const setProductFieldValue = form.setFieldValue;
+
+  useEffect(() => {
+    setUploaded(initialMedia);
+    setProductFieldValue(
+      "imageMediaIds",
+      initialMedia.map((media) => media.id)
+    );
+  }, [initialMedia, productId, setProductFieldValue]);
+
+  const handleAiAssist = () => {
+    const name =
+      form.state.values.name.trim() ||
+      form.state.values.storyTitle.trim() ||
+      "Untitled Product";
+    anchorProduct(activeProductId, name);
+    openAgent();
+  };
+
+  const handleStoryApplied = useCallback((event: Event) => {
+    const { detail } = event as CustomEvent<ProductStoryAppliedEventDetail>;
+    if (!detail || detail.productId !== activeProductId) return;
+
+    if (detail.values.storyTitle) {
+      setProductFieldValue("storyTitle", detail.values.storyTitle);
+    }
+    if (detail.values.storyNarrative) {
+      setProductFieldValue("storyNarrative", detail.values.storyNarrative);
+    }
+    if (detail.values.storyProvenance) {
+      setProductFieldValue("storyProvenance", detail.values.storyProvenance);
+    }
+    if (detail.values.storyEra) {
+      setProductFieldValue("storyEra", detail.values.storyEra);
+    }
+    aiStoryPendingSaveRef.current = true;
+    setSaveState("AI story updated locally");
+  }, [activeProductId, setProductFieldValue]);
+
+  useEffect(() => {
+    window.addEventListener(PRODUCT_STORY_APPLIED_EVENT, handleStoryApplied);
+    return () => {
+      window.removeEventListener(PRODUCT_STORY_APPLIED_EVENT, handleStoryApplied);
+    };
+  }, [handleStoryApplied]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      if (!hasStepperChanges(form.state.values, lastPersistedSnapshotRef.current)) {
+        return;
+      }
       void persistProduct(form.state.values, true);
     }, 30_000);
 
@@ -176,9 +253,9 @@ export function ProductStepper({
   }, [stepIndex]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div className="@container grid gap-6 @5xl:grid-cols-[1fr_320px]">
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {steps.map((step, index) => (
             <Button
               key={step}
@@ -190,6 +267,18 @@ export function ProductStepper({
               {index + 1}. {step}
             </Button>
           ))}
+          <div className="ml-auto">
+            <Button
+              onClick={handleAiAssist}
+              size="sm"
+              type="button"
+              variant="outline"
+              className="gap-1.5"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI Assist
+            </Button>
+          </div>
         </div>
 
         <div ref={stepContainerRef}>
@@ -204,7 +293,7 @@ export function ProductStepper({
 
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-muted-foreground">
-            {isSaving ? "Saving..." : saveState ?? "Changes auto-save every 30 seconds"}
+            {isSaving ? "Saving..." : saveState ?? "Changes auto-save after edits"}
           </div>
           <div className="flex gap-2">
             <Button

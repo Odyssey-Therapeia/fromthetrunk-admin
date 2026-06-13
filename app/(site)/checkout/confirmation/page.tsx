@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getServerAuthSession } from "@/lib/auth/get-session";
 import { getOrder } from "@/db/queries/orders";
+import { verifyOrderAccessToken } from "@/lib/orders/order-access-token";
 import type { Order, OrderItem } from "@/types/domain";
+import { ClearCartOnConfirmation } from "./clear-cart-on-confirmation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +18,18 @@ export const metadata: Metadata = {
 };
 
 type ConfirmationPageProps = {
-  searchParams: Promise<{ orderId?: string }> | { orderId?: string };
+  searchParams:
+    | Promise<{ key?: string; orderId?: string; payment?: string }>
+    | { key?: string; orderId?: string; payment?: string };
 };
 
 export default async function ConfirmationPage({
   searchParams,
 }: ConfirmationPageProps) {
   const resolvedParams = await Promise.resolve(searchParams);
+  const accessKey = resolvedParams?.key;
   const orderId = resolvedParams?.orderId;
+  const paymentStatus = resolvedParams?.payment;
 
   // If no order ID, show generic confirmation
   if (!orderId) {
@@ -33,9 +38,6 @@ export default async function ConfirmationPage({
 
   try {
     const session = await getServerAuthSession();
-    if (!session?.user?.id) {
-      redirect("/account/sign-in");
-    }
 
     const rawOrder = await getOrder(orderId);
     if (!rawOrder) {
@@ -46,12 +48,15 @@ export default async function ConfirmationPage({
 
     // Verify the order belongs to the current user
     const orderUserId = order.userId;
-    if (orderUserId !== session.user.id) {
+    const canViewOrder =
+      orderUserId === session?.user?.id || verifyOrderAccessToken(order.id, accessKey);
+    if (!canViewOrder) {
       return <GenericConfirmation />;
     }
 
     return (
       <div className="mx-auto w-full max-w-3xl space-y-8 px-6 py-20">
+        <ClearCartOnConfirmation />
         <div className="text-center space-y-4">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <svg
@@ -76,7 +81,9 @@ export default async function ConfirmationPage({
           </h1>
           <p className="text-sm text-muted-foreground">
             Order #{order.id.slice(0, 8).toUpperCase()} has been placed successfully.
-            You will receive a confirmation email shortly.
+            {paymentStatus === "review"
+              ? " We have received the payment handoff and are checking the payment record."
+              : " You will receive a confirmation email shortly."}
           </p>
         </div>
 

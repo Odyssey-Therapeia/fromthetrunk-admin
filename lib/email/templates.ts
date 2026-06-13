@@ -2,14 +2,16 @@
  * Brand-consistent email templates for From the Trunk.
  * Uses inline styles for maximum email client compatibility.
  */
+import { formatINR } from "@/db/money";
+import { getSiteOrigin } from "@/lib/config/site";
 
-type EmailOrderItem = {
+export type EmailOrderItem = {
   name: string;
   price: number;
   quantity: number;
 };
 
-type EmailShippingAddress = {
+export type EmailShippingAddress = {
   city?: null | string;
   country?: null | string;
   email?: null | string;
@@ -21,7 +23,7 @@ type EmailShippingAddress = {
   state?: null | string;
 };
 
-type EmailOrder = {
+export type EmailOrder = {
   id: string;
   items: EmailOrderItem[];
   shippingAddress?: EmailShippingAddress | null;
@@ -41,12 +43,13 @@ const brandStyles = {
   border: "#dccbb7",
 };
 
-const formatINR = (amount: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
+const escapeHtml = (value: null | string | undefined) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
 const wrapper = (content: string) => `
 <!DOCTYPE html>
@@ -86,11 +89,11 @@ export function orderConfirmationEmail(order: EmailOrder): {
       (item: EmailOrderItem) => `
     <tr>
       <td style="padding:8px 0;border-bottom:1px solid ${brandStyles.border};font-size:14px;color:${brandStyles.text};">
-        ${item.name}<br>
+        ${escapeHtml(item.name)}<br>
         <span style="font-size:12px;color:${brandStyles.muted};">Qty: ${item.quantity}</span>
       </td>
       <td style="padding:8px 0;border-bottom:1px solid ${brandStyles.border};font-size:14px;color:${brandStyles.text};text-align:right;">
-        ${formatINR(item.price * item.quantity)}
+        ${formatINR(item.price * item.quantity * 100)}
       </td>
     </tr>
   `
@@ -103,10 +106,10 @@ export function orderConfirmationEmail(order: EmailOrder): {
     <div style="margin-top:20px;padding:16px;background:${brandStyles.bg};border-radius:12px;">
       <p style="font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Shipping to</p>
       <p style="font-size:14px;color:${brandStyles.text};margin:0;line-height:1.6;">
-        ${address.name ?? ""}<br>
-        ${address.line1 ?? ""}${address.line2 ? `<br>${address.line2}` : ""}<br>
-        ${address.city ?? ""}${address.state ? `, ${address.state}` : ""} ${address.postalCode ?? ""}<br>
-        ${address.country ?? ""}
+        ${escapeHtml(address.name)}<br>
+        ${escapeHtml(address.line1)}${address.line2 ? `<br>${escapeHtml(address.line2)}` : ""}<br>
+        ${escapeHtml(address.city)}${address.state ? `, ${escapeHtml(address.state)}` : ""} ${escapeHtml(address.postalCode)}<br>
+        ${escapeHtml(address.country)}
       </p>
     </div>
   `
@@ -135,19 +138,19 @@ export function orderConfirmationEmail(order: EmailOrder): {
 
     <div style="margin:16px 0;">
       <div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;">
-        <span>Subtotal</span><span>${formatINR(order.subtotal)}</span>
+        <span>Subtotal</span><span>${formatINR(order.subtotal * 100)}</span>
       </div>
-      ${(order.shippingCost ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>Shipping</span><span>${formatINR(order.shippingCost!)}</span></div>` : ""}
-      ${(order.taxAmount ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>GST</span><span>${formatINR(order.taxAmount!)}</span></div>` : ""}
+      ${(order.shippingCost ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>Shipping</span><span>${formatINR(order.shippingCost! * 100)}</span></div>` : ""}
+      ${(order.taxAmount ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>GST</span><span>${formatINR(order.taxAmount! * 100)}</span></div>` : ""}
       <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;color:${brandStyles.text};margin:12px 0;padding-top:12px;border-top:2px solid ${brandStyles.border};">
-        <span>Total</span><span>${formatINR(order.total ?? order.subtotal)}</span>
+        <span>Total</span><span>${formatINR((order.total ?? order.subtotal) * 100)}</span>
       </div>
     </div>
 
     ${addressBlock}
 
     <div style="text-align:center;margin-top:24px;">
-      <a href="${process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com"}/account/orders"
+      <a href="${getSiteOrigin()}/account/orders"
          style="display:inline-block;padding:12px 32px;background:${brandStyles.primary};color:#fff;border-radius:100px;text-decoration:none;font-size:14px;">
         View Your Orders
       </a>
@@ -155,7 +158,103 @@ export function orderConfirmationEmail(order: EmailOrder): {
   `;
 
   return {
-    subject: `Order Confirmed — #${orderId} | From the Trunk`,
+    subject: `Order Confirmed - #${orderId} | From the Trunk`,
+    html: wrapper(content),
+  };
+}
+
+export function orderPurchaseNotificationEmail(
+  order: EmailOrder,
+  payment: {
+    paymentId?: null | string;
+    paymentMethod?: null | string;
+    paymentReference?: null | string;
+    paymentUrl?: null | string;
+    source: string;
+  }
+): { subject: string; html: string } {
+  const orderId = order.id.slice(0, 8).toUpperCase();
+  const address = order.shippingAddress;
+  const items = order.items ?? [];
+  const itemRows = items
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid ${brandStyles.border};font-size:14px;color:${brandStyles.text};">
+            ${escapeHtml(item.name)}<br>
+            <span style="font-size:12px;color:${brandStyles.muted};">Qty: ${item.quantity}</span>
+          </td>
+          <td style="padding:8px 0;border-bottom:1px solid ${brandStyles.border};font-size:14px;color:${brandStyles.text};text-align:right;">
+            ${formatINR(item.price * item.quantity * 100)}
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <h2 style="font-size:24px;color:${brandStyles.text};margin:0 0 4px;">Paid Order Invoice</h2>
+      <p style="font-size:14px;color:${brandStyles.muted};margin:0;">Order #${orderId}</p>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:${brandStyles.bg};border-radius:12px;">
+      <p style="font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Customer</p>
+      <p style="font-size:14px;color:${brandStyles.text};line-height:1.6;margin:0;">
+        ${escapeHtml(address?.name)}<br>
+        ${escapeHtml(address?.email)}${address?.phone ? `<br>${escapeHtml(address.phone)}` : ""}
+      </p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">Item</th>
+          <th style="text-align:right;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+
+    <div style="margin:16px 0;">
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;">
+        <span>Subtotal</span><span>${formatINR(order.subtotal * 100)}</span>
+      </div>
+      ${(order.shippingCost ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>Shipping</span><span>${formatINR(order.shippingCost! * 100)}</span></div>` : ""}
+      ${(order.taxAmount ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;font-size:14px;color:${brandStyles.muted};margin:4px 0;"><span>GST</span><span>${formatINR(order.taxAmount! * 100)}</span></div>` : ""}
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;color:${brandStyles.text};margin:12px 0;padding-top:12px;border-top:2px solid ${brandStyles.border};">
+        <span>Total paid</span><span>${formatINR((order.total ?? order.subtotal) * 100)}</span>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding:16px;background:${brandStyles.bg};border-radius:12px;">
+      <p style="font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Payment</p>
+      <p style="font-size:14px;color:${brandStyles.text};line-height:1.6;margin:0;">
+        Source: ${escapeHtml(payment.source)}<br>
+        Method: ${escapeHtml(payment.paymentMethod ?? "Razorpay")}<br>
+        ${payment.paymentId ? `Payment ID: ${escapeHtml(payment.paymentId)}<br>` : ""}
+        ${payment.paymentReference ? `Reference: ${escapeHtml(payment.paymentReference)}<br>` : ""}
+        ${payment.paymentUrl ? `Payment link: ${escapeHtml(payment.paymentUrl)}` : ""}
+      </p>
+    </div>
+
+    ${
+      address?.line1
+        ? `<div style="margin-top:20px;padding:16px;background:${brandStyles.bg};border-radius:12px;">
+            <p style="font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Ship to</p>
+            <p style="font-size:14px;color:${brandStyles.text};line-height:1.6;margin:0;">
+              ${escapeHtml(address.name)}<br>
+              ${escapeHtml(address.line1)}${address.line2 ? `<br>${escapeHtml(address.line2)}` : ""}<br>
+              ${escapeHtml(address.city)}${address.state ? `, ${escapeHtml(address.state)}` : ""} ${escapeHtml(address.postalCode)}<br>
+              ${escapeHtml(address.country)}
+            </p>
+          </div>`
+        : ""
+    }
+  `;
+
+  return {
+    subject: `Paid Order Invoice - #${orderId} | From the Trunk`,
     html: wrapper(content),
   };
 }
@@ -176,7 +275,7 @@ export function orderShippedEmail(
       ${trackingNumber ? `Your tracking number is <strong style="color:${brandStyles.text};">${trackingNumber}</strong>.` : ""}
     </p>
     <div style="text-align:center;margin-top:24px;">
-      <a href="${process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com"}/account/orders"
+      <a href="${getSiteOrigin()}/account/orders"
          style="display:inline-block;padding:12px 32px;background:${brandStyles.primary};color:#fff;border-radius:100px;text-decoration:none;font-size:14px;">
         Track Your Order
       </a>
@@ -184,7 +283,7 @@ export function orderShippedEmail(
   `;
 
   return {
-    subject: `Your Order Has Shipped — #${orderId} | From the Trunk`,
+    subject: `Your Order Has Shipped - #${orderId} | From the Trunk`,
     html: wrapper(content),
   };
 }
@@ -202,14 +301,14 @@ export function welcomeEmail(name: string): {
     </p>
     <p style="font-size:14px;color:${brandStyles.muted};line-height:1.6;">
       Thank you for joining our community. Each saree in our collection is a
-      one-of-a-kind piece with its own story — authenticated, restored, and
+      one-of-a-kind piece with its own story: authenticated, restored, and
       ready for a new chapter.
     </p>
     <p style="font-size:14px;color:${brandStyles.muted};line-height:1.6;">
       Start exploring and discover your next treasure.
     </p>
     <div style="text-align:center;margin-top:24px;">
-      <a href="${process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com"}/collection"
+      <a href="${getSiteOrigin()}/collection"
          style="display:inline-block;padding:12px 32px;background:${brandStyles.primary};color:#fff;border-radius:100px;text-decoration:none;font-size:14px;">
         Explore the Collection
       </a>

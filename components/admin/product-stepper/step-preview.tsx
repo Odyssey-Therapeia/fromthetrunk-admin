@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatINR, toPaise } from "@/db/money";
 
+import { productStockStatusLabels } from "./availability";
 import type { ProductStepperValues } from "./types";
 
 type StepPreviewProps = {
@@ -19,6 +20,9 @@ export function StepPreview({
       <CardContent className="space-y-3 text-sm">
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary">{values.status}</Badge>
+          <Badge variant={values.stockStatus === "sold" ? "destructive" : "outline"}>
+            {productStockStatusLabels[values.stockStatus]}
+          </Badge>
           {values.featured ? <Badge>Featured</Badge> : null}
           <Badge variant="outline">{values.imageMediaIds.length} photos</Badge>
         </div>

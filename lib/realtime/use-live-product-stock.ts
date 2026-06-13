@@ -83,6 +83,13 @@ export const useLiveProductStock = ({
     }),
     [productId]
   );
+  const mapStockRows = useCallback(
+    (values: unknown[]) =>
+      values
+        .map((entry) => normalizeStockRow(entry, initialStatus))
+        .filter((entry): entry is ProductStockRow => Boolean(entry)),
+    [initialStatus],
+  );
 
   const { mode, rows } = useElectricShapeRows<ProductStockRow>({
     fallbackFetch,
@@ -93,10 +100,7 @@ export const useLiveProductStock = ({
         stockStatus: initialStatus,
       },
     ],
-    mapRows: (values) =>
-      values
-        .map((entry) => normalizeStockRow(entry, initialStatus))
-        .filter((entry): entry is ProductStockRow => Boolean(entry)),
+    mapRows: mapStockRows,
     pollIntervalMs: 10_000,
     shapeParams,
     table: "products",

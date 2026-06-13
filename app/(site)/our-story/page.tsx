@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Our Story",
   description:
-    "From the Trunk began with a single cedar chest filled with heirloom sarees. Each piece whispered stories of celebrations, journeys, and women who wore them before.",
+    "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems, bridging the gap between vintage charm and modern luxury.",
 };
 
 export default function OurStoryPage() {
@@ -31,27 +31,27 @@ async function OurStoryPageContent() {
 
   const cards = [
     {
-      title: textOrFallback(ourStoryPage?.cardOneTitle, "Curated Heritage"),
+      title: textOrFallback(ourStoryPage?.cardOneTitle, "Sourcing"),
       description:
         textOrFallback(
           ourStoryPage?.cardOneBody,
-          "Every saree is sourced from trusted collectors and family archives."
+          "We give new life to preloved sarees sourced directly from homes."
         ),
     },
     {
-      title: textOrFallback(ourStoryPage?.cardTwoTitle, "Authenticated Craft"),
+      title: textOrFallback(ourStoryPage?.cardTwoTitle, "Quality Control"),
       description:
         textOrFallback(
           ourStoryPage?.cardTwoBody,
-          "We verify weave, zari, and provenance before adding any piece."
+          "A rigorous 360\u00B0 check for tears, spills, and material integrity."
         ),
     },
     {
-      title: textOrFallback(ourStoryPage?.cardThreeTitle, "Modern Heirlooms"),
+      title: textOrFallback(ourStoryPage?.cardThreeTitle, "Eco-Restoration"),
       description:
         textOrFallback(
           ourStoryPage?.cardThreeBody,
-          "Pieces are restored with care so they can be cherished again."
+          "Conscious cleaning and artisanal mending that respects the fabric."
         ),
     },
   ];
@@ -73,7 +73,7 @@ async function OurStoryPageContent() {
               {textOrFallback(ourStoryPage?.heroEyebrow, "Our Story")}
             </p>
             <h1 className="font-serif text-4xl md:text-6xl">
-              {textOrFallback(ourStoryPage?.heroTitle, "A trunk of memories, reopened")}
+              {textOrFallback(ourStoryPage?.heroTitle, "Born in Bengaluru, rooted in heritage")}
             </h1>
           </ScrollReveal>
         </div>
@@ -82,12 +82,12 @@ async function OurStoryPageContent() {
       <section className="mx-auto w-full max-w-5xl space-y-10 px-6">
         <ScrollReveal className="space-y-4">
           <h2 className="font-serif text-3xl text-foreground">
-            {textOrFallback(ourStoryPage?.sectionTitle, "From keepsake to collection")}
+            {textOrFallback(ourStoryPage?.sectionTitle, "Our Trunk Journey")}
           </h2>
           <p className="text-sm text-muted-foreground">
             {textOrFallback(
               ourStoryPage?.sectionBody,
-              "The first trunk belonged to a grandmother who kept every saree she wore for milestones, festivals, and family weddings. We realized each piece carried a story worth preserving and sharing."
+              "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems. By sourcing forgotten treasures and meticulously restoring them to their original glory, we bridge the gap between vintage charm and modern luxury. We believe in a world where quality isn't just bought, it's preserved."
             )}
           </p>
         </ScrollReveal>
@@ -107,6 +107,49 @@ async function OurStoryPageContent() {
             </Card>
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-5xl space-y-6 px-6">
+        <ScrollReveal className="space-y-6">
+          <h2 className="font-serif text-3xl text-foreground">
+            Why we do what we do
+          </h2>
+          <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+            <p>
+              There&apos;s something quietly powerful about a saree. It carries
+              more than fabric &mdash; it holds memories, milestones, and
+              moments that once meant everything.
+            </p>
+            <p>
+              In so many homes, these beautiful pieces lie tucked away,
+              preserved but forgotten.
+            </p>
+            <p>
+              From the Trunk was born from a simple, heartfelt belief: these
+              sarees still have stories left to tell.
+            </p>
+            <p>
+              By giving your pre-loved sarees a second life, you&apos;re not
+              just clearing space &mdash; you&apos;re passing on heritage,
+              emotion, and craftsmanship. Each saree becomes a bridge between
+              past and present, finding new meaning in someone else&apos;s
+              journey.
+            </p>
+            <p>
+              And in doing so, you&apos;re also making a conscious, sustainable
+              choice &mdash; reducing waste while celebrating timeless fashion.
+            </p>
+            <p className="font-serif text-base text-foreground">
+              At From the Trunk, we don&apos;t just collect sarees.
+              <br />
+              We honor them.
+              <br />
+              We preserve their stories.
+              <br />
+              And we help them be loved all over again.
+            </p>
+          </div>
+        </ScrollReveal>
       </section>
     </div>
   );

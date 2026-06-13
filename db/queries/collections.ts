@@ -1,7 +1,8 @@
-import { desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
+import { and, desc, eq, inArray, InferInsertModel, InferSelectModel, isNotNull } from "drizzle-orm";
 
-import { db } from "@/db";
-import { collections, mediaAssets } from "@/db/schema";
+import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
+import { collections, mediaAssets, products } from "@/db/schema";
 
 type CollectionRecord = InferSelectModel<typeof collections>;
 type MediaRecord = InferSelectModel<typeof mediaAssets>;
@@ -30,7 +31,7 @@ const hydrateCollections = async (
 
   const mediaRows =
     mediaIds.length > 0
-      ? await db.select().from(mediaAssets).where(inArray(mediaAssets.id, mediaIds))
+      ? await withRetry(() => db.select().from(mediaAssets).where(inArray(mediaAssets.id, mediaIds)))
       : [];
   const mediaById = new Map(mediaRows.map((row) => [row.id, row]));
 
@@ -41,12 +42,52 @@ const hydrateCollections = async (
 };
 
 export const listCollections = async (limit = 100, offset = 0): Promise<CollectionWithHeroMedia[]> => {
-  const rows = await db
-    .select()
-    .from(collections)
-    .orderBy(desc(collections.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await withRetry(() =>
+    db
+      .select()
+      .from(collections)
+      .orderBy(desc(collections.createdAt))
+      .limit(limit)
+      .offset(offset)
+  );
+
+  return hydrateCollections(rows);
+};
+
+export const listCollectionsWithProducts = async ({
+  includeDrafts = false,
+  limit = 100,
+  offset = 0,
+}: {
+  includeDrafts?: boolean;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<CollectionWithHeroMedia[]> => {
+  const productCollectionRows = await withRetry(() =>
+    db
+      .selectDistinct({ collectionId: products.collectionId })
+      .from(products)
+      .where(
+        includeDrafts
+          ? isNotNull(products.collectionId)
+          : and(eq(products.status, "published"), isNotNull(products.collectionId))
+      )
+  );
+  const collectionIds = productCollectionRows
+    .map((row) => row.collectionId)
+    .filter((value): value is string => Boolean(value));
+
+  if (collectionIds.length === 0) return [];
+
+  const rows = await withRetry(() =>
+    db
+      .select()
+      .from(collections)
+      .where(inArray(collections.id, collectionIds))
+      .orderBy(desc(collections.createdAt))
+      .limit(limit)
+      .offset(offset)
+  );
 
   return hydrateCollections(rows);
 };
@@ -54,7 +95,9 @@ export const listCollections = async (limit = 100, offset = 0): Promise<Collecti
 export const getCollectionBySlug = async (
   slug: string
 ): Promise<CollectionWithHeroMedia | null> => {
-  const [row] = await db.select().from(collections).where(eq(collections.slug, slug)).limit(1);
+  const [row] = await withRetry(() =>
+    db.select().from(collections).where(eq(collections.slug, slug)).limit(1)
+  );
   if (!row) return null;
   const [hydrated] = await hydrateCollections([row]);
   return hydrated ?? null;
@@ -63,13 +106,16 @@ export const getCollectionBySlug = async (
 export const createCollection = async (
   input: CreateCollectionInput
 ): Promise<CollectionWithHeroMedia> => {
-  const [created] = await db
-    .insert(collections)
-    .values({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const created = requireFirstRow(
+    await db
+      .insert(collections)
+      .values({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .returning(),
+    "Failed to create collection."
+  );
 
   const [hydrated] = await hydrateCollections([created]);
   if (!hydrated) {
@@ -83,14 +129,16 @@ export const updateCollection = async (
   collectionId: string,
   input: UpdateCollectionInput
 ): Promise<CollectionWithHeroMedia | null> => {
-  const [updated] = await db
-    .update(collections)
-    .set({
-      ...input,
-      updatedAt: new Date(),
-    })
-    .where(eq(collections.id, collectionId))
-    .returning();
+  const updated = getFirstRow(
+    await db
+      .update(collections)
+      .set({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .where(eq(collections.id, collectionId))
+      .returning()
+  );
 
   if (!updated) return null;
 

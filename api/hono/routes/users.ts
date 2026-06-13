@@ -13,7 +13,8 @@ import {
 } from "@/api/hono/schemas/users";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
-import { getUserByEmail, getUserById, listUsers, updateUser } from "@/db/queries/users";
+import { claimCheckoutShell, getUserByEmail, getUserById, listUsers, updateUser } from "@/db/queries/users";
+import { requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
 import { welcomeEmail } from "@/lib/email/templates";
@@ -83,16 +84,19 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       const passwordHash = await bcrypt.hash(body.password, 12);
-      const [created] = await db
-        .insert(users)
-        .values({
-          email: body.email.toLowerCase(),
-          name: body.name,
-          passwordHash,
-          role: "admin",
-          updatedAt: new Date(),
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(users)
+          .values({
+            email: body.email.toLowerCase(),
+            name: body.name,
+            passwordHash,
+            role: "admin",
+            updatedAt: new Date(),
+          })
+          .returning(),
+        "Failed to create admin user."
+      );
 
       return c.json(created, 201);
     }
@@ -132,27 +136,67 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const body = c.req.valid("json");
       const existing = await getUserByEmail(body.email);
+
       if (existing) {
-        return c.json(
-          {
-            code: "EMAIL_ALREADY_REGISTERED",
-            message: "An account with this email already exists.",
-          },
-          409
-        );
+        // Checkout shell: no password yet, created via guest checkout flow
+        const isCheckoutShell =
+          !existing.passwordHash &&
+          (existing.metadata as Record<string, unknown> | null)?.source === "checkout";
+
+        if (!isCheckoutShell) {
+          return c.json(
+            {
+              code: "EMAIL_ALREADY_REGISTERED",
+              message: "An account with this email already exists.",
+            },
+            409
+          );
+        }
+
+        // Upgrade the shell in-place so existing orders remain linked.
+        // claimCheckoutShell uses WHERE password_hash IS NULL, so only one
+        // concurrent writer wins; the loser gets null back.
+        const passwordHash = await bcrypt.hash(body.password, 12);
+        const upgraded = await claimCheckoutShell(existing.id, {
+          passwordHash,
+          ...(body.name ? { name: body.name } : {}),
+        });
+
+        if (!upgraded) {
+          // Lost the race — another request already claimed this shell
+          return c.json(
+            {
+              code: "EMAIL_ALREADY_REGISTERED",
+              message: "An account with this email already exists.",
+            },
+            409
+          );
+        }
+
+        const emailTemplate = welcomeEmail(body.name.trim());
+        sendEmail({
+          to: existing.email,
+          subject: emailTemplate.subject,
+          html: emailTemplate.html,
+        }).catch(() => undefined);
+
+        return c.json(upgraded, 201);
       }
 
       const passwordHash = await bcrypt.hash(body.password, 12);
-      const [created] = await db
-        .insert(users)
-        .values({
-          email: body.email.toLowerCase(),
-          name: body.name,
-          passwordHash,
-          role: "customer",
-          updatedAt: new Date(),
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(users)
+          .values({
+            email: body.email.toLowerCase(),
+            name: body.name,
+            passwordHash,
+            role: "customer",
+            updatedAt: new Date(),
+          })
+          .returning(),
+        "Failed to create user."
+      );
 
       const emailTemplate = welcomeEmail(body.name.trim());
       sendEmail({

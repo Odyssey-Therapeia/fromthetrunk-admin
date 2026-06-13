@@ -65,13 +65,22 @@ export function checkRateLimit(
 /**
  * Extract a rate-limit key from a request.
  * Uses user ID if available (from headers set by middleware), otherwise IP.
+ *
+ * IP resolution order:
+ *  1. x-real-ip  — set by Vercel from the TLS connection; not client-controllable.
+ *  2. Last hop of x-forwarded-for — the closest trusted proxy entry; harder to forge
+ *     than the first hop, which a client can freely prepend.
  */
 export function getRateLimitKey(
   request: Request,
   prefix: string
 ): string {
+  // Vercel sets x-real-ip from the TLS connection — unforgeable by clients
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return `${prefix}:${realIp.trim()}`;
+  // Fallback: last hop in x-forwarded-for (hardest to forge)
   const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() || "unknown";
+  const ip = forwarded?.split(",").pop()?.trim() || "unknown";
   return `${prefix}:${ip}`;
 }
 

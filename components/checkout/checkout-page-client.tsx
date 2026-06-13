@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { GST_RATE, SHIPPING_TIERS, type ShippingMethod } from "@/lib/config/order-pricing";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
@@ -39,22 +40,61 @@ interface FormErrors {
   [key: string]: string | undefined;
 }
 
-const GST_RATE = 0.12;
-
-const SHIPPING_TIERS = {
-  freeThreshold: 25000,
-  standard: 500,
-  express: 1200,
-};
-
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => {
+    Razorpay: new (options: RazorpayOptions) => {
       open: () => void;
-      on: (event: string, handler: (response: Record<string, unknown>) => void) => void;
+      on: (event: "payment.failed", handler: (response: RazorpayFailureResponse) => void) => void;
     };
   }
 }
+
+type CreatePaymentOrderResponse = {
+  amount?: number;
+  amountPaise: number;
+  currency: string;
+  orderAccessToken?: string;
+  order_id?: string;
+  orderId: string;
+  paymentLinkId?: string;
+  paymentLinkUrl?: string;
+  razorpayKeyId?: string;
+  razorpayOrderId: string;
+};
+
+type RazorpaySuccessResponse = {
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+};
+
+type RazorpayFailureResponse = {
+  error?: {
+    description?: string;
+    reason?: string;
+  };
+};
+
+type RazorpayOptions = {
+  amount: number;
+  currency: string;
+  description: string;
+  handler: (response: RazorpaySuccessResponse) => Promise<void>;
+  key: string;
+  modal: {
+    ondismiss: () => void;
+  };
+  name: string;
+  order_id: string;
+  prefill: {
+    contact: string;
+    email: string;
+    name: string;
+  };
+  theme: {
+    color: string;
+  };
+};
 
 export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const router = useRouter();
@@ -67,7 +107,9 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
+  const [isPaymentScriptReady, setIsPaymentScriptReady] = useState(false);
+  const [paymentScriptError, setPaymentScriptError] = useState<string | null>(null);
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("standard");
 
   const { data: savedAddresses } = useQuery({
     queryKey: ["checkout-addresses"],
@@ -111,21 +153,53 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   }, [session?.user?.email]);
 
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
+    if (window.Razorpay) {
+      setIsPaymentScriptReady(true);
+      return;
+    }
+
+    const scriptSrc = "https://checkout.razorpay.com/v1/checkout.js";
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${scriptSrc}"]`);
+    const wasExistingScript = Boolean(script);
+
+    if (!script) {
+      script = document.createElement("script");
+      script.src = scriptSrc;
+      script.async = true;
+      document.body.appendChild(script);
+    }
+
+    const handleLoad = () => {
+      setPaymentScriptError(null);
+      setIsPaymentScriptReady(true);
+    };
+    const handleError = () => {
+      setIsPaymentScriptReady(false);
+      setPaymentScriptError("Payment system could not load. Please refresh and try again.");
+    };
+
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleError);
+
     return () => {
-      document.body.removeChild(script);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+      if (!wasExistingScript && script.parentElement) {
+        script.parentElement.removeChild(script);
+      }
     };
   }, []);
 
-  const canCheckout = Boolean(session?.user?.id);
+  const canCheckout = true;
 
   const shippingCost =
     subtotal >= SHIPPING_TIERS.freeThreshold ? 0 : SHIPPING_TIERS[shippingMethod];
   const taxAmount = Math.round(subtotal * GST_RATE);
   const total = subtotal + shippingCost + taxAmount;
+  const taxRateLabel = new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 2,
+    style: "percent",
+  }).format(GST_RATE);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -182,14 +256,28 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         throw new Error(errorData?.message || "Unable to create order.");
       }
 
-      const orderData = await createResponse.json();
-
-      if (!window.Razorpay) {
-        throw new Error("Payment system is loading. Please try again.");
+      const orderData = (await createResponse.json()) as CreatePaymentOrderResponse;
+      if (orderData.paymentLinkUrl) {
+        window.location.assign(orderData.paymentLinkUrl);
+        return;
       }
 
-      const options: Record<string, unknown> = {
-        key: orderData.razorpayKeyId,
+      if (paymentScriptError) {
+        throw new Error(paymentScriptError);
+      }
+
+      if (!isPaymentScriptReady || !window.Razorpay) {
+        throw new Error("Payment system is still loading. Please try again in a moment.");
+      }
+
+      const razorpayKeyId =
+        orderData.razorpayKeyId ?? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      if (!razorpayKeyId) {
+        throw new Error("Razorpay key is not configured.");
+      }
+
+      const options: RazorpayOptions = {
+        key: razorpayKeyId,
         amount: orderData.amountPaise,
         currency: orderData.currency,
         name: "FTT Luxury Group",
@@ -203,26 +291,40 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         theme: {
           color: "#6B1D1D",
         },
-        handler: async (response: Record<string, unknown>) => {
+        handler: async (response) => {
           try {
+            const {
+              razorpay_order_id: razorpayOrderId,
+              razorpay_payment_id: razorpayPaymentId,
+              razorpay_signature: razorpaySignature,
+            } = response;
+
+            if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+              throw new Error("Razorpay returned an incomplete payment response.");
+            }
+
             const verifyResponse = await fetch("/api/v2/payments/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 orderId: orderData.orderId,
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
+                razorpayOrderId,
+                razorpayPaymentId,
+                razorpaySignature,
               }),
             });
 
             if (!verifyResponse.ok) {
-              throw new Error("Payment verification failed.");
+              const errorData = await verifyResponse.json().catch(() => null);
+              throw new Error(errorData?.message || "Payment verification failed.");
             }
 
             clearCart();
             toast.success("Order placed successfully!");
-            router.push(`/checkout/confirmation?orderId=${orderData.orderId}`);
+            const confirmationPath = orderData.orderAccessToken
+              ? `/checkout/confirmation?orderId=${orderData.orderId}&key=${orderData.orderAccessToken}`
+              : `/checkout/confirmation?orderId=${orderData.orderId}`;
+            router.push(confirmationPath);
           } catch {
             setError("Payment was received but verification failed. Please contact support.");
             setIsSubmitting(false);
@@ -237,8 +339,12 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", () => {
-        setError("Payment failed. Please try again.");
+      rzp.on("payment.failed", (response) => {
+        const message =
+          response.error?.description ||
+          response.error?.reason ||
+          "Payment failed. Please try again.";
+        setError(message);
         setIsSubmitting(false);
       });
       rzp.open();
@@ -317,16 +423,6 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                 </div>
               </div>
 
-              {/* Login Warning for unauthenticated users */}
-              {!canCheckout && (
-                <div className="rounded-[24px] border border-dashed border-border/70 p-6 text-sm text-foreground/60 bg-card">
-                  Please sign in to place an order.{" "}
-                  <Button asChild variant="link" className="px-0 font-bold text-primary">
-                    <Link href="/account/sign-in">Sign in</Link>
-                  </Button>
-                </div>
-              )}
-
               {/* Shipping Form Section */}
               <section className="bg-card p-10 rounded-[24px] shadow-soft border border-border/20">
                 <div className="flex items-center gap-3 mb-8 text-foreground">
@@ -344,12 +440,17 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         <SelectValue placeholder="Choose a saved address..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {savedAddresses.map((addr) => (
-                          <SelectItem key={addr.id} value={addr.id}>
-                            {addr.label || addr.name || addr.line1} — {addr.city}
-                            {addr.isDefault ? " (Default)" : ""}
-                          </SelectItem>
-                        ))}
+                        {savedAddresses.map((addr) => {
+                          const savedAddressLabel =
+                            addr.label || addr.name || addr.line1 || "Saved address";
+                          return (
+                            <SelectItem key={addr.id} value={addr.id}>
+                              {savedAddressLabel}
+                              {addr.city ? `, ${addr.city}` : ""}
+                              {addr.isDefault ? " (Default)" : ""}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -387,7 +488,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       />
                       <div>
                         <p className="text-sm font-bold text-foreground">Standard Delivery</p>
-                        <p className="text-xs text-foreground/60 mt-1">5–7 business days</p>
+                        <p className="text-xs text-foreground/60 mt-1">5 to 7 business days</p>
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
@@ -406,7 +507,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       />
                       <div>
                         <p className="text-sm font-bold text-foreground">Express Delivery</p>
-                        <p className="text-xs text-foreground/60 mt-1">2–3 business days</p>
+                        <p className="text-xs text-foreground/60 mt-1">2 to 3 business days</p>
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
@@ -429,7 +530,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                   </div>
                   <h4 className="font-bold text-foreground">Payment Handled by Razorpay</h4>
                   <p className="text-sm text-foreground/60 max-w-sm">
-                    You will be redirected to our secure payment gateway to complete your purchase. We support Credit Cards, UPI, Netbanking, and Wallets.
+                    You will continue to Razorpay&apos;s secure payment link to complete your purchase. We support credit cards, UPI, netbanking, and wallets.
                   </p>
                 </div>
               </section>
@@ -489,7 +590,9 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-foreground/60">Estimated Tax (12%)</span>
+                        <span className="text-foreground/60">
+                          Estimated Tax ({taxRateLabel})
+                        </span>
                         <span className="font-medium text-foreground">{formatCurrency(taxAmount)}</span>
                       </div>
                     </div>
@@ -505,7 +608,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                     
                     <button 
                       onClick={handleSubmit}
-                      disabled={!canCheckout || isSubmitting}
+                      disabled={!hasItems || isSubmitting}
                       className="w-full bg-primary hover:bg-[#5a1818] text-primary-foreground font-bold py-5 rounded-full shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                     >
                       <span className="uppercase tracking-[0.15em] text-[10px]">
@@ -536,7 +639,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         ) : (
           <div className="space-y-10">
             <div className="rounded-[24px] border border-dashed border-border/70 bg-card/60 p-12 text-center shadow-soft max-w-2xl mx-auto">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-foreground/60 font-bold">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-foreground font-bold">
                 Your bag is empty
               </p>
               <h2 className="mt-4 font-serif text-3xl text-foreground font-bold">
@@ -552,7 +655,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
 
             <section className="space-y-8 pt-10">
               <div className="space-y-3 text-center">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">
                   Featured Picks
                 </p>
                 <h2 className="font-serif text-3xl text-foreground font-bold">

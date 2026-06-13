@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, withRetry } from "@/db";
 import { siteConfig } from "@/db/schema";
 
 export type SiteConfigContent = Record<string, unknown>;
@@ -14,11 +14,13 @@ export type SiteConfigSlug =
 export const getGlobal = async <TContent extends SiteConfigContent = SiteConfigContent>(
   slug: SiteConfigSlug
 ): Promise<TContent | null> => {
-  const [row] = await db
-    .select({ content: siteConfig.content })
-    .from(siteConfig)
-    .where(eq(siteConfig.slug, slug))
-    .limit(1);
+  const [row] = await withRetry(() =>
+    db
+      .select({ content: siteConfig.content })
+      .from(siteConfig)
+      .where(eq(siteConfig.slug, slug))
+      .limit(1)
+  );
 
   return (row?.content as TContent | undefined) ?? null;
 };

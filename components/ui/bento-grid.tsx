@@ -14,7 +14,7 @@ interface BentoCardProps {
   name: string
   className?: string
   background: ReactNode
-  Icon: React.ElementType
+  Icon?: React.ElementType
   description: string
   href: string
   cta: string
@@ -57,7 +57,9 @@ const BentoCard = ({
     <div>{background}</div>
     <div className="p-4">
       <div className="pointer-events-none z-10 flex transform-gpu flex-col gap-1 text-white drop-shadow-[0_6px_16px_rgba(0,0,0,0.45)] transition-all duration-300 lg:group-hover:-translate-y-10">
-        <Icon className="h-12 w-12 origin-left transform-gpu text-white transition-all duration-300 ease-in-out group-hover:scale-75" />
+        {Icon ? (
+          <Icon className="h-12 w-12 origin-left transform-gpu text-white transition-all duration-300 ease-in-out group-hover:scale-75" />
+        ) : null}
         <h3 className="text-xl font-semibold text-white">
           {name}
         </h3>

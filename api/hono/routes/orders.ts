@@ -8,7 +8,7 @@ import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { createOrder, getOrder, listOrders } from "@/db/queries/orders";
 import { products } from "@/db/schema";
-import { GST_RATE, SHIPPING_TIERS } from "@/lib/payments/razorpay";
+import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
 
 const toShippingCostPaise = (subtotalPaise: number, shippingMethod: "express" | "standard") => {
   const freeThresholdPaise = SHIPPING_TIERS.freeThreshold * 100;

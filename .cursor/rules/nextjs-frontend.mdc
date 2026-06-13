@@ -1,0 +1,90 @@
+---
+description: Mobile-first responsive layout, component architecture, and frontend patterns for Next.js 16+ / Tailwind v4 / shadcn v4 / React 19 projects.
+globs: "**/*.tsx, **/*.css"
+alwaysApply: false
+---
+
+# Frontend Stack & Patterns
+
+## Stack
+- Next.js 16+ (App Router, `proxy.ts`, `"use cache"`, async request APIs)
+- React 19+ (Server Components default, `"use client"` pushed to leaf nodes)
+- Tailwind CSS v4+ (CSS-first config via `@theme`, `@import "tailwindcss"`, built-in container queries)
+- shadcn/ui v4 (use shadcn/skills for component context; supports both Radix and Base UI primitives)
+
+## 1. File Structure
+- Components live in `components/` at project root, organized by domain:
+  - `components/ui/` — shadcn primitives. Never modify directly; extend via `className` + `cn()`.
+  - `components/{domain}/` — composite components (e.g., `components/product/product-card.tsx`).
+  - `components/layout/` — site-wide layout (header, footer, sidebar).
+  - `components/sections/` — page section compositions.
+  - `components/animations/` — animation wrappers (ScrollReveal, etc.).
+- Never create `components/` folders inside `app/` route directories.
+- Page-specific markup stays in the page file; extract to a named component only when reused.
+- Add new shadcn components with `npx shadcn@latest add <name>` — never copy-paste from docs.
+
+## 2. Server vs Client Components
+- Default to Server Components — no directive needed.
+- Add `"use client"` only for: event handlers, React hooks, browser APIs, or context consumers.
+- Push `"use client"` to the smallest possible leaf component.
+- Fetch data in Server Components via `async` / `await` — never `useEffect` + `fetch` for initial data.
+- All request APIs are async: `await cookies()`, `await headers()`, `await params`, `await searchParams`.
+- Use `proxy.ts` (not `middleware.ts`) for request interception in Next.js 16+.
+
+## 3. Layout & Responsiveness
+**Mobile-first always.** Base (unprefixed) Tailwind classes target the smallest screen. Scale up with ascending breakpoints (`sm:`, `md:`, `lg:`).
+
+**Two-tier responsive strategy:**
+- **Page-level (macro):** Viewport media queries (`sm:`, `md:`, `lg:`) for grid column counts, page padding, and section spacing.
+- **Component-level (micro):** Container queries (`@container` on parent, `@sm:` / `@md:` / `@lg:` on children) for internal padding, text sizing, aspect ratios, and layout direction within reusable components.
+
+**Reusable components must use container queries** for internal responsiveness. See `docs/internal/LayoutSystem.md` for full syntax reference and grid patterns.
+
+Card grids in catalog / e-commerce contexts: **minimum 2 columns on mobile** (`grid-cols-2`). Scale with `md:grid-cols-3` or `lg:grid-cols-4`. Never single-column for product/card grids.
+
+Page padding scales down on mobile: `px-4 sm:px-6` not `px-6`. `py-8 sm:py-12 lg:py-16` not `py-16`.
+
+## 4. Images
+- Every `next/image` with `fill` must have a `sizes` prop.
+- Grid cards: `sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"`
+- Hero / full-width: `sizes="100vw"`
+- Image containers use `aspect-[ratio]` with container-query override: `aspect-[3/4] @sm:aspect-[4/5]`.
+- Set meaningful `alt` text — empty string only for purely decorative images.
+- Use `priority` only on above-the-fold hero images.
+
+## 5. Design Tokens
+- All tokens as CSS variables in `globals.css` via `:root` and Tailwind `@theme`.
+- Never hardcode hex/rgb colors — use semantic tokens (`bg-primary`, `text-muted-foreground`).
+- Brand-specific colors use a project namespace in theme config (e.g., `trunk-*`, `brand-*`).
+- Typography uses `font-serif` / `font-sans` CSS variable families.
+- Refer to `docs/internal/DesignSystem.md` for project-specific token values when available.
+
+## 6. Animations
+- GSAP for scroll-triggered animations, complex timelines, and physics-based motion.
+- Framer Motion for layout animations, presence/exit, and simple transitions.
+- Always clean up GSAP instances in `useEffect` / `useLayoutEffect` cleanup. Prefer `useGSAP()` from `@gsap/react`.
+- Apply `transform-gpu` on animated elements for hardware acceleration.
+- Respect `prefers-reduced-motion` — provide a static fallback or disable animations.
+- Animation wrapper components go in `components/animations/`.
+
+## 7. Existing Project Safety
+When working in an established codebase (live production site):
+- Do not rewrite working components to adopt new patterns unless explicitly asked.
+- Migrate incrementally: adopt container queries in new or modified components; leave stable ones alone.
+- shadcn Base UI migration is component-by-component. Use `npx shadcn@latest add <name> --diff` to preview changes before applying. Radix-based components continue to work — only migrate when touching that component.
+- Test at 390px, 768px, and 1280px after any layout change. Verify visually, not just via build passing.
+- When fixing responsiveness in existing components, match the codebase's existing token usage and naming patterns.
+
+## 8. Anti-patterns — never do these
+- Desktop-first breakpoints (`text-xl md:text-base`) — always mobile-first.
+- Viewport queries (`sm:`, `md:`) for internal component layout — use container queries.
+- Omitting `sizes` on `next/image` with `fill`.
+- `aspect-[4/5]` without a mobile-appropriate container-query override.
+- Creating new primitive UI components (buttons, inputs, dialogs) — use shadcn/ui.
+- Placing component files inside `app/` route directories — they go in `components/`.
+- `useEffect` + `fetch` for data fetchable in Server Components.
+- `any` in TypeScript — use proper types or `unknown`.
+- `next/router` — use `next/navigation`.
+- `middleware.ts` — use `proxy.ts` (Next.js 16+).
+- Hardcoding color values — use design tokens.
+- String concatenation for `className` — use `cn()` from `@/lib/utils`.

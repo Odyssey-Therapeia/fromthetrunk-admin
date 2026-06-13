@@ -44,7 +44,7 @@ export default function TermsOfServicePage() {
 
         <section className="space-y-3">
           <h2 className="font-serif text-xl text-foreground">6. Intellectual Property</h2>
-          <p>All content on this site — including product descriptions, photography, design, and branding — is the property of From the Trunk and may not be reproduced without permission.</p>
+          <p>All content on this site, including product descriptions, photography, design, and branding, is the property of From the Trunk and may not be reproduced without permission.</p>
         </section>
 
         <section className="space-y-3">

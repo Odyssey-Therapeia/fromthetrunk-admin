@@ -1,4 +1,8 @@
-import { getCollectionBySlug, listCollections } from "@/db/queries/collections";
+import {
+  getCollectionBySlug,
+  listCollections,
+  listCollectionsWithProducts,
+} from "@/db/queries/collections";
 import {
   getFeaturedProducts as getFeaturedProductsQuery,
   getProductBySlug as getProductBySlugQuery,
@@ -7,11 +11,14 @@ import {
   searchProducts as searchProductsQuery,
 } from "@/db/queries/products";
 import { getGlobal } from "@/db/queries/globals";
+import type { ProductSortOption } from "@/lib/products/sort";
 import type { Product } from "@/types/domain";
 
 type QueryOptions = {
   includeDrafts?: boolean;
+  onlyWithProducts?: boolean;
   page?: number;
+  sort?: ProductSortOption;
 };
 
 export const getGlobals = async (slug: string, options: QueryOptions = {}) => {
@@ -21,8 +28,10 @@ export const getGlobals = async (slug: string, options: QueryOptions = {}) => {
 };
 
 export const getCollections = async (options: QueryOptions = {}) => {
-  void options;
-  const docs = (await listCollections()).sort((a, b) => a.name.localeCompare(b.name));
+  const docs = (await (options.onlyWithProducts
+    ? listCollectionsWithProducts({ includeDrafts: options.includeDrafts })
+    : listCollections()
+  )).sort((a, b) => a.name.localeCompare(b.name));
   return {
     docs,
     totalDocs: docs.length,
@@ -32,15 +41,16 @@ export const getCollections = async (options: QueryOptions = {}) => {
 export const getProducts = async (limit = 200, options: QueryOptions = {}) => {
   const page = options.page ?? 1;
   const offset = (page - 1) * limit;
-  const docs = await listProductsQuery({
+  const { rows, totalCount } = await listProductsQuery({
     includeDrafts: options.includeDrafts,
     limit,
     offset,
+    sort: options.sort,
   });
 
   return {
-    docs,
-    totalDocs: docs.length,
+    docs: rows,
+    totalDocs: totalCount,
   };
 };
 
@@ -56,15 +66,16 @@ export const getProductsByCollection = async (
 
   const page = options.page ?? 1;
   const offset = (page - 1) * limit;
-  const docs = await getProductsByCollectionQuery(collectionDoc.slug, {
+  const { rows, totalCount } = await getProductsByCollectionQuery(collectionDoc.slug, {
     includeDrafts: options.includeDrafts,
     limit,
     offset,
+    sort: options.sort,
   });
 
   return {
-    docs,
-    totalDocs: docs.length,
+    docs: rows,
+    totalDocs: totalCount,
   };
 };
 

@@ -1,7 +1,7 @@
 import type { Product } from "@/types/domain";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
-
-const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
+import { getProductDisplayDetails } from "@/lib/products/display-details";
+import { getSiteOrigin } from "@/lib/config/site";
 
 /**
  * Generate JSON-LD structured data for a product page.
@@ -9,6 +9,7 @@ const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com"
  */
 export function productJsonLd(product: Product): Record<string, unknown> {
   const image = resolveMediaURL(product.images?.[0]);
+  const displayDetails = getProductDisplayDetails(product);
 
   return {
     "@context": "https://schema.org",
@@ -16,7 +17,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     name: product.name,
     description:
       product.storyNarrative ??
-      `${product.name} — ${product.detailsFabric ?? "Heirloom"} saree.`,
+      `${product.name}: ${displayDetails.fabric}.`,
     ...(image ? { image } : {}),
     brand: {
       "@type": "Brand",
@@ -32,7 +33,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
           : product.stockStatus === "reserved"
           ? "https://schema.org/LimitedAvailability"
           : "https://schema.org/InStock",
-      url: `${baseUrl}/collection/${product.slug}`,
+      url: `${getSiteOrigin()}/collection/${product.slug}`,
       seller: {
         "@type": "Organization",
         name: "From the Trunk",
@@ -41,9 +42,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     ...(product.detailsCondition
       ? { itemCondition: "https://schema.org/UsedCondition" }
       : {}),
-    ...(product.detailsFabric
-      ? { material: product.detailsFabric }
-      : {}),
+    material: displayDetails.fabric,
   };
 }
 
@@ -55,7 +54,7 @@ export function organizationJsonLd(): Record<string, unknown> {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "From the Trunk",
-    url: baseUrl,
+    url: getSiteOrigin(),
     description:
       "Curated collection of authenticated, pre-loved luxury sarees with provenance.",
     contactPoint: {
@@ -64,6 +63,18 @@ export function organizationJsonLd(): Record<string, unknown> {
       contactType: "customer service",
     },
   };
+}
+
+/**
+ * Serialize JSON-LD data for safe inline embedding in a <script> tag.
+ *
+ * JSON.stringify does not escape `<`, so a value containing `</script>`
+ * would cause the HTML parser to close the script block early (XSS vector).
+ * Unicode-escaping `<` fixes this while remaining valid JSON — parsers decode
+ * `<` back to `<` transparently.
+ */
+export function safeJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
 /**

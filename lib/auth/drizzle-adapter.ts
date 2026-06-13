@@ -12,6 +12,7 @@ import type {
 import { randomBytes } from "crypto";
 
 import { db } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import {
   authAccounts,
   authSessions,
@@ -44,18 +45,21 @@ export const DrizzleAdapter = (): Adapter => {
         throw new Error("Email is required to create a user.");
       }
 
-      const [created] = await db
-        .insert(users)
-        .values({
-          email: data.email.toLowerCase(),
-          emailVerified: data.emailVerified ?? null,
-          image: data.image ?? null,
-          name: data.name ?? null,
-          passwordHash: generatePassword(),
-          role: "customer",
-          updatedAt: new Date(),
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(users)
+          .values({
+            email: data.email.toLowerCase(),
+            emailVerified: data.emailVerified ?? null,
+            image: data.image ?? null,
+            name: data.name ?? null,
+            passwordHash: generatePassword(),
+            role: "customer",
+            updatedAt: new Date(),
+          })
+          .returning(),
+        "Failed to create user."
+      );
 
       const emailTemplate = welcomeEmail(data.name ?? "");
       sendEmail({
@@ -107,17 +111,19 @@ export const DrizzleAdapter = (): Adapter => {
         throw new Error("User id is required");
       }
 
-      const [updated] = await db
-        .update(users)
-        .set({
-          email: data.email?.toLowerCase(),
-          emailVerified: data.emailVerified ?? undefined,
-          image: data.image,
-          name: data.name,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, data.id))
-        .returning();
+      const updated = getFirstRow(
+        await db
+          .update(users)
+          .set({
+            email: data.email?.toLowerCase(),
+            emailVerified: data.emailVerified ?? undefined,
+            image: data.image,
+            name: data.name,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, data.id))
+          .returning()
+      );
 
       if (!updated) {
         throw new Error("Failed to update user.");
@@ -175,14 +181,17 @@ export const DrizzleAdapter = (): Adapter => {
     },
 
     async createSession(session: AdapterSession) {
-      const [created] = await db
-        .insert(authSessions)
-        .values({
-          expires: session.expires,
-          sessionToken: session.sessionToken,
-          userId: session.userId,
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(authSessions)
+          .values({
+            expires: session.expires,
+            sessionToken: session.sessionToken,
+            userId: session.userId,
+          })
+          .returning(),
+        "Failed to create session."
+      );
 
       return mapSession(created);
     },
@@ -209,14 +218,16 @@ export const DrizzleAdapter = (): Adapter => {
     async updateSession(
       data: Partial<AdapterSession> & Pick<AdapterSession, "sessionToken">
     ) {
-      const [updated] = await db
-        .update(authSessions)
-        .set({
-          expires: data.expires,
-          userId: data.userId,
-        })
-        .where(eq(authSessions.sessionToken, data.sessionToken))
-        .returning();
+      const updated = getFirstRow(
+        await db
+          .update(authSessions)
+          .set({
+            expires: data.expires,
+            userId: data.userId,
+          })
+          .where(eq(authSessions.sessionToken, data.sessionToken))
+          .returning()
+      );
 
       return updated ? mapSession(updated) : null;
     },
@@ -226,14 +237,17 @@ export const DrizzleAdapter = (): Adapter => {
     },
 
     async createVerificationToken(token: VerificationToken) {
-      const [created] = await db
-        .insert(authVerificationTokens)
-        .values({
-          expires: token.expires,
-          identifier: token.identifier,
-          token: token.token,
-        })
-        .returning();
+      const created = requireFirstRow(
+        await db
+          .insert(authVerificationTokens)
+          .values({
+            expires: token.expires,
+            identifier: token.identifier,
+            token: token.token,
+          })
+          .returning(),
+        "Failed to create verification token."
+      );
 
       return {
         expires: created.expires,

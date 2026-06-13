@@ -56,7 +56,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       </ScrollReveal>
 
       {results.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-6 lg:grid-cols-3">
           {results.map((product, index) => (
             <ScrollReveal key={product.id} delay={index * 0.04}>
               <ProductCard product={product} />

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+import { productSlugExists } from "@/db/queries/products";
+
 /**
  * Proxy handles:
  * 1. Route protection — redirect unauthenticated users from protected paths
@@ -16,15 +18,44 @@ const protectedPaths = [
   "/account/addresses",
   "/account/orders",
   "/account/wishlist",
-  "/checkout",
 ];
 
 const isProtected = (pathname: string) =>
   protectedPaths.some((prefix) => pathname.startsWith(prefix));
 
+const isDraftPreviewRequest = (request: NextRequest) =>
+  request.cookies.has("__prerender_bypass") ||
+  request.cookies.has("__next_preview_data");
+
+const getProductDetailSlug = (pathname: string) => {
+  const match = pathname.match(/^\/collection\/([^/]+)\/?$/);
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match[1] ?? "");
+  } catch {
+    return "";
+  }
+};
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
+  const productSlug = getProductDetailSlug(pathname);
+
+  if (
+    productSlug !== null &&
+    !isDraftPreviewRequest(request) &&
+    !(await productSlugExists(productSlug, { includeDrafts: false }))
+  ) {
+    return new NextResponse("Product not found.", {
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex",
+      },
+      status: 404,
+    });
+  }
 
   // ─── Route Protection ───────────────────────────────────────────
   if (isProtected(pathname)) {
@@ -53,6 +84,6 @@ export const config = {
     "/account/addresses/:path*",
     "/account/orders/:path*",
     "/account/wishlist/:path*",
-    "/checkout/:path*",
+    "/collection/:slug",
   ],
 };

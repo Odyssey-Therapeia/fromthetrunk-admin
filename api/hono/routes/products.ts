@@ -11,7 +11,6 @@ import {
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import type { HonoBindings } from "@/api/hono/types";
 import { refreshProductEmbedding } from "@/lib/ai/embeddings";
-import { ensureProductEmbeddingsTable } from "@/lib/ai/extensions";
 import { recommendProducts } from "@/lib/ai/recommendations";
 import { suggestTagIds } from "@/lib/ai/tag-suggestions";
 import {
@@ -31,7 +30,43 @@ const parseDate = (value: null | string | undefined) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+const canIncludeDrafts = (c: Parameters<typeof requireAdmin>[0], requested: boolean) => {
+  if (!requested) return false;
+  return !(requireAdmin(c) instanceof Response);
+};
+
 export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
+  // Lightweight admin-only product lookup by ID (for agent panel auto-anchor)
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/by-id/{id}",
+      request: { params: idParamSchema },
+      responses: {
+        200: { description: "Product summary" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Not found",
+        },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+      const product = await getProduct(id);
+      if (!product) {
+        return c.json({ code: "NOT_FOUND", message: "Product not found." }, 404);
+      }
+      return c.json(
+        { id: product.id, name: product.name, slug: product.slug, status: product.status },
+        200,
+      );
+    },
+  );
+
   app.openapi(
     createRoute({
       method: "get",
@@ -46,13 +81,16 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
     }),
     async (c) => {
       const query = c.req.valid("query");
-      const products = await listProducts({
-        includeDrafts: Boolean(query.includeDrafts),
+      const includeDrafts = canIncludeDrafts(c, Boolean(query.includeDrafts));
+      const { rows: products } = await listProducts({
+        includeDrafts,
         limit: query.limit ?? 200,
         offset: query.offset ?? 0,
       });
       const enriched = products.map((product) => ({
         ...product,
+        coverImageFilename: product.images[0]?.media.filename ?? null,
+        imageCount: product.images.length,
         thumbnailUrl: product.images[0]?.media.url ?? null,
       }));
       return c.json(enriched, 200);
@@ -141,7 +179,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
     async (c) => {
       const params = c.req.valid("param");
 
-      const product = await getProductBySlug(params.slug, { includeDrafts: true });
+      const product = await getProductBySlug(params.slug, { includeDrafts: false });
       if (!product) {
         return c.json(
           {
@@ -178,7 +216,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const body = c.req.valid("json");
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       const created = await createProduct({
         ...body,
         imageMediaIds: body.imageMediaIds ?? [],
@@ -223,7 +260,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       void refreshProductEmbedding(duplicated.id).catch(() => undefined);
 
       return c.json(duplicated, 201);
@@ -270,7 +306,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      void ensureProductEmbeddingsTable().catch(() => undefined);
       const updated = await updateProduct(params.id, {
         ...body,
         reservedUntil: parseDate(body.reservedUntil),

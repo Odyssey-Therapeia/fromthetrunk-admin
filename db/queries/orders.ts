@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, InferInsertModel, InferSelectModel } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, withRetry } from "@/db";
+import { getFirstRow, requireFirstRow } from "@/db/results";
 import { orderEvents, orderItems, orders } from "@/db/schema";
 
 type OrderEventRecord = InferSelectModel<typeof orderEvents>;
@@ -25,17 +26,19 @@ const hydrateOrders = async (rows: OrderRecord[]): Promise<OrderWithRelations[]>
   if (rows.length === 0) return [];
 
   const orderIds = rows.map((row) => row.id);
-  const [itemsRows, eventRows] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(inArray(orderItems.orderId, orderIds)),
-    db
-      .select()
-      .from(orderEvents)
-      .where(inArray(orderEvents.orderId, orderIds))
-      .orderBy(desc(orderEvents.createdAt)),
-  ]);
+  const [itemsRows, eventRows] = await withRetry(() =>
+    Promise.all([
+      db
+        .select()
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds)),
+      db
+        .select()
+        .from(orderEvents)
+        .where(inArray(orderEvents.orderId, orderIds))
+        .orderBy(desc(orderEvents.createdAt)),
+    ])
+  );
 
   const itemsByOrderId = new Map<string, OrderItemRecord[]>();
   const eventsByOrderId = new Map<string, OrderEventRecord[]>();
@@ -78,19 +81,23 @@ export const listOrders = async (options?: {
 
   const whereClause = filters.length === 0 ? undefined : filters.length === 1 ? filters[0] : and(...filters);
 
-  const rows = await db
-    .select()
-    .from(orders)
-    .where(whereClause)
-    .orderBy(desc(orders.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await withRetry(() =>
+    db
+      .select()
+      .from(orders)
+      .where(whereClause)
+      .orderBy(desc(orders.createdAt))
+      .limit(limit)
+      .offset(offset)
+  );
 
   return hydrateOrders(rows);
 };
 
 export const getOrder = async (orderId: string): Promise<OrderWithRelations | null> => {
-  const [row] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  const [row] = await withRetry(() =>
+    db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  );
   if (!row) return null;
   const [hydrated] = await hydrateOrders([row]);
   return hydrated ?? null;
@@ -103,13 +110,16 @@ export const createOrder = async (input: CreateOrderInput): Promise<OrderWithRel
     ...orderData
   } = input;
 
-  const [createdOrder] = await db
-    .insert(orders)
-    .values({
-      ...orderData,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const createdOrder = requireFirstRow(
+    await db
+      .insert(orders)
+      .values({
+        ...orderData,
+        updatedAt: new Date(),
+      })
+      .returning(),
+    "Failed to create order."
+  );
 
   if (items.length > 0) {
     await db.insert(orderItems).values(
@@ -141,14 +151,16 @@ export const updateOrderStatus = async (
   note = "Order status updated",
   payload: Record<string, unknown> | null = null
 ): Promise<OrderWithRelations | null> => {
-  const [updated] = await db
-    .update(orders)
-    .set({
-      status,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId))
-    .returning({ id: orders.id, status: orders.status });
+  const updated = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning({ id: orders.id, status: orders.status })
+  );
 
   if (!updated) return null;
 
@@ -168,15 +180,18 @@ export const addOrderEvent = async (
   status: OrderRecord["status"],
   payload: Record<string, unknown> | null = null
 ): Promise<OrderEventRecord> => {
-  const [created] = await db
-    .insert(orderEvents)
-    .values({
-      orderId,
-      note,
-      status,
-      payload,
-    })
-    .returning();
+  const created = requireFirstRow(
+    await db
+      .insert(orderEvents)
+      .values({
+        orderId,
+        note,
+        status,
+        payload,
+      })
+      .returning(),
+    "Failed to create order event."
+  );
 
   return created;
 };

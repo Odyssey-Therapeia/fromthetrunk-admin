@@ -30,8 +30,29 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE
-.cursor/
+# IDE — ignore everything inside .cursor except rules
+.cursor/*
+!.cursor/rules/
+
+# Test artifacts
+test-results/
+.lighthouseci/
+/tmp/
+
+# Generated / captured artifacts — root-scoped so public/ tracked images are unaffected
+/output/
+/outputs/
+/.playwright-mcp/
+/razorpay-modal-check.png
+/ftt-*.png
+/weavex-review-companion-*.png
+/ftt-live-collection-*.json
+
+# Sensitive internal docs
+/docs/finance/
 
 # lock files (keep package-lock.json for reproducible builds)
 bun.lock
+
+# Xeno local config (contains secrets / env-specific overrides; .example is tracked)
+lib/ai/xeno-local-config.ts

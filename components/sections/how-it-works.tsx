@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { Package, ShieldCheck, Sparkles } from "lucide-react";
 
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { BentoGrid } from "@/components/ui/bento-grid";
@@ -11,19 +10,16 @@ const steps = [
     title: "Curate",
     description:
       "We source sarees from private wardrobes, couture archives, and heritage collectors.",
-    icon: Sparkles,
   },
   {
     title: "Authenticate",
     description:
       "Each piece is inspected, restored, and documented with provenance.",
-    icon: ShieldCheck,
   },
   {
     title: "Deliver",
     description:
       "Your saree arrives with a story card, preservation notes, and careful packaging.",
-    icon: Package,
   },
 ];
 
@@ -45,7 +41,6 @@ export function HowItWorks({ products }: HowItWorksProps) {
 
       <BentoGrid className="mt-10 auto-rows-[16rem] grid-cols-1 gap-5 md:grid-cols-3 md:auto-rows-[18rem]">
         {steps.map((step, index) => {
-          const Icon = step.icon;
           const image = resolveMediaURL(
             products?.[index]?.images?.[0] ?? products?.[0]?.images?.[0]
           );
@@ -65,8 +60,7 @@ export function HowItWorks({ products }: HowItWorksProps) {
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
               <div className="relative z-10 flex h-full flex-col justify-between p-6 text-white">
-                <div className="flex items-center justify-between">
-                  <Icon className="h-10 w-10" />
+                <div className="flex items-center justify-end">
                   <span className="text-xs uppercase tracking-[0.4em] text-white/70">
                     {String(index + 1).padStart(2, "0")}
                   </span>

@@ -1,0 +1,150 @@
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
+  workflow_dispatch:
+
+concurrency:
+  group: lighthouse-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Tests, lint, and build
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://placeholder:placeholder@localhost:5432/ftt
+      PAYLOAD_SECRET: ci-build-secret-placeholder
+      NEXTAUTH_SECRET: ci-build-secret-placeholder
+      NEXT_PUBLIC_SERVER_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run verification harness
+        run: npm run verify
+
+  lighthouse:
+    name: Public Lighthouse CI
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://placeholder:placeholder@localhost:5432/ftt
+      PAYLOAD_SECRET: ci-build-secret-placeholder
+      NEXTAUTH_SECRET: ci-build-secret-placeholder
+      NEXT_PUBLIC_SERVER_URL: http://127.0.0.1:3000
+      FTT_LHCI_BASE_URL: http://127.0.0.1:3000
+      FTT_LHCI_URL_PATHS: /privacy-policy,/shipping-policy,/return-policy,/packing
+    strategy:
+      fail-fast: false
+      matrix:
+        form-factor: [mobile, desktop]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Lighthouse CI
+        run: npm run lhci:autorun
+        env:
+          FTT_LHCI_FORM_FACTOR: ${{ matrix.form-factor }}
+          FTT_LHCI_OUTPUT_DIR: ./test-results/lighthouse/${{ matrix.form-factor }}
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-ci-${{ matrix.form-factor }}-reports
+          path: test-results/lighthouse/${{ matrix.form-factor }}
+          if-no-files-found: ignore
+
+  admin-lighthouse:
+    name: Authenticated admin Lighthouse CI
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PAYLOAD_SECRET: ${{ secrets.PAYLOAD_SECRET }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      NEXT_PUBLIC_SERVER_URL: http://127.0.0.1:3000
+      FTT_LHCI_BASE_URL: http://127.0.0.1:3000
+      FTT_LHCI_SCOPE: admin
+      FTT_LHCI_AUTH_EMAIL: ${{ secrets.FTT_LHCI_AUTH_EMAIL }}
+      FTT_LHCI_AUTH_PASSWORD: ${{ secrets.FTT_LHCI_AUTH_PASSWORD }}
+      FTT_LHCI_SANITIZED_DB: ${{ secrets.FTT_LHCI_SANITIZED_DB }}
+    strategy:
+      fail-fast: false
+      matrix:
+        form-factor: [mobile, desktop]
+    steps:
+      - name: Check admin Lighthouse secrets
+        id: admin-secrets
+        shell: bash
+        run: |
+          missing=()
+          for name in DATABASE_URL PAYLOAD_SECRET NEXTAUTH_SECRET FTT_LHCI_AUTH_EMAIL FTT_LHCI_AUTH_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping authenticated admin Lighthouse CI because required secrets are missing: ${missing[*]}"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.admin-secrets.outputs.available == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.admin-secrets.outputs.available == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.admin-secrets.outputs.available == 'true'
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        if: steps.admin-secrets.outputs.available == 'true'
+        run: npm run build
+
+      - name: Run authenticated admin Lighthouse CI
+        if: steps.admin-secrets.outputs.available == 'true'
+        run: npm run lhci:autorun
+        env:
+          FTT_LHCI_FORM_FACTOR: ${{ matrix.form-factor }}
+          FTT_LHCI_OUTPUT_DIR: ./test-results/lighthouse/admin-${{ matrix.form-factor }}
+
+      - name: Upload admin Lighthouse reports
+        if: always() && steps.admin-secrets.outputs.available == 'true' && env.FTT_LHCI_SANITIZED_DB == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-ci-admin-${{ matrix.form-factor }}-reports
+          path: test-results/lighthouse/admin-${{ matrix.form-factor }}
+          if-no-files-found: ignore

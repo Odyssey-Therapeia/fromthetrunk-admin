@@ -1,33 +1,81 @@
 import { getResendClient, FROM_EMAIL } from "./resend";
 
 interface SendEmailOptions {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
 }
 
+const normalizeRecipients = (to: string | string[]) =>
+  (Array.isArray(to) ? to : [to])
+    .map((recipient) => recipient.trim())
+    .filter(Boolean);
+
+const hasSmtpConfig = () =>
+  Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+
+const getSmtpPort = () => {
+  const rawPort = process.env.SMTP_PORT;
+  if (!rawPort) return 465;
+
+  const port = Number(rawPort);
+  return Number.isFinite(port) ? port : 465;
+};
+
+const getSmtpFrom = () =>
+  process.env.SMTP_FROM_EMAIL ||
+  process.env.RESEND_FROM_EMAIL ||
+  (process.env.SMTP_USER ? `From the Trunk <${process.env.SMTP_USER}>` : FROM_EMAIL);
+
 /**
  * Send a transactional email via Resend.
  *
- * Falls back silently in development when RESEND_API_KEY is not set,
- * logging the email to the console instead.
+ * Falls back to SMTP when configured, then console logging in development.
  */
 export async function sendEmail({ to, subject, html }: SendEmailOptions): Promise<boolean> {
-  // In development without API key, log to console
-  if (!process.env.RESEND_API_KEY) {
-    console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
-    console.log(`[EMAIL] (Set RESEND_API_KEY to send real emails)`);
-    return true;
-  }
+  const recipients = normalizeRecipients(to);
+  if (recipients.length === 0) return false;
 
   try {
-    const resend = getResendClient();
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject,
-      html,
-    });
+    if (process.env.RESEND_API_KEY) {
+      const resend = getResendClient();
+      const { error } = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipients,
+        subject,
+        html,
+      });
+      if (error) {
+        console.error("[EMAIL] Resend error:", error.message);
+        return false;
+      }
+      return true;
+    }
+
+    if (hasSmtpConfig()) {
+      const { default: nodemailer } = await import("nodemailer");
+      const port = getSmtpPort();
+      const transporter = nodemailer.createTransport({
+        auth: {
+          pass: process.env.SMTP_PASSWORD,
+          user: process.env.SMTP_USER,
+        },
+        host: process.env.SMTP_HOST,
+        port,
+        secure: port === 465,
+      });
+
+      await transporter.sendMail({
+        from: getSmtpFrom(),
+        html,
+        subject,
+        to: recipients.join(", "),
+      });
+      return true;
+    }
+
+    console.log(`[EMAIL] To: ${recipients.join(", ")} | Subject: ${subject}`);
+    console.log(`[EMAIL] (Set RESEND_API_KEY or SMTP_* vars to send real emails)`);
     return true;
   } catch (error) {
     console.error("[EMAIL] Failed to send:", error);

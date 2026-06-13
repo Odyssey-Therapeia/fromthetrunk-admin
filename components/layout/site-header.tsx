@@ -10,12 +10,12 @@ import { useSession } from "next-auth/react";
 import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { SearchBar } from "@/components/layout/search-bar";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useHasMounted } from "@/lib/hooks/use-has-mounted";
@@ -24,6 +24,7 @@ import logoMark from "@/logos/image 8 [Vectorized].png";
 const navLinks = [
   { href: "/collection", label: "Collection" },
   { href: "/our-story", label: "Our Story" },
+  { href: "/why", label: "Our Why" },
   { href: "/how-it-works", label: "How It Works" },
 ];
 
@@ -68,7 +69,6 @@ export function SiteHeader() {
 
           <div className="flex items-center gap-1">
             <SearchBar />
-            <ThemeToggle />
 
             {/* Account button */}
             <Button
@@ -104,6 +104,7 @@ export function SiteHeader() {
                     </Button>
                   </SheetTrigger>
                   <SheetContent className="bg-background">
+                    <SheetTitle className="sr-only">Mobile navigation</SheetTitle>
                     <div className="flex h-full flex-col gap-6 pt-8">
                       {/* Mobile search */}
                       <form

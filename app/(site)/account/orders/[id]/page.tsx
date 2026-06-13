@@ -71,7 +71,7 @@ export default function OrderDetailPage() {
             Order #{order.id.slice(0, 8).toUpperCase()}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Placed {order.placedAt ? new Date(order.placedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—"}
+            Placed {order.placedAt ? new Date(order.placedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "-"}
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -130,7 +130,7 @@ export default function OrderDetailPage() {
             <div key={index} className="flex items-center justify-between text-sm">
               <div>
                 <p className="font-medium text-foreground">{item.name}</p>
-                <p className="text-xs text-muted-foreground">Qty: {item.quantity} · One of a kind</p>
+                <p className="text-xs text-muted-foreground">Qty: {item.quantity}, one of a kind</p>
               </div>
               <p className="font-semibold text-foreground">
                 {formatCurrency((item.pricePaise * item.quantity) / 100)}
@@ -193,11 +193,11 @@ export default function OrderDetailPage() {
         <div className="text-sm text-muted-foreground space-y-1">
           <div className="flex justify-between">
             <span>Status</span>
-            <span className="capitalize font-medium text-foreground">{order.paymentStatus ?? "—"}</span>
+            <span className="capitalize font-medium text-foreground">{order.paymentStatus ?? "-"}</span>
           </div>
           <div className="flex justify-between">
             <span>Gateway</span>
-            <span className="capitalize">{order.paymentGateway ?? "—"}</span>
+            <span className="capitalize">{order.paymentGateway ?? "-"}</span>
           </div>
           {order.paymentId && (
             <div className="flex justify-between">

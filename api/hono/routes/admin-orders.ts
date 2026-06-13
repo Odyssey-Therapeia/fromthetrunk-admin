@@ -1,13 +1,10 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
 
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import { idParamSchema } from "@/api/hono/schemas/common";
 import { orderStatusPatchSchema } from "@/api/hono/schemas/orders";
 import type { HonoBindings } from "@/api/hono/types";
-import { db } from "@/db";
-import { addOrderEvent, getOrder, updateOrderStatus } from "@/db/queries/orders";
-import { orders } from "@/db/schema";
+import { getOrder, updateOrderStatus } from "@/db/queries/orders";
 import { sendEmail } from "@/lib/email/send";
 import { orderShippedEmail } from "@/lib/email/templates";
 
@@ -51,30 +48,29 @@ export const registerAdminOrderRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      await updateOrderStatus(id, body.status, body.note ?? "Status updated by admin");
-      await db
-        .update(orders)
-        .set({ updatedAt: new Date() })
-        .where(eq(orders.id, id));
-      await addOrderEvent(id, body.note ?? "Status updated by admin", body.status, null);
+      const isStatusChange = order.status !== body.status;
 
-      if (body.status === "shipped" && order.shippingEmail) {
-        const email = orderShippedEmail(
-          {
-            id: order.id,
-          },
-          undefined
-        );
-        sendEmail({
-          to: order.shippingEmail,
-          subject: email.subject,
-          html: email.html,
-        }).catch(() => undefined);
+      if (isStatusChange) {
+        await updateOrderStatus(id, body.status, body.note ?? "Status updated by admin");
+
+        if (body.status === "shipped" && order.shippingEmail) {
+          const email = orderShippedEmail(
+            {
+              id: order.id,
+            },
+            undefined
+          );
+          sendEmail({
+            to: order.shippingEmail,
+            subject: email.subject,
+            html: email.html,
+          }).catch(() => undefined);
+        }
       }
 
       return c.json(
         {
-          emailSent: body.status === "shipped",
+          emailSent: isStatusChange && body.status === "shipped" && Boolean(order.shippingEmail),
           id,
           status: body.status,
         },

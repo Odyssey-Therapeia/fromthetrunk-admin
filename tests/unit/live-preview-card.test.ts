@@ -46,7 +46,7 @@ describe("LivePreviewCard", () => {
       ]
     );
 
-    expect(html).toContain('src="https://cdn.example.com/cover.jpg"');
+    expect(html).toContain("https%3A%2F%2Fcdn.example.com%2Fcover.jpg");
     expect(html).toContain("1 of 2");
   });
 
@@ -59,5 +59,13 @@ describe("LivePreviewCard", () => {
 
     expect(html).toContain("Published");
     expect(html).toContain("line-through");
+  });
+
+  it("shows a sold availability badge", () => {
+    const html = renderCard({
+      stockStatus: "sold",
+    });
+
+    expect(html).toContain("Sold");
   });
 });

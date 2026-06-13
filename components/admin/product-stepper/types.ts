@@ -1,5 +1,7 @@
 import { toRupees } from "@/db/money";
 
+import type { ProductStockStatus } from "./availability";
+
 export type ProductStepperMedia = {
   filename: string;
   id: string;
@@ -18,13 +20,21 @@ export type ProductStepperValues = {
   name: string;
   originalPriceRupees: number;
   priceRupees: number;
+  reservedUntil: null | string;
   slug: string;
+  soldAt: null | string;
   status: "draft" | "published";
+  stockStatus: ProductStockStatus;
   storyEra: string;
   storyNarrative: string;
   storyProvenance: string;
   storyTitle: string;
   tagsCsv: string;
+};
+
+const toNullableIsoString = (value?: Date | null | string) => {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
 };
 
 export const mapProductToStepperValues = (product: {
@@ -35,12 +45,15 @@ export const mapProductToStepperValues = (product: {
   detailsLength?: null | string;
   detailsWidth?: null | string;
   featured?: boolean;
-  images?: Array<{ media: { id: string } }>;
+  images?: Array<{ media: { id: string }; sortOrder?: number }>;
   name?: string;
   originalPricePaise?: null | number;
   pricePaise?: number;
+  reservedUntil?: Date | null | string;
   slug?: string;
+  soldAt?: Date | null | string;
   status?: "draft" | "published";
+  stockStatus?: ProductStockStatus;
   storyEra?: null | string;
   storyNarrative?: null | string;
   storyProvenance?: null | string;
@@ -54,12 +67,20 @@ export const mapProductToStepperValues = (product: {
   detailsLength: product.detailsLength ?? "",
   detailsWidth: product.detailsWidth ?? "",
   featured: Boolean(product.featured),
-  imageMediaIds: product.images?.map((image) => image.media.id) ?? [],
+  imageMediaIds:
+    product.images
+      ? [...product.images]
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map((image) => image.media.id)
+      : [],
   name: product.name ?? "",
   originalPriceRupees: product.originalPricePaise ? toRupees(product.originalPricePaise) : 0,
   priceRupees: product.pricePaise ? toRupees(product.pricePaise) : 0,
+  reservedUntil: toNullableIsoString(product.reservedUntil),
   slug: product.slug ?? "",
+  soldAt: toNullableIsoString(product.soldAt),
   status: product.status ?? "draft",
+  stockStatus: product.stockStatus ?? "available",
   storyEra: product.storyEra ?? "",
   storyNarrative: product.storyNarrative ?? "",
   storyProvenance: product.storyProvenance ?? "",
@@ -79,8 +100,11 @@ export const defaultStepperValues: ProductStepperValues = {
   name: "",
   originalPriceRupees: 0,
   priceRupees: 0,
+  reservedUntil: null,
   slug: "",
+  soldAt: null,
   status: "draft",
+  stockStatus: "available",
   storyEra: "",
   storyNarrative: "",
   storyProvenance: "",

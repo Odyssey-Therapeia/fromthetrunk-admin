@@ -1,5 +1,4 @@
 import { getProduct, listProducts, type ProductWithRelations } from "@/db/queries/products";
-import { ensurePgmlExtension } from "@/lib/ai/extensions";
 
 import { findSimilarProductsByProductId } from "./embeddings";
 
@@ -69,23 +68,26 @@ const uniqueById = (items: Recommendation[]) => {
 };
 
 export const recommendProducts = async (productId: string, limit = 6) => {
-  await ensurePgmlExtension();
-
   const source = await getProduct(productId);
   if (!source) return [];
 
-  const semanticMatches = await findSimilarProductsByProductId(productId, limit);
-  const semanticRecommendations: Recommendation[] = semanticMatches.map((match) => ({
-    product: match.product,
-    reason: "semantic similarity",
-    score: Number(match.similarity),
-    source: "semantic",
-  }));
+  let semanticRecommendations: Recommendation[] = [];
+  try {
+    const semanticMatches = await findSimilarProductsByProductId(productId, limit);
+    semanticRecommendations = semanticMatches.map((match) => ({
+      product: match.product,
+      reason: "semantic similarity",
+      score: Number(match.similarity),
+      source: "semantic",
+    }));
+  } catch (err) {
+    console.warn("[recommendations] Semantic search failed, falling back to heuristics:", { productId, limit }, err);
+  }
 
   const remainder = Math.max(limit - semanticRecommendations.length, 0);
   let heuristicRecommendations: Recommendation[] = [];
   if (remainder > 0) {
-    const candidates = await listProducts({
+    const { rows: candidates } = await listProducts({
       includeDrafts: false,
       limit: 200,
     });

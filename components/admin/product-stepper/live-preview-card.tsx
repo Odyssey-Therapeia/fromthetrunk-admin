@@ -1,7 +1,10 @@
+import Image from "next/image";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatINR, toPaise } from "@/db/money";
 
+import { productStockStatusLabels } from "./availability";
 import type { ProductStepperValues } from "./types";
 
 type LivePreviewCardProps = {
@@ -23,23 +26,32 @@ export function LivePreviewCard({
   const previewTitle = values.name || values.storyTitle || "Untitled Product";
   const priceLabel = formatINR(toPaise(values.priceRupees || 0));
   const statusLabel = values.status === "published" ? "Published" : "Draft";
+  const stockStatusLabel = productStockStatusLabels[values.stockStatus];
 
   return (
     <Card className="sticky top-24">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-lg">Live Preview</CardTitle>
-        <Badge variant={values.status === "published" ? "default" : "secondary"}>
-          {statusLabel}
-        </Badge>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <Badge variant={values.status === "published" ? "default" : "secondary"}>
+            {statusLabel}
+          </Badge>
+          {values.stockStatus !== "available" ? (
+            <Badge variant={values.stockStatus === "sold" ? "destructive" : "outline"}>
+              {stockStatusLabel}
+            </Badge>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {coverImage ? (
-          <div className="relative overflow-hidden rounded-md border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+          <div className="relative aspect-[4/5] overflow-hidden rounded-md border">
+            <Image
               alt={previewTitle}
-              className="aspect-[4/5] w-full object-cover"
               src={coverImage.url}
+              fill
+              sizes="320px"
+              className="object-cover"
             />
             {imageCountLabel ? (
               <Badge className="absolute left-2 top-2" variant="secondary">

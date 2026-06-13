@@ -18,11 +18,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/formatters";
 import { getProductBySlug, getProducts } from "@/lib/data/products";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
-import { productJsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
+import { getProductDisplayDetails } from "@/lib/products/display-details";
+import { productJsonLd, breadcrumbJsonLd, safeJsonLd } from "@/lib/seo/json-ld";
+import { buildPdpTitle, buildPdpDescription } from "@/lib/seo/pdp-meta";
+import { getSiteOrigin } from "@/lib/config/site";
 import type { Product } from "@/types/domain";
 
 interface ProductPageProps {
@@ -41,17 +43,22 @@ export async function generateMetadata({
 
   const product = rawProduct as Product;
   const image = resolveMediaURL(product.images?.[0]);
+  const displayDetails = getProductDisplayDetails(product);
+
+  const pdpTitle = buildPdpTitle(product.name, displayDetails.fabric);
+  const pdpDescription = buildPdpDescription(
+    product.name,
+    displayDetails.fabric,
+    product.storyNarrative,
+    product.storyTitle,
+  );
 
   return {
-    title: product.name,
-    description:
-      product.storyNarrative ??
-      `${product.name} — ${product.detailsFabric ?? "Heirloom"} saree from the trunk. ${formatCurrency(product.pricePaise / 100)}.`,
+    title: pdpTitle,
+    description: pdpDescription,
     openGraph: {
-      title: product.name,
-      description:
-        product.storyNarrative ??
-        `One-of-a-kind ${product.detailsFabric ?? ""} saree. ${formatCurrency(product.pricePaise / 100)}.`,
+      title: pdpTitle,
+      description: pdpDescription,
       type: "website",
       ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
     },
@@ -64,21 +71,24 @@ export default async function SareePage({ params }: ProductPageProps) {
   const rawProduct = await getProductBySlug(slug, { includeDrafts });
 
   if (!rawProduct) {
-    notFound();
+    return notFound();
   }
 
   const product = rawProduct as Product;
+  const displayDetails = getProductDisplayDetails(product);
   const allProducts = await getProducts(12, { includeDrafts });
   const relatedPool = (allProducts.docs as Product[]).filter(
     (item) => item.slug !== product.slug
   );
   const productOccasions = new Set(product.tags.map((tag) => tag.name));
-  const normalizedFabric = product.detailsFabric?.toLowerCase() ?? "";
+  const normalizedFabric = displayDetails.fabric.toLowerCase();
   const normalizedEra = product.storyEra?.toLowerCase() ?? "";
 
   const rankedRelated = relatedPool
     .map((candidate) => {
+      const candidateDisplayDetails = getProductDisplayDetails(candidate);
       const candidateOccasions = new Set(candidate.tags.map((tag) => tag.name));
+      const candidateFabric = candidateDisplayDetails.fabric.toLowerCase();
       let score = 0;
 
       if (
@@ -91,8 +101,7 @@ export default async function SareePage({ params }: ProductPageProps) {
 
       if (
         normalizedFabric &&
-        candidate.detailsFabric &&
-        candidate.detailsFabric.toLowerCase() === normalizedFabric
+        candidateFabric === normalizedFabric
       ) {
         score += 2;
       }
@@ -104,7 +113,7 @@ export default async function SareePage({ params }: ProductPageProps) {
         }
       }
 
-      return { candidate, score };
+      return { candidate, displayDetails: candidateDisplayDetails, score };
     })
     .sort((a, b) => b.score - a.score);
 
@@ -118,13 +127,12 @@ export default async function SareePage({ params }: ProductPageProps) {
   const sameFabricMatch = Boolean(
     topRecommendation &&
       normalizedFabric &&
-      topRecommendation.candidate.detailsFabric?.toLowerCase() ===
-        normalizedFabric
+      topRecommendation.displayDetails.fabric.toLowerCase() === normalizedFabric
   );
   const recommendationEyebrow = sameEraMatch
     ? "From the same era"
     : sameFabricMatch
-      ? `Similar ${product.detailsFabric ?? "weaves"}`
+      ? `Similar ${displayDetails.fabric}`
       : "You May Also Love";
   const recommendationTitle = sameEraMatch
     ? "Curated pieces from the same chapter"
@@ -135,7 +143,7 @@ export default async function SareePage({ params }: ProductPageProps) {
     .map((img) => resolveMediaURL(img as unknown))
     .filter(Boolean) as string[];
 
-  const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || "https://fromthetrunk.com";
+  const baseUrl = getSiteOrigin();
   const jsonLd = productJsonLd(product as Product);
   const breadcrumbs = breadcrumbJsonLd([
     { name: "Home", url: baseUrl },
@@ -144,14 +152,14 @@ export default async function SareePage({ params }: ProductPageProps) {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-16 px-6 py-16">
+    <div className="mx-auto w-full max-w-6xl space-y-10 px-4 py-6 sm:px-6 sm:py-10 lg:space-y-16 lg:py-16">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbs) }}
       />
       <ProductViewTracker
         id={product.id}
@@ -160,12 +168,12 @@ export default async function SareePage({ params }: ProductPageProps) {
         price={product.pricePaise / 100}
         image={images[0] ?? ""}
       />
-      <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-        <ScrollReveal>
+      <div className="grid gap-6 lg:gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="order-2 lg:order-1">
           <ProductGallery images={images} alt={product.name} />
-        </ScrollReveal>
+        </div>
 
-        <ScrollReveal delay={0.1} className="space-y-6">
+        <ScrollReveal delay={0.1} className="order-1 flex flex-col gap-6 lg:order-2">
           <div className="space-y-3">
             <Badge className="bg-secondary text-muted-foreground">
               {product.storyEra ?? "Archive"}
@@ -192,31 +200,13 @@ export default async function SareePage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <Separator />
-
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {product.storyNarrative}
-            </p>
-            {product.storyProvenance && (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  Provenance:
-                </span>{" "}
-                {product.storyProvenance}
-              </p>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="space-y-4">
+          <div className="order-2 space-y-4 border-t border-border/60 pt-6 lg:order-3">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
                 Length
               </p>
               <div className="rounded-2xl border border-border/60 bg-card/70 px-4 py-3 text-sm text-foreground">
-                {product.detailsLength ?? "Made to drape"}
+                {displayDetails.length}
               </div>
             </div>
             <AddToCartButton product={product} />
@@ -232,16 +222,34 @@ export default async function SareePage({ params }: ProductPageProps) {
             )}
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
+          <div className="order-3 space-y-4 border-t border-border/60 pt-6 lg:order-2">
+            <p className="text-sm text-muted-foreground">
+              {product.storyNarrative}
+            </p>
+            {product.storyProvenance && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  Provenance:
+                </span>{" "}
+                {product.storyProvenance}
+              </p>
+            )}
+          </div>
+
+          <Accordion
+            type="single"
+            collapsible
+            className="order-4 w-full border-t border-border/60 pt-2"
+          >
             <AccordionItem value="details">
               <AccordionTrigger>Product Details</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>Fabric: {product.detailsFabric ?? "—"}</p>
-                <p>Length: {product.detailsLength ?? "—"}</p>
-                <p>Width: {product.detailsWidth ?? "—"}</p>
-                <p>Condition: {product.detailsCondition ?? "—"}</p>
-                {product.detailsDesigner && (
-                  <p>Designer: {product.detailsDesigner}</p>
+                <p>Fabric: {displayDetails.fabric}</p>
+                <p>Length: {displayDetails.length}</p>
+                <p>Width: {displayDetails.width}</p>
+                <p>Condition: {displayDetails.condition}</p>
+                {displayDetails.designer && (
+                  <p>Designer: {displayDetails.designer}</p>
                 )}
               </AccordionContent>
             </AccordionItem>
@@ -268,7 +276,7 @@ export default async function SareePage({ params }: ProductPageProps) {
               </h2>
             </div>
           </ScrollReveal>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 md:gap-6 lg:grid-cols-3">
             {related.map((item, index) => (
               <ScrollReveal key={item.id} delay={index * 0.05}>
                 <ProductCard product={item} />

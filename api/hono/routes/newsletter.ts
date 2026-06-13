@@ -8,6 +8,7 @@ import { confirmSubscription, subscribe } from "@/db/queries/newsletter";
 import { sendEmail } from "@/lib/email/send";
 import { newsletterConfirmationEmail } from "@/lib/email/templates";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
+import { getSiteOrigin } from "@/lib/config/site";
 
 export const registerNewsletterRoutes = (app: OpenAPIHono<HonoBindings>) => {
   app.openapi(
@@ -51,7 +52,7 @@ export const registerNewsletterRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const confirmToken = crypto.randomBytes(32).toString("hex");
       await subscribe(body.email, confirmToken);
 
-      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "[REDACTED]";
+      const baseUrl = getSiteOrigin();
       const confirmUrl = `${baseUrl}/api/v2/newsletter/confirm?token=${confirmToken}&email=${encodeURIComponent(
         body.email
       )}`;
@@ -104,7 +105,7 @@ export const registerNewsletterRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? "[REDACTED]";
+      const baseUrl = getSiteOrigin();
       return c.redirect(`${baseUrl}/?newsletter=confirmed`, 302);
     }
   );

@@ -2,7 +2,6 @@ import { and, desc, eq, ilike, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { tags } from "@/db/schema";
-import { ensurePgmlExtension } from "@/lib/ai/extensions";
 
 type SuggestTagsInput = {
   detailsDesigner?: null | string;
@@ -23,8 +22,6 @@ const tokenize = (value: string) =>
 const unique = <T>(values: T[]) => Array.from(new Set(values));
 
 export const suggestTagIds = async (input: SuggestTagsInput, limit = 8) => {
-  await ensurePgmlExtension();
-
   const phrase = [
     input.storyTitle,
     input.storyNarrative,

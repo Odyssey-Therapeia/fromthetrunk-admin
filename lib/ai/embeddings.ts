@@ -1,5 +1,5 @@
 import { getProduct, type ProductWithRelations } from "@/db/queries/products";
-import { pool } from "@/db";
+import { rawSql, withRetry } from "@/db";
 
 import { ensureProductEmbeddingsTable } from "./extensions";
 
@@ -46,24 +46,38 @@ const buildEmbeddingInput = (product: ProductWithRelations) => {
 export const createEmbedding = async (
   input: string
 ): Promise<null | { embedding: number[]; model: string }> => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey || apiKey.startsWith("{{") || !apiKey.startsWith("sk-")) return null;
 
   const model = getEmbeddingModel();
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    body: JSON.stringify({
-      input,
-      model,
-    }),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+  const parsed = parseInt(process.env.EMBEDDING_TIMEOUT_MS ?? "15000", 10);
+  const timeoutMs = Number.isFinite(parsed) && parsed > 0 ? parsed : 15000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/embeddings", {
+      body: JSON.stringify({
+        input,
+        model,
+      }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    console.warn("[ai] Embedding request error:", { model, inputLength: input.length }, err);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
-    console.warn("[ai] Embedding request failed", await response.text());
+    console.warn("[ai] Embedding request failed:", { model, status: response.status });
     return null;
   }
 
@@ -88,18 +102,15 @@ const upsertEmbedding = async (
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return false;
 
-  await pool.query(
-    `
-      insert into product_embeddings (product_id, embedding, model, updated_at)
-      values ($1, $2::vector, $3, now())
-      on conflict (product_id)
-      do update set
-        embedding = excluded.embedding,
-        model = excluded.model,
-        updated_at = now()
-    `,
-    [productId, toVectorLiteral(embedding), model]
-  );
+  await withRetry(() => rawSql`
+    insert into product_embeddings (product_id, embedding, model, updated_at)
+    values (${productId}, ${toVectorLiteral(embedding)}::vector, ${model}, now())
+    on conflict (product_id)
+    do update set
+      embedding = excluded.embedding,
+      model = excluded.model,
+      updated_at = now()
+  `);
 
   return true;
 };
@@ -108,17 +119,17 @@ const loadEmbedding = async (productId: string): Promise<null | number[]> => {
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return null;
 
-  const result = await pool.query<{ embedding: string }>(
-    `
-      select embedding
-      from product_embeddings
-      where product_id = $1
-      limit 1
-    `,
-    [productId]
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select embedding
+        from product_embeddings
+        where product_id = ${productId}
+        limit 1
+      `) as Array<{ embedding: string }>
   );
 
-  return parseVector(result.rows[0]?.embedding ?? null);
+  return parseVector(rows[0]?.embedding ?? null);
 };
 
 export const refreshProductEmbedding = async (productId: string) => {
@@ -174,50 +185,57 @@ const hydrateSimilarityRows = async (rows: SimilarityRow[]) => {
     );
 };
 
+const clampLimit = (limit: number, fallback: number): number => {
+  const n = Math.floor(Number(limit));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 100) : fallback;
+};
+
 export const findSimilarProductsByProductId = async (
   productId: string,
   limit = 6
 ) => {
+  const safeLimit = clampLimit(limit, 6);
   const embedding = await ensureProductEmbedding(productId);
   if (!embedding || embedding.length === 0) return [];
 
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return [];
 
-  const result = await pool.query<SimilarityRow>(
-    `
-      select pe.product_id, 1 - (pe.embedding <=> $1::vector) as similarity
-      from product_embeddings pe
-      join products p on p.id = pe.product_id
-      where pe.product_id <> $2
-        and p.status = 'published'
-      order by pe.embedding <=> $1::vector asc
-      limit $3
-    `,
-    [toVectorLiteral(embedding), productId, limit]
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select pe.product_id, 1 - (pe.embedding <=> ${toVectorLiteral(embedding)}::vector) as similarity
+        from product_embeddings pe
+        join products p on p.id = pe.product_id
+        where pe.product_id <> ${productId}
+          and p.status = 'published'
+        order by pe.embedding <=> ${toVectorLiteral(embedding)}::vector asc
+        limit ${safeLimit}
+      `) as SimilarityRow[]
   );
 
-  return hydrateSimilarityRows(result.rows);
+  return hydrateSimilarityRows(rows);
 };
 
 export const semanticSearchProducts = async (query: string, limit = 12) => {
+  const safeLimit = clampLimit(limit, 12);
   const embedded = await createEmbedding(query);
   if (!embedded) return [];
 
   const ready = await ensureProductEmbeddingsTable();
   if (!ready) return [];
 
-  const result = await pool.query<SimilarityRow>(
-    `
-      select pe.product_id, 1 - (pe.embedding <=> $1::vector) as similarity
-      from product_embeddings pe
-      join products p on p.id = pe.product_id
-      where p.status = 'published'
-      order by pe.embedding <=> $1::vector asc
-      limit $2
-    `,
-    [toVectorLiteral(embedded.embedding), limit]
+  const rows = await withRetry(
+    async () =>
+      (await rawSql`
+        select pe.product_id, 1 - (pe.embedding <=> ${toVectorLiteral(embedded.embedding)}::vector) as similarity
+        from product_embeddings pe
+        join products p on p.id = pe.product_id
+        where p.status = 'published'
+        order by pe.embedding <=> ${toVectorLiteral(embedded.embedding)}::vector asc
+        limit ${safeLimit}
+      `) as SimilarityRow[]
   );
 
-  return hydrateSimilarityRows(result.rows);
+  return hydrateSimilarityRows(rows);
 };

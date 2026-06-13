@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
+import { AppVersionBadge } from "@/components/admin/app-version-badge";
 import { AdminMobileNav } from "@/components/admin/mobile-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,10 @@ export function AdminTopBar({
         <AdminMobileNav />
         <div>
           <p className="text-sm text-muted-foreground">Control center</p>
-          <h1 className="text-base font-semibold text-foreground">From the Trunk</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-semibold text-foreground">From the Trunk</h1>
+            <AppVersionBadge className="hidden sm:inline-flex" tone="outline" />
+          </div>
         </div>
       </div>
 

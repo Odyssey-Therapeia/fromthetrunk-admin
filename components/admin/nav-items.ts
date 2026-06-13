@@ -1,10 +1,30 @@
-export const adminNavItems = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/products", label: "Products" },
-  { href: "/admin/collections", label: "Collections" },
-  { href: "/admin/orders", label: "Orders" },
-  { href: "/admin/customers", label: "Users" },
-  { href: "/admin/media", label: "Media" },
-  { href: "/admin/globals", label: "Globals" },
-  { href: "/admin/settings", label: "Settings" },
-] as const;
+import {
+  FolderOpen,
+  Globe,
+  Image,
+  LayoutDashboard,
+  Package,
+  Settings,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
+
+export type AdminNavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+};
+
+export const adminNavItems: AdminNavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/products", label: "Products", icon: Package },
+  { href: "/admin/collections", label: "Collections", icon: FolderOpen },
+  { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/admin/customers", label: "Users", icon: Users },
+  { href: "/admin/media", label: "Media", icon: Image },
+  { href: "/admin/globals", label: "Globals", icon: Globe },
+];
+
+export const adminBottomNavItems: AdminNavItem[] = [
+  { href: "/admin/settings", label: "Settings", icon: Settings },
+];

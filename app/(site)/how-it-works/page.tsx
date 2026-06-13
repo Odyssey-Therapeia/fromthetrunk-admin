@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "How It Works",
   description:
-    "From sourcing to storytelling — learn how every heirloom saree is curated, authenticated, restored, and delivered with care.",
+    "Give your saree a second story. From sourcing to doorstep delivery, every piece is cared for with love and respect for its heritage.",
 };
 
 export default async function HowItWorksPage() {
@@ -24,36 +24,40 @@ export default async function HowItWorksPage() {
     typeof value === "string" && value.trim().length > 0 ? value : fallback;
   const steps = [
     {
-      title: textOrFallback(howItWorksPage?.stepOneTitle, "Sourcing & Curation"),
+      title: textOrFallback(howItWorksPage?.stepOneTitle, "Sourcing"),
       description:
         textOrFallback(
           howItWorksPage?.stepOneBody,
-          "We partner with collectors, couture archives, and legacy wardrobes to source heirloom sarees."
+          "We give new life to preloved sarees sourced directly from homes."
         ),
     },
     {
-      title: textOrFallback(howItWorksPage?.stepTwoTitle, "Authentication"),
+      title: textOrFallback(howItWorksPage?.stepTwoTitle, "Quality Control"),
       description:
         textOrFallback(
           howItWorksPage?.stepTwoBody,
-          "Our specialists verify weave, fabric, zari, and craftsmanship. Every piece is documented with provenance."
+          "A rigorous 360\u00B0 check for tears, spills, and material integrity."
         ),
     },
     {
-      title: textOrFallback(howItWorksPage?.stepThreeTitle, "Restoration"),
+      title: textOrFallback(howItWorksPage?.stepThreeTitle, "Eco-Restoration"),
       description:
         textOrFallback(
           howItWorksPage?.stepThreeBody,
-          "Gentle cleaning, steaming, and preservation ensures each saree is ready to wear again."
+          "Conscious cleaning and artisanal mending that respects the fabric."
         ),
     },
     {
-      title: textOrFallback(howItWorksPage?.stepFourTitle, "Delivery"),
+      title: textOrFallback(howItWorksPage?.stepFourTitle, "Sustainable Packaging"),
       description:
         textOrFallback(
           howItWorksPage?.stepFourBody,
-          "Your saree arrives in a protective muslin wrap with a story card and care notes."
+          "Zero-plastic. We use reusable paper bags and natural scents."
         ),
+    },
+    {
+      title: "Doorstep Magic",
+      description: "Safe, carbon-conscious delivery to your wardrobe.",
     },
   ];
 
@@ -64,12 +68,12 @@ export default async function HowItWorksPage() {
           {textOrFallback(howItWorksPage?.eyebrow, "How It Works")}
         </p>
         <h1 className="font-serif text-4xl text-foreground">
-          {textOrFallback(howItWorksPage?.title, "The journey of every saree")}
+          {textOrFallback(howItWorksPage?.title, "Give your saree a second story")}
         </h1>
         <p className="text-sm text-muted-foreground">
           {textOrFallback(
             howItWorksPage?.description,
-            "From sourcing to storytelling, every piece is cared for with respect to its heritage."
+            "Have a pre-loved saree you\u2019re ready to part with? We\u2019d love to give it a new life. Each piece will be thoughtfully curated, and you will be compensated fairly based on its value and condition."
           )}
         </p>
       </ScrollReveal>
