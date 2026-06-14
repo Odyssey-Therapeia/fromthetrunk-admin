@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, InferInsertModel, InferSelectModel, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, InferInsertModel, InferSelectModel, isNull, or, sql } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
 import { getFirstRow, requireFirstRow } from "@/db/results";
@@ -230,4 +230,176 @@ export const deleteOrder = async (orderId: string): Promise<boolean> => {
     .returning({ id: orders.id });
 
   return deleted.length > 0;
+};
+
+/**
+ * P6-05 ATOMIC REFUND CLAIM — step 1 of 3.
+ *
+ * Performs a conditional UPDATE that atomically transitions paymentStatus from
+ * "paid" → "refunded" with refundId still NULL (in-flight marker).
+ * Returns the claimed row if successful, or null if the order was already
+ * claimed/refunded by another request (TOCTOU guard).
+ *
+ * Only the winner of this claim should call the Razorpay API.
+ */
+export const claimOrderRefund = async (orderId: string): Promise<{ id: string } | null> => {
+  const claimed = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        paymentStatus: "refunded",
+        refundedAt: sql`now()`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(orders.id, orderId), eq(orders.paymentStatus, "paid")))
+      .returning({ id: orders.id })
+  );
+  return claimed ?? null;
+};
+
+/**
+ * P6-05 ATOMIC REFUND FINALIZE — step 2 of 3.
+ *
+ * Called after a successful Razorpay refund. Writes refundId and amount,
+ * and inserts the audit event.
+ */
+export const finalizeOrderRefund = async (
+  orderId: string,
+  refundId: string,
+  refundedAmountPaise: number
+): Promise<void> => {
+  await db
+    .update(orders)
+    .set({
+      refundId,
+      refundedAmountPaise,
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, orderId));
+
+  await db.insert(orderEvents).values({
+    orderId,
+    status: "pending",
+    note: `Refund issued. Razorpay refund ID: ${refundId}. Amount: ${refundedAmountPaise} paise.`,
+    payload: { refundId, refundedAmountPaise },
+  });
+};
+
+/**
+ * P6-05 ATOMIC REFUND REVERT — fallback on Razorpay failure.
+ *
+ * Un-does an unfinalized claim (refundId IS NULL) by setting paymentStatus
+ * back to "paid". This allows a later retry to claim and attempt the refund
+ * again. If Razorpay already succeeded (refundId is set), this is a no-op.
+ */
+export const revertOrderRefundClaim = async (orderId: string): Promise<void> => {
+  await db
+    .update(orders)
+    .set({
+      paymentStatus: "paid",
+      refundedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.paymentStatus, "refunded"),
+        isNull(orders.refundId)
+      )
+    );
+};
+
+/**
+ * P6-05: Mark an order as refunded.
+ * Updates paymentStatus to "refunded", sets refundId, refundedAt, refundedAmountPaise.
+ * Creates an orderEvent for audit trail.
+ * Does NOT modify stockStatus — restock is handled separately (one-of-one logic).
+ *
+ * @deprecated Use claimOrderRefund / finalizeOrderRefund / revertOrderRefundClaim instead.
+ */
+export const updateOrderRefund = async (
+  orderId: string,
+  refundId: string,
+  refundedAmountPaise: number
+): Promise<OrderWithRelations | null> => {
+  const updated = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        paymentStatus: "refunded",
+        refundId,
+        refundedAmountPaise,
+        refundedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning({ id: orders.id })
+  );
+
+  if (!updated) return null;
+
+  await db.insert(orderEvents).values({
+    orderId,
+    status: "pending",
+    note: `Refund issued. Razorpay refund ID: ${refundId}. Amount: ${refundedAmountPaise} paise.`,
+    payload: { refundId, refundedAmountPaise },
+  });
+
+  return getOrder(orderId);
+};
+
+/**
+ * P6-05: Update shipment tracking fields.
+ * Creates an orderEvent for audit trail.
+ */
+export const updateOrderTracking = async (
+  orderId: string,
+  trackingNumber: string | null,
+  trackingCarrier: string | null
+): Promise<OrderWithRelations | null> => {
+  const updated = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        trackingNumber,
+        trackingCarrier,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning({ id: orders.id })
+  );
+
+  if (!updated) return null;
+
+  await db.insert(orderEvents).values({
+    orderId,
+    status: "shipped",
+    note: `Tracking updated: ${trackingNumber ?? "cleared"} (${trackingCarrier ?? "no carrier"})`,
+    payload: { trackingNumber, trackingCarrier },
+  });
+
+  return getOrder(orderId);
+};
+
+/**
+ * P6-05: Update internal admin note on an order (bounded to 500 chars at application layer).
+ */
+export const updateOrderNote = async (
+  orderId: string,
+  note: string
+): Promise<OrderWithRelations | null> => {
+  const updated = getFirstRow(
+    await db
+      .update(orders)
+      .set({
+        internalNote: note,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning({ id: orders.id })
+  );
+
+  if (!updated) return null;
+
+  return getOrder(orderId);
 };

@@ -392,6 +392,31 @@ export const orders = pgTable(
      */
     discountId: uuid("discount_id").references((): AnyPgColumn => discounts.id, { onDelete: "set null" }),
     discountCode: text("discount_code"),
+    /**
+     * P6-05: Refund tracking.
+     * refundedAt: timestamp when the Razorpay refund was issued.
+     * refundId: Razorpay refund ID (rfnd_xxx) for idempotency + audit.
+     * refundedAmountPaise: amount actually refunded (may differ from totalPaise in partial refunds).
+     * All nullable: null when no refund has been issued.
+     * Requires migration: drizzle/0016_orders_refund_tracking.sql (build-not-run).
+     */
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    refundId: text("refund_id"),
+    refundedAmountPaise: integer("refunded_amount_paise"),
+    /**
+     * P6-05: Shipment tracking.
+     * trackingNumber: carrier tracking number set by admin after dispatch.
+     * trackingCarrier: carrier name (e.g. "BlueDart", "DTDC", "India Post").
+     * Both nullable: null until admin sets them.
+     * Setting/changing trackingNumber triggers ONE customer shipping email (P1-05 guard).
+     */
+    trackingNumber: text("tracking_number"),
+    trackingCarrier: text("tracking_carrier"),
+    /**
+     * P6-05: Internal admin note (first-class, bounded to 500 chars at application layer).
+     * Stored on the orders table for direct access; orderEvents captures the audit trail.
+     */
+    internalNote: text("internal_note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

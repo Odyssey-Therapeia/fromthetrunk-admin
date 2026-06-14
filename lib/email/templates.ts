@@ -273,7 +273,7 @@ export function orderShippedEmail(
     </div>
     <p style="font-size:14px;color:${brandStyles.muted};line-height:1.6;">
       Your saree has been carefully wrapped in muslin and dispatched.
-      ${trackingNumber ? `Your tracking number is <strong style="color:${brandStyles.text};">${trackingNumber}</strong>.` : ""}
+      ${trackingNumber ? `Your tracking number is <strong style="color:${brandStyles.text};">${escapeHtml(trackingNumber)}</strong>.` : ""}
     </p>
     <div style="text-align:center;margin-top:24px;">
       <a href="${getSiteOrigin()}/account/orders"

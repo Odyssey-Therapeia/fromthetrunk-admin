@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, like, or, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, like, ne, or, SQL } from "drizzle-orm";
 import { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
@@ -6,6 +6,8 @@ import { getFirstRow, requireFirstRow } from "@/db/results";
 import {
   collections,
   mediaAssets,
+  orderItems,
+  orders,
   productImages,
   products,
   productTags,
@@ -675,3 +677,80 @@ export const bulkSetProductTags = async (
 export function deriveQuantityAvailable(stockStatus: "available" | "reserved" | "sold"): number {
   return stockStatus === "sold" ? 0 : 1;
 }
+
+/**
+ * P6-05: Restock a product after a refund (one-of-one model).
+ *
+ * Decision rule:
+ *   - If the product is currently "sold" AND it was re-sold to a DIFFERENT paid order
+ *     (not the refunded order), do NOT restock.
+ *   - If the product is "sold" only because of the refunded order's payment (the common case:
+ *     paid → marked sold → refunded), reset to "available".
+ *   - If the product is "reserved" or "available", reset to "available".
+ *
+ * This implements the packet spec: "refund → piece returns to available, unless already re-sold."
+ * "Already re-sold" = another non-refunded paid order has this product in its items.
+ *
+ * REPAIR-2 fix: the previous implementation skipped ALL 'sold' products, which made
+ * restock dead for the common paid-then-refunded case (complete-paid-order.ts marks
+ * every paid product 'sold'). We now detect genuine re-sales by querying orderItems.
+ *
+ * @param productId - The product to potentially restock
+ * @param refundedOrderId - The order being refunded (excluded from re-sale check)
+ * Returns: "restocked" | "skipped" | "not_found"
+ */
+export const restockProduct = async (
+  productId: string,
+  refundedOrderId?: string
+): Promise<"restocked" | "skipped" | "not_found"> => {
+  // Read the current stock status first (conditional restock)
+  const [product] = await db
+    .select({ id: products.id, stockStatus: products.stockStatus })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  if (!product) return "not_found";
+
+  if (product.stockStatus === "sold") {
+    // Detect genuine re-sale: check if a DIFFERENT paid order has this product.
+    // If refundedOrderId is provided, exclude it from the check.
+    // A re-sale means another order (with paymentStatus='paid') contains this product.
+    const reSaleFilter =
+      refundedOrderId
+        ? and(
+            eq(orderItems.productId, productId),
+            ne(orderItems.orderId, refundedOrderId),
+            eq(orders.paymentStatus, "paid")
+          )
+        : and(
+            eq(orderItems.productId, productId),
+            eq(orders.paymentStatus, "paid")
+          );
+
+    const [reSaleRow] = await db
+      .select({ orderId: orderItems.orderId })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .where(reSaleFilter)
+      .limit(1);
+
+    if (reSaleRow) {
+      // Genuine re-sale to a different customer — do not restock
+      return "skipped";
+    }
+    // The 'sold' state was solely from the refunded order — proceed to restock
+  }
+
+  await db
+    .update(products)
+    .set({
+      stockStatus: "available",
+      quantityAvailable: 1,
+      reservedUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(products.id, productId));
+
+  return "restocked";
+};

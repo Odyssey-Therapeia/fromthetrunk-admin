@@ -32,6 +32,15 @@ export const createOrderSchema = z.object({
 });
 
 export const orderStatusPatchSchema = z.object({
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
   status: z.enum(["pending", "confirmed", "shipped", "delivered"]),
+});
+
+export const orderNotePatchSchema = z.object({
+  note: z.string().max(500),
+});
+
+export const orderTrackingPatchSchema = z.object({
+  trackingNumber: z.string().max(200).nullable().optional(),
+  trackingCarrier: z.string().max(100).nullable().optional(),
 });
