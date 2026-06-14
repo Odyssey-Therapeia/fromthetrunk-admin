@@ -42,7 +42,9 @@ draftMode + signed expiring preview token (P1-11 pattern); Publish = freeze vers
 
 ### P3-07: Theme tokens + editor
 `theme_settings` token schema (palette, font pair from a curated list, radius, spacing scale) → CSS variables in root layout; admin editor = schema-form + live preview iframe; tokens versioned like pages (history row on save). Guardrail: blocks/components consume variables only — verifier drift-check.
-- [ ]
+- [x] (2026-06-14, bef89db, "theme token set [palette+curated font pair+radius+spacing] as a FormSchema persisted to theme_settings; ThemeStyler RSC emits :root{} CSS-var overrides at site root layout, overriding Tailwind v4 vars via @theme inline var() indirection [extends docs/design-system.md, mutation-proven vs REAL emitted __html, no-theme default byte-identical]; admin editor = SchemaForm [D-style, no per-token UI] + live preview, nav-wired, POST /api/v2/admin/theme requireAdmin; versioned via immutable theme_versions [new table; drizzle/0010 IF-NOT-EXISTS parse-validated NOT run], persistence mutation-proven via REAL query [mock @/db only]; drift guardrail clean; tsc 0; 919 tests; opus 3-lens ACCEPT-WITH-MINORS. browser e2e → #G-P3.")
+- [ ] P3-07a: dead exports EDITABLE_COLOR_TOKENS + EditableColorToken (lib/content/theme-tokens.ts:57-74) have ZERO consumers and duplicate the editable-token list independently defined in theme-settings.schema.ts → drift trap. Either DELETE them, or DERIVE the schema's color-field keys from EDITABLE_COLOR_TOKENS (one source of truth, closes the D-shape loop for colors).
+- [ ] P3-07b: app/(site)/layout.tsx:64 has a pre-existing raw hex (`"theme-color": "#6b1d1d"` metadata) — now in a P3-07-touched file, so the Rule-1 (no-raw-hex) drift grep will flag it. Replace with a token-derived value or add a documented waiver. (Pre-existing, not introduced by P3-07.) Minor: theme-css-injection.test.ts layout-wiring tests are weak source-text regex (the real proof is theme-styler-consumer.test.ts) — fine, noted.
 
 ### P3-08: Remaining v1 blocks
 image+text, story/editorial, FAQ (+FAQPage JSON-LD — rendered-output test per P1-16 pattern), newsletter, announcement bar, spacer.
