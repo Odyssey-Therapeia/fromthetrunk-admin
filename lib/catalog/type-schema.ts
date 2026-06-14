@@ -155,6 +155,12 @@ function deriveZodValidator(def: AttributeDef): z.ZodTypeAny {
       return required ? base : base.optional();
     }
 
+    case "list-of-text": {
+      // Emits string[] directly (no {value} wrapper).
+      const base = z.array(z.string());
+      return required ? base : base.optional();
+    }
+
     case "conditional": {
       // Conditional fields are always optional at the server-side validator level;
       // the showIf predicate is client-side only.

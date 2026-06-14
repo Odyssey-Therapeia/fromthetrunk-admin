@@ -12,7 +12,7 @@ import type { ZodTypeAny } from "zod";
 // ---------------------------------------------------------------------------
 
 /**
- * Canonical field type discriminant — maps to FT-01 through FT-11.
+ * Canonical field type discriminant — maps to FT-01 through FT-12.
  *
  * FT-01  text          — single-line string input
  * FT-02  textarea      — multi-line string input
@@ -25,6 +25,10 @@ import type { ZodTypeAny } from "zod";
  * FT-09  image-ref     — UUID(s) referencing media_assets rows
  * FT-10  list-of-group — repeatable nested group (recursive, max 2 levels)
  * FT-11  conditional   — shows/hides based on a sibling field predicate
+ * FT-12  list-of-text  — repeatable list of bare strings (value type: string[])
+ *                        Use instead of list-of-group when each row is a single string,
+ *                        so the propsSchema can stay string[] (no {value} wrapper needed).
+ *                        Emits string[] directly; add-row pushes "", update-row replaces string.
  */
 export type FieldType =
   | "text"
@@ -37,7 +41,8 @@ export type FieldType =
   | "boolean"
   | "image-ref"
   | "list-of-group"
-  | "conditional";
+  | "conditional"
+  | "list-of-text";
 
 // ---------------------------------------------------------------------------
 // FieldMeta

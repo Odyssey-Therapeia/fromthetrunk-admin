@@ -16,6 +16,7 @@
  * FT-09  image-ref     → <Input type="text"> (UUID; full picker is step-photos pattern)
  * FT-10  list-of-group → repeatable group rows (add/remove)
  * FT-11  conditional   → honours FieldMeta.showIf predicate; renders null when false
+ * FT-12  list-of-text  → repeatable list of bare string rows; emits string[] directly
  */
 
 import { Input } from "@/components/ui/input";
@@ -491,6 +492,77 @@ function ListOfGroupField({
 }
 
 // ---------------------------------------------------------------------------
+// FT-12 list-of-text — repeatable bare-string rows (emits string[])
+// ---------------------------------------------------------------------------
+
+function ListOfTextField({
+  fieldKey,
+  meta,
+  value,
+  error,
+  onBlur,
+  onChange,
+}: SchemaFormFieldProps) {
+  const rows: string[] = Array.isArray(value)
+    ? (value as unknown[]).map((v) => (typeof v === "string" ? v : ""))
+    : [];
+
+  const addRow = () => {
+    onChange([...rows, ""]);
+  };
+
+  const updateRow = (index: number, next: string) => {
+    const updated = rows.map((r, i) => (i === index ? next : r));
+    onChange(updated);
+  };
+
+  const removeRow = (index: number) => {
+    onChange(rows.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-3">
+      <Label>{meta.label}</Label>
+      {meta.description ? (
+        <p className="text-xs text-muted-foreground">{meta.description}</p>
+      ) : null}
+
+      {rows.map((row, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Input
+            id={`sf-${fieldKey}-${i}`}
+            type="text"
+            placeholder={meta.placeholder}
+            value={row}
+            onBlur={onBlur}
+            onChange={(e) => updateRow(i, e.target.value)}
+          />
+          <button
+            type="button"
+            className="shrink-0 text-xs text-destructive hover:underline"
+            onClick={() => removeRow(i)}
+            onBlur={onBlur}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        className="flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-input hover:text-foreground"
+        onClick={addRow}
+        onBlur={onBlur}
+      >
+        Add {meta.label}
+      </button>
+
+      <FieldError error={error} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FT-11 conditional — honours showIf predicate
 // If showIf returns false, renders null (field is hidden/unmounted).
 // The actual field type is treated as "text" for the inner renderer since
@@ -538,6 +610,8 @@ export function SchemaFormField(props: SchemaFormFieldProps) {
       return <ImageRefField {...props} />;
     case "list-of-group":
       return <ListOfGroupField {...props} />;
+    case "list-of-text":
+      return <ListOfTextField {...props} />;
     case "conditional":
       return <ConditionalField {...props} />;
     default: {

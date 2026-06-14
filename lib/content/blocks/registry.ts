@@ -106,7 +106,19 @@ export async function renderBlock({
 import { heroBlock } from "@/lib/content/blocks/hero";
 import { richTextBlock } from "@/lib/content/blocks/rich-text";
 import { productGridBlock } from "@/lib/content/blocks/product-grid";
+import { imageTextSplitBlock } from "@/lib/content/blocks/image-text-split";
+import { storyEditorialBlock } from "@/lib/content/blocks/story-editorial";
+import { faqBlock } from "@/lib/content/blocks/faq";
+import { newsletterSignupBlock } from "@/lib/content/blocks/newsletter-signup";
+import { announcementBarBlock } from "@/lib/content/blocks/announcement-bar";
+import { spacerBlock } from "@/lib/content/blocks/spacer";
 
 BLOCK_REGISTRY.set(heroBlock.type, heroBlock);
 BLOCK_REGISTRY.set(richTextBlock.type, richTextBlock);
 BLOCK_REGISTRY.set(productGridBlock.type, productGridBlock);
+BLOCK_REGISTRY.set(imageTextSplitBlock.type, imageTextSplitBlock);
+BLOCK_REGISTRY.set(storyEditorialBlock.type, storyEditorialBlock);
+BLOCK_REGISTRY.set(faqBlock.type, faqBlock);
+BLOCK_REGISTRY.set(newsletterSignupBlock.type, newsletterSignupBlock);
+BLOCK_REGISTRY.set(announcementBarBlock.type, announcementBarBlock);
+BLOCK_REGISTRY.set(spacerBlock.type, spacerBlock);

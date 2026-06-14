@@ -318,13 +318,423 @@ export const productGridEditorSchema: FormSchema = {
   },
 };
 
+// ── Image-text-split block schema ─────────────────────────────────────────────
+// Mirrors imageTextSplitPropsSchema from lib/content/blocks/image-text-split.tsx
+
+export const imageTextSplitEditorSchema: FormSchema = {
+  fields: {
+    heading: {
+      zod: z.string().max(200),
+      meta: {
+        type: "text",
+        label: "Heading",
+        placeholder: "e.g. Our story begins here",
+        description: "Main heading for the split section.",
+      },
+    },
+    eyebrow: {
+      zod: z.string().max(80).optional(),
+      meta: {
+        type: "text",
+        label: "Eyebrow",
+        placeholder: "e.g. About us",
+        description: "Small uppercase label above the heading.",
+      },
+    },
+    body: {
+      zod: z.string().max(2000),
+      meta: {
+        type: "rich-text",
+        label: "Body",
+        placeholder: "Write your content here…",
+        description: "Rich text body content (sanitized on render).",
+      },
+    },
+    image: {
+      zod: z.string().uuid(),
+      meta: {
+        type: "image-ref",
+        label: "Image",
+        description: "UUID of the media asset displayed beside the text.",
+      },
+    },
+    imageAlt: {
+      zod: z.string().max(200).optional(),
+      meta: {
+        type: "text",
+        label: "Image alt text",
+        placeholder: "Describe the image for screen readers",
+        description: "Accessible description of the image.",
+      },
+    },
+    imagePosition: {
+      zod: z.enum(["left", "right"]).default("right"),
+      meta: {
+        type: "select",
+        label: "Image position",
+        options: [
+          { label: "Right (default)", value: "right" },
+          { label: "Left", value: "left" },
+        ],
+        description: "Which side the image appears on (desktop).",
+      },
+    },
+    ctaLabel: {
+      zod: z.string().max(60).optional(),
+      meta: {
+        type: "text",
+        label: "CTA label",
+        placeholder: "e.g. Learn more",
+        description: "Label for the optional call-to-action link.",
+      },
+    },
+    ctaHref: {
+      zod: z.string().max(300).optional(),
+      meta: {
+        type: "text",
+        label: "CTA URL",
+        placeholder: "/our-story",
+        description: "Destination URL for the CTA.",
+      },
+    },
+    background: {
+      zod: z.enum(["transparent", "secondary", "muted"]).default("transparent"),
+      meta: {
+        type: "select",
+        label: "Background",
+        options: [
+          { label: "Transparent (default)", value: "transparent" },
+          { label: "Secondary", value: "secondary" },
+          { label: "Muted", value: "muted" },
+        ],
+        description: "Background colour of the section.",
+      },
+    },
+  },
+};
+
+// ── Story-editorial block schema ──────────────────────────────────────────────
+// Mirrors storyEditorialPropsSchema from lib/content/blocks/story-editorial.tsx
+
+export const storyEditorialEditorSchema: FormSchema = {
+  fields: {
+    beats: {
+      zod: z.array(
+        z.object({
+          paragraphs: z.array(z.string().max(600)).min(1).max(4),
+          image: z.string().uuid().optional(),
+          imageAlt: z.string().max(200).optional(),
+          layout: z.enum([
+            "image-right",
+            "image-left",
+            "text-only-dark",
+            "full-bleed",
+          ]),
+        })
+      ).min(1).max(6),
+      meta: {
+        type: "list-of-group",
+        label: "Beats",
+        description: "Editorial beats (sections) in the narrative.",
+        itemSchema: {
+          fields: {
+            layout: {
+              zod: z.enum([
+                "image-right",
+                "image-left",
+                "text-only-dark",
+                "full-bleed",
+              ]),
+              meta: {
+                type: "select",
+                label: "Layout",
+                options: [
+                  { label: "Image right", value: "image-right" },
+                  { label: "Image left", value: "image-left" },
+                  { label: "Text only (dark bg)", value: "text-only-dark" },
+                  { label: "Full bleed", value: "full-bleed" },
+                ],
+                description: "Visual layout for this beat.",
+              },
+            },
+            paragraphs: {
+              zod: z.array(z.string().max(600)).min(1).max(4),
+              meta: {
+                type: "list-of-text",
+                label: "Paragraphs",
+                placeholder: "Write a paragraph…",
+                description: "Text paragraphs for this beat (1–4). Each row is one paragraph.",
+              },
+            },
+            image: {
+              zod: z.string().uuid().optional(),
+              meta: {
+                type: "image-ref",
+                label: "Image",
+                description: "Optional image for this beat.",
+              },
+            },
+            imageAlt: {
+              zod: z.string().max(200).optional(),
+              meta: {
+                type: "text",
+                label: "Image alt text",
+                placeholder: "Describe the image",
+                description: "Accessible description of the beat image.",
+              },
+            },
+          },
+        },
+      },
+    },
+    climaxLines: {
+      zod: z.array(z.string().max(200)).max(6).optional(),
+      meta: {
+        type: "list-of-text",
+        label: "Climax lines",
+        placeholder: "e.g. Every saree holds a story.",
+        description: "Optional finale text lines shown on a dark background (max 6). Each row is one line.",
+      },
+    },
+    ctaLabel: {
+      zod: z.string().max(60).optional(),
+      meta: {
+        type: "text",
+        label: "CTA label",
+        placeholder: "e.g. Explore the collection",
+        description: "Label for the optional call-to-action below the narrative.",
+      },
+    },
+    ctaHref: {
+      zod: z.string().max(300).optional(),
+      meta: {
+        type: "text",
+        label: "CTA URL",
+        placeholder: "/collection",
+        description: "Destination URL for the CTA.",
+      },
+    },
+  },
+};
+
+// ── FAQ block schema ──────────────────────────────────────────────────────────
+// Mirrors faqPropsSchema from lib/content/blocks/faq.tsx
+
+export const faqEditorSchema: FormSchema = {
+  fields: {
+    heading: {
+      zod: z.string().max(200).optional(),
+      meta: {
+        type: "text",
+        label: "Heading",
+        placeholder: "e.g. Frequently asked questions",
+        description: "Optional heading shown above the FAQ list.",
+      },
+    },
+    eyebrow: {
+      zod: z.string().max(80).optional(),
+      meta: {
+        type: "text",
+        label: "Eyebrow",
+        placeholder: "e.g. FAQ",
+        description: "Small uppercase label above the heading.",
+      },
+    },
+    items: {
+      zod: z.array(
+        z.object({
+          question: z.string().max(300),
+          answer: z.string().max(2000),
+        })
+      ).min(1).max(20),
+      meta: {
+        type: "list-of-group",
+        label: "FAQ items",
+        description: "List of questions and answers (1–20).",
+        itemSchema: {
+          fields: {
+            question: {
+              zod: z.string().max(300),
+              meta: {
+                type: "text",
+                label: "Question",
+                placeholder: "e.g. How do I authenticate a saree?",
+                description: "The FAQ question (max 300 chars).",
+              },
+            },
+            answer: {
+              zod: z.string().max(2000),
+              meta: {
+                type: "rich-text",
+                label: "Answer",
+                placeholder: "Write the answer here…",
+                description: "The answer (rich text, sanitized on render; max 2000 chars).",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+// ── Newsletter-signup block schema ────────────────────────────────────────────
+// Mirrors newsletterSignupPropsSchema from lib/content/blocks/newsletter-signup.tsx
+
+export const newsletterSignupEditorSchema: FormSchema = {
+  fields: {
+    heading: {
+      zod: z.string().max(200),
+      meta: {
+        type: "text",
+        label: "Heading",
+        placeholder: "e.g. Be the first to discover new arrivals",
+        description: "Main heading for the newsletter signup section.",
+      },
+    },
+    eyebrow: {
+      zod: z.string().max(80).optional(),
+      meta: {
+        type: "text",
+        label: "Eyebrow",
+        placeholder: "e.g. Private Drops",
+        description: "Small uppercase label above the heading.",
+      },
+    },
+    body: {
+      zod: z.string().max(400).optional(),
+      meta: {
+        type: "textarea",
+        label: "Body",
+        placeholder: "e.g. Receive curated drops delivered once a fortnight.",
+        description: "Optional supporting copy below the heading.",
+      },
+    },
+    inputPlaceholder: {
+      zod: z.string().max(80).default("Enter your email"),
+      meta: {
+        type: "text",
+        label: "Input placeholder",
+        placeholder: "Enter your email",
+        description: "Placeholder text shown inside the email input.",
+      },
+    },
+    buttonLabel: {
+      zod: z.string().max(60).default("Join the list"),
+      meta: {
+        type: "text",
+        label: "Button label",
+        placeholder: "Join the list",
+        description: "Label for the subscribe button.",
+      },
+    },
+    background: {
+      zod: z.enum(["card", "secondary", "transparent"]).default("card"),
+      meta: {
+        type: "select",
+        label: "Background",
+        options: [
+          { label: "Card (default)", value: "card" },
+          { label: "Secondary", value: "secondary" },
+          { label: "Transparent", value: "transparent" },
+        ],
+        description: "Background colour of the section.",
+      },
+    },
+  },
+};
+
+// ── Announcement-bar block schema ─────────────────────────────────────────────
+// Mirrors announcementBarPropsSchema from lib/content/blocks/announcement-bar.tsx
+
+export const announcementBarEditorSchema: FormSchema = {
+  fields: {
+    messages: {
+      zod: z.array(z.string().max(200)).min(1).max(5),
+      meta: {
+        type: "list-of-text",
+        label: "Messages",
+        placeholder: "e.g. Complimentary styling consult",
+        description: "One or more announcement messages shown in the bar (1–5). Each row is one message.",
+      },
+    },
+    ctaLabel: {
+      zod: z.string().max(60).optional(),
+      meta: {
+        type: "text",
+        label: "CTA label",
+        placeholder: "e.g. Explore the Collection",
+        description: "Label for the optional call-to-action link.",
+      },
+    },
+    ctaHref: {
+      zod: z.string().max(300).optional(),
+      meta: {
+        type: "text",
+        label: "CTA URL",
+        placeholder: "/collection",
+        description: "Destination URL for the CTA link.",
+      },
+    },
+    background: {
+      zod: z.enum(["primary", "accent", "foreground"]).default("primary"),
+      meta: {
+        type: "select",
+        label: "Background",
+        options: [
+          { label: "Primary (default)", value: "primary" },
+          { label: "Accent", value: "accent" },
+          { label: "Foreground (dark)", value: "foreground" },
+        ],
+        description: "Background colour of the announcement bar.",
+      },
+    },
+  },
+};
+
+// ── Spacer block schema ───────────────────────────────────────────────────────
+// Mirrors spacerPropsSchema from lib/content/blocks/spacer.tsx
+
+export const spacerEditorSchema: FormSchema = {
+  fields: {
+    size: {
+      zod: z.enum(["sm", "md", "lg", "xl"]).default("md"),
+      meta: {
+        type: "select",
+        label: "Size",
+        options: [
+          { label: "Small (2rem)", value: "sm" },
+          { label: "Medium (4rem, default)", value: "md" },
+          { label: "Large (6rem)", value: "lg" },
+          { label: "Extra large (8rem)", value: "xl" },
+        ],
+        description: "Vertical height of the spacer.",
+      },
+    },
+    showDivider: {
+      zod: z.boolean().default(false),
+      meta: {
+        type: "boolean",
+        label: "Show divider",
+        description: "Render a horizontal rule (uses --border token colour).",
+      },
+    },
+  },
+};
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 // EDITOR_SCHEMA_BLOCK_TYPES — verifier anchor: grep for this comment to confirm
-// all three registered block types (hero, rich-text, product-grid) have schemas.
+// all nine registered block types have schemas.
 
 export const BLOCK_EDITOR_SCHEMAS: Record<string, FormSchema> = {
   hero: heroEditorSchema,
   "rich-text": richTextEditorSchema,
   "product-grid": productGridEditorSchema,
+  "image-text-split": imageTextSplitEditorSchema,
+  "story-editorial": storyEditorialEditorSchema,
+  faq: faqEditorSchema,
+  "newsletter-signup": newsletterSignupEditorSchema,
+  "announcement-bar": announcementBarEditorSchema,
+  spacer: spacerEditorSchema,
 };
