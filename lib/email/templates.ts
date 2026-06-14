@@ -408,6 +408,149 @@ export function emailChangeVerificationEmail(verifyUrl: string): {
   };
 }
 
+/**
+ * P6-07: Weekly ops digest email.
+ *
+ * Composes a structured operations summary from the Control Centre dashboard
+ * and formats it as a brand-consistent HTML email.
+ */
+export function weeklyOpsDigestEmail(dashboard: import("@/lib/control-centre/compose-dashboard").ControlCentreDashboard): {
+  subject: string;
+  html: string;
+} {
+  const { funnel, feedHealth, parity, indexation, cwv, reservationExpiry } = dashboard;
+  const now = new Date();
+  const weekLabel = now.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const content = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <h2 style="font-size:22px;color:${brandStyles.text};margin:0 0 4px;">Weekly Operations Digest</h2>
+      <p style="font-size:13px;color:${brandStyles.muted};margin:0;">Week of ${weekLabel} &mdash; last 30 days</p>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+      <thead>
+        <tr>
+          <th colspan="2" style="text-align:left;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">
+            Revenue Funnel
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Sessions (GA4)</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${funnel.sessions}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Orders Created</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${funnel.ordersCreated}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Payments Completed</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${funnel.paid}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+      <thead>
+        <tr>
+          <th colspan="2" style="text-align:left;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">
+            Meta Catalog Health
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Catalog Items</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${feedHealth.catalogItemCount}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Disapprovals</td>
+          <td style="padding:6px 0;font-size:14px;color:${feedHealth.catalogDisapprovals > 0 ? brandStyles.primary : brandStyles.text};text-align:right;font-weight:bold;">${feedHealth.catalogDisapprovals}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Pixel / CAPI Parity</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${parity.pixelEventCount} / ${parity.capiEventCount} (delta: ${parity.parityDelta > 0 ? "+" : ""}${parity.parityDelta})</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+      <thead>
+        <tr>
+          <th colspan="2" style="text-align:left;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">
+            Search &amp; Core Web Vitals
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Indexed Pages (GSC)</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${indexation.indexedPageCount}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Avg CTR</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${(indexation.avgCtr * 100).toFixed(1)}%</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">LCP p75</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${cwv.lcp.toFixed(2)}s</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">INP p75</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${cwv.inp}ms</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">CLS p75</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${cwv.cls.toFixed(3)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Recent Deploys</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${cwv.recentDeployCount}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+      <thead>
+        <tr>
+          <th colspan="2" style="text-align:left;padding:8px 0;border-bottom:2px solid ${brandStyles.border};font-size:12px;color:${brandStyles.muted};text-transform:uppercase;letter-spacing:0.1em;">
+            Reservations
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Created</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${reservationExpiry.reservationsCreated}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Expired (30d)</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${reservationExpiry.expiredCount}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.muted};">Expiry Rate</td>
+          <td style="padding:6px 0;font-size:14px;color:${brandStyles.text};text-align:right;font-weight:bold;">${(reservationExpiry.expiryRate * 100).toFixed(1)}%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:12px;color:${brandStyles.muted};margin-top:16px;text-align:center;">
+      Auto-generated by From the Trunk Operations Digest. Data reflects the last 30 days.
+    </p>
+  `;
+
+  return {
+    subject: `Weekly Ops Digest — ${weekLabel} | From the Trunk`,
+    html: wrapper(content),
+  };
+}
+
 export function newsletterConfirmationEmail(confirmUrl: string): {
   subject: string;
   html: string;

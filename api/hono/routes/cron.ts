@@ -6,10 +6,15 @@ import { db } from "@/db";
 import { expireReservations } from "@/db/queries/reservations";
 import { sendReservationExpiryReminders } from "@/db/queries/reservation-reminders";
 import { upsertChannelMetric } from "@/db/queries/channel-metrics";
+import { getChannelMetrics, getEventCounts } from "@/db/queries/control-centre";
 import { products } from "@/db/schema";
 import { verifyBearerSecret } from "@/lib/http/verify-secret";
 import { emitAnalyticsEvent } from "@/lib/analytics/emit";
 import { pullAllMetrics } from "@/lib/ports/channel-metrics";
+import { composeDashboard } from "@/lib/control-centre/compose-dashboard";
+import { sendEmail } from "@/lib/email/send";
+import { getOrderNotificationRecipients } from "@/lib/email/recipients";
+import { weeklyOpsDigestEmail } from "@/lib/email/templates";
 import { createLogger } from "@/lib/log";
 
 const log = createLogger("cron:channel-metrics");
@@ -266,6 +271,88 @@ export const registerCronRoutes = (app: OpenAPIHono<HonoBindings>) => {
           skippedSold: result.skippedSold,
           skippedNoEmail: result.skippedNoEmail,
           errors: result.errors,
+          timestamp: new Date().toISOString(),
+        },
+        200
+      );
+    }
+  );
+
+  // ── P6-07: Weekly ops digest email ───────────────────────────────────────
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/weekly-ops-digest",
+      responses: {
+        200: {
+          description: "Weekly operations digest email sent (or skipped on send error)",
+        },
+        401: {
+          description: "Unauthorized — invalid or missing cron secret",
+        },
+        500: {
+          description: "CRON_SECRET not configured",
+        },
+      },
+      tags: ["Cron"],
+    }),
+    async (c) => {
+      const cronSecret = process.env.CRON_SECRET;
+      if (!cronSecret) {
+        return c.json(
+          {
+            code: "CRON_SECRET_MISSING",
+            message: "CRON_SECRET is not configured.",
+          },
+          500
+        );
+      }
+
+      const authHeader = c.req.header("authorization") ?? null;
+      if (!verifyBearerSecret(authHeader, cronSecret)) {
+        return c.json(
+          {
+            code: "UNAUTHORIZED",
+            message: "Invalid cron secret.",
+          },
+          401
+        );
+      }
+
+      // Compose the REAL dashboard from live data (both functions never throw).
+      const [channelMetrics, eventCounts] = await Promise.all([
+        getChannelMetrics(),
+        getEventCounts(),
+      ]);
+
+      const dashboard = composeDashboard({
+        ga4: channelMetrics.ga4,
+        searchConsole: channelMetrics.searchConsole,
+        vercelInsights: channelMetrics.vercelInsights,
+        metaMarketing: channelMetrics.metaMarketing,
+        eventCounts,
+      });
+
+      const { subject, html } = weeklyOpsDigestEmail(dashboard);
+      const recipients = getOrderNotificationRecipients();
+
+      // Fire-and-forget: a failing send does NOT crash the cron.
+      // Returns 200 regardless — the send failure is logged but not propagated.
+      let emailOk = false;
+      try {
+        emailOk = await sendEmail({ to: recipients, subject, html });
+      } catch (err) {
+        log.error("[weekly-ops-digest cron] sendEmail threw", {
+          err: err as Record<string, unknown>,
+        });
+      }
+
+      return c.json(
+        {
+          ok: true,
+          emailSent: emailOk,
+          recipients,
           timestamp: new Date().toISOString(),
         },
         200

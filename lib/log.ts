@@ -18,7 +18,10 @@
  * Safety:
  *   All methods are wrapped in try/catch — the logger NEVER throws.
  *   Safe to use inside fire-and-forget paths.
+ *
+ * P6-07: error() also forwards to the error-tracker port (env-gated, never throws).
  */
+import { getErrorTracker } from "@/lib/ports/error-tracker";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -134,6 +137,15 @@ export function createLogger(namespace: string): Logger {
     },
     error(msg: string, meta?: Record<string, unknown>): void {
       log("error", namespace, msg, meta);
+      // P6-07: forward to error-tracker port (env-gated, never throws).
+      // Extract the first Error object from meta if present (typically meta.err).
+      try {
+        const tracker = getErrorTracker();
+        const errValue = meta?.err instanceof Error ? meta.err : undefined;
+        tracker.capture(errValue ?? new Error(msg), { namespace, msg, ...meta });
+      } catch {
+        // Never throw from the logging path
+      }
     },
   };
 }
