@@ -35,3 +35,18 @@ export function isGstInclusive(): boolean {
 export function isInventoryV2(): boolean {
   return process.env.FTT_FEATURE_INVENTORY_V2 === "true";
 }
+
+/**
+ * When true, the homepage (/) renders its sections via the block-content engine
+ * (lib/content/seed/homepage-blocks.ts fixture → renderBlock dispatch).
+ * This is the P3-10 proof-of-concept flag.
+ *
+ * When false (default), the homepage renders the existing hardcoded JSX EXACTLY
+ * as before this change — no behavioural difference.
+ *
+ * Flip this only after the homepage CMS page row + published page_version are
+ * inserted (scripts/seed-homepage-cms.ts) and verified in staging.
+ */
+export function isBlocksHomepage(): boolean {
+  return process.env.FTT_FEATURE_BLOCKS_HOMEPAGE === "true";
+}
