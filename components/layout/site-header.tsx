@@ -20,15 +20,17 @@ import {
 } from "@/components/ui/sheet";
 import { useHasMounted } from "@/lib/hooks/use-has-mounted";
 import logoMark from "@/logos/image 8 [Vectorized].png";
+import type { NavLink } from "@/components/layout/nav-data";
 
-const navLinks = [
+// Default nav links (fallback when no managed menu is configured).
+const DEFAULT_NAV_LINKS: NavLink[] = [
   { href: "/collection", label: "Collection" },
   { href: "/our-story", label: "Our Story" },
   { href: "/why", label: "Our Why" },
   { href: "/how-it-works", label: "How It Works" },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ navLinks = DEFAULT_NAV_LINKS }: { navLinks?: NavLink[] }) {
   const { data: session } = useSession();
   const router = useRouter();
   const hasMounted = useHasMounted();

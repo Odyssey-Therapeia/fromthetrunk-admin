@@ -260,6 +260,14 @@ export function createInMemoryContentStore(): ContentStore {
     async getRedirect(fromPath: string): Promise<Redirect | null> {
       return redirectsByFrom.get(fromPath) ?? null;
     },
+
+    async listRedirects(): Promise<Redirect[]> {
+      return Array.from(redirectsByFrom.values());
+    },
+
+    async deleteRedirect(fromPath: string): Promise<boolean> {
+      return redirectsByFrom.delete(fromPath);
+    },
   };
 }
 
@@ -414,6 +422,17 @@ export function createDrizzleContentStore(): ContentStore {
       const { dbSelectRedirect } = await import("@/db/queries/content");
       const row = await dbSelectRedirect(fromPath);
       return row ? rowToRedirect(row) : null;
+    },
+
+    async listRedirects(): Promise<Redirect[]> {
+      const { dbSelectAllRedirects } = await import("@/db/queries/content");
+      const rows = await dbSelectAllRedirects();
+      return rows.map(rowToRedirect);
+    },
+
+    async deleteRedirect(fromPath: string): Promise<boolean> {
+      const { dbDeleteRedirect } = await import("@/db/queries/content");
+      return dbDeleteRedirect(fromPath);
     },
   };
 }

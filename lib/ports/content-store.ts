@@ -128,4 +128,6 @@ export interface ContentStore {
   // Redirects
   createRedirect(fromPath: string, toPath: string): Promise<Redirect>;
   getRedirect(fromPath: string): Promise<Redirect | null>;
+  listRedirects(): Promise<Redirect[]>;
+  deleteRedirect(fromPath: string): Promise<boolean>;
 }

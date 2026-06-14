@@ -2,8 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { Instagram, MessageCircle } from "lucide-react";
 import logoMark from "@/logos/image 8 [Vectorized].png";
+import type { FooterSection } from "@/components/layout/nav-data";
 
-const footerLinks = [
+// Default footer sections (fallback when no managed menu is configured).
+const DEFAULT_FOOTER_SECTIONS: FooterSection[] = [
   {
     title: "Explore",
     links: [
@@ -30,7 +32,7 @@ const footerLinks = [
   },
 ];
 
-export function SiteFooter() {
+export function SiteFooter({ footerSections = DEFAULT_FOOTER_SECTIONS }: { footerSections?: FooterSection[] }) {
   return (
     <footer className="border-t border-border/70 bg-secondary/40">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.5fr_2fr]">
@@ -79,7 +81,7 @@ export function SiteFooter() {
         </div>
 
         <div className="grid gap-8 sm:grid-cols-3">
-          {footerLinks.map((section) => (
+          {footerSections.map((section) => (
             <div key={section.title} className="space-y-3">
               <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
                 {section.title}

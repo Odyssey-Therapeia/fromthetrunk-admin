@@ -4,6 +4,8 @@ import {
   Globe,
   Image,
   LayoutDashboard,
+  Link2,
+  Menu,
   Package,
   Palette,
   Settings,
@@ -26,6 +28,8 @@ export const adminNavItems: AdminNavItem[] = [
   { href: "/admin/media", label: "Media", icon: Image },
   { href: "/admin/pages", label: "Pages", icon: FileText },
   { href: "/admin/theme", label: "Theme", icon: Palette },
+  { href: "/admin/navigation", label: "Navigation", icon: Menu },
+  { href: "/admin/redirects", label: "Redirects", icon: Link2 },
   { href: "/admin/globals", label: "Globals", icon: Globe },
 ];
 

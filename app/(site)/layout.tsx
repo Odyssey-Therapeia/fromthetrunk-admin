@@ -7,8 +7,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { shouldRenderGtm, buildGtmSrc } from "@/lib/analytics/gtm";
 
 import "../globals.css";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { SiteFooterServer } from "@/components/layout/site-footer-server";
+import { SiteHeaderServer } from "@/components/layout/site-header-server";
 import { ThemeStyler } from "@/components/layout/theme-styler";
 import { Providers } from "@/components/providers";
 import { organizationJsonLd, safeJsonLd } from "@/lib/seo/json-ld";
@@ -86,11 +86,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Skip to main content
         </a>
         <Providers>
-          <SiteHeader />
+          <SiteHeaderServer />
           <main id="main-content" className="min-h-[70vh]" role="main">
             {children}
           </main>
-          <SiteFooter />
+          <SiteFooterServer />
         </Providers>
         <Analytics />
         <SpeedInsights />

@@ -214,3 +214,15 @@ export async function dbSelectRedirect(fromPath: string): Promise<RedirectRow | 
     .limit(1);
   return row ?? null;
 }
+
+export async function dbSelectAllRedirects(): Promise<RedirectRow[]> {
+  return db.select().from(redirects).orderBy(desc(redirects.createdAt));
+}
+
+export async function dbDeleteRedirect(fromPath: string): Promise<boolean> {
+  const result = await db
+    .delete(redirects)
+    .where(eq(redirects.fromPath, fromPath))
+    .returning();
+  return result.length > 0;
+}
