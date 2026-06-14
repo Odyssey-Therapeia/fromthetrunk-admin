@@ -30,7 +30,7 @@
  *   - api/hono/routes/cron.ts      (expireReservations, always runs for dual-write)
  */
 
-import { and, count, eq, gt, lt } from "drizzle-orm";
+import { and, count, eq, gt, inArray, lt } from "drizzle-orm";
 
 import { db, rawSql } from "@/db";
 import { products, reservations } from "@/db/schema";
@@ -151,4 +151,40 @@ export async function getActiveReservationsCount(
       )
     );
   return result?.total ?? 0;
+}
+
+/**
+ * P5-01: Batch variant of getActiveReservationsCount.
+ *
+ * Fetches non-expired reservation counts for a set of product IDs in ONE
+ * query (one round-trip, not N). Used by the Google Merchant feed and the
+ * Meta catalog feed so that availability can be derived via deriveStockStatus
+ * for ALL eligible products without N+1 queries.
+ *
+ * Returns a Map<productId, activeReservationCount>.
+ * Products with zero reservations are NOT present in the map
+ * (callers should default to 0 for missing keys).
+ */
+export async function getBatchActiveReservationsCounts(
+  productIds: string[],
+  asOf: Date = new Date()
+): Promise<Map<string, number>> {
+  if (productIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({ productId: reservations.productId, total: count() })
+    .from(reservations)
+    .where(
+      and(
+        inArray(reservations.productId, productIds),
+        gt(reservations.expiresAt, asOf)
+      )
+    )
+    .groupBy(reservations.productId);
+
+  const result = new Map<string, number>();
+  for (const row of rows) {
+    result.set(row.productId, row.total);
+  }
+  return result;
 }

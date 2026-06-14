@@ -25,6 +25,7 @@ import { registerSearchRoutes } from "@/api/hono/routes/search";
 import { registerUserRoutes } from "@/api/hono/routes/users";
 import { registerWishlistRoutes } from "@/api/hono/routes/wishlist";
 import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
+import { registerFeedsRoutes } from "@/api/hono/routes/feeds";
 import type { HonoBindings } from "@/api/hono/types";
 import { onUncaughtError } from "@/lib/http/on-uncaught-error";
 
@@ -130,6 +131,10 @@ app.route("/admin/redirects", adminRedirectsApp);
 const conversationsApp = new OpenAPIHono<HonoBindings>();
 registerConversationRoutes(conversationsApp);
 app.route("/conversations", conversationsApp);
+
+const feedsApp = new OpenAPIHono<HonoBindings>();
+registerFeedsRoutes(feedsApp);
+app.route("/feeds", feedsApp);
 
 app.onError(onUncaughtError);
 
