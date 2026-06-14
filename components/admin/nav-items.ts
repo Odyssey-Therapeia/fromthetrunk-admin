@@ -1,4 +1,5 @@
 import {
+  Activity,
   FileText,
   FolderOpen,
   Globe,
@@ -21,6 +22,7 @@ export type AdminNavItem = {
 
 export const adminNavItems: AdminNavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/control-centre", label: "Control Centre", icon: Activity },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/collections", label: "Collections", icon: FolderOpen },
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
