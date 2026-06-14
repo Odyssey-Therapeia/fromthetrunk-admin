@@ -5,7 +5,7 @@ External-console latency is real: Merchant Center review 3–5 business days; pr
 
 ### P5-00 (spike): channel account audit (ops + doc)
 Findings doc: state of Google Merchant Center, Search Console property (which domain — post #G-DOMAIN), Meta Business/Commerce Manager, API access (service account for GSC/GA4, Meta system user token, Vercel API token). Lists every credential needed with owner. Nothing ships without this inventory.
-- [ ]
+- [x] (2026-06-14, docs/spikes/channel-audit.md, "credential checklist (owner=user, BATCHED for P5-03/#G-P5: GMC, GSC SA+property, GA4 Data API, Vercel API token, Meta system-user+catalog id, FEEDS_PUBLIC_TOKEN) + the committed feed-mapping decisions (GST-inclusive price, availability from quantities, condition=used, identifier_exists=false GTIN-exemption, json-ld description fallback, absolute Blob URLs, exclusions) + GTIN-exemption flow + P5-04 adapter scope + assumptions A-CH1..4. Code feeds/adapters built+fixture-tested; consoles batched. Orchestrator-written planning doc.")
 
 ### P5-01: Google Merchant feed
 `GET /api/v2/feeds/google-merchant.xml` over `listProducts` (the sitemap's exact query): GST-inclusive price (P2-04), availability from quantities (P4-05), `condition=used`, `identifier_exists=false`, description fallback chain (storyNarrative→storyTitle→name+fabric — mirror `lib/seo/json-ld.ts:19-21`), absolute Blob image URLs, landing pages `/collection/{slug}`. Feed-level exclusions: drafts, the test product, zero-image items. Secured? No — feeds are public by design; add a static token query param anyway to deter scraping. Ladder: +L2 (XML schema-validated in test) — plus Google's own feed debugger as ops evidence.
