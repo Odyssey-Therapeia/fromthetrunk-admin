@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
-import { searchProducts } from "@/lib/data/products";
+import { searchProducts } from "@/lib/ports/catalog-search";
 import type { Product } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   let results: Product[] = [];
 
   if (query.length >= 2) {
-    const result = await searchProducts(query, 48);
-    results = result.docs as Product[];
+    // P6-03: use the catalog-search port (ILIKE over name/storyTitle/storyNarrative/attributes)
+    const result = await searchProducts({ query });
+    results = result.products as unknown as Product[];
   }
 
   return (
@@ -50,7 +51,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         {!query && (
           <p className="text-sm text-muted-foreground">
             Use the search bar in the header to find sarees by name, fabric,
-            designer, or era.
+            or the story behind each piece.
           </p>
         )}
       </ScrollReveal>
@@ -72,7 +73,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             Try keywords like &ldquo;Banarasi&rdquo;, &ldquo;Kanjeevaram&rdquo;,
-            &ldquo;Silk&rdquo;, or an era such as &ldquo;1990s&rdquo;.
+            &ldquo;Silk&rdquo;, or &ldquo;Heirloom&rdquo;.
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             {["Banarasi", "Kanjeevaram", "Silk", "Bridal"].map((term) => (

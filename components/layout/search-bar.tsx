@@ -151,7 +151,7 @@ export function SearchBar() {
                 No results for &ldquo;{query}&rdquo;
               </p>
               <p className="text-xs text-muted-foreground">
-                Try Banarasi, Kanjeevaram, Silk, or a designer name.
+                Try Banarasi, Kanjeevaram, Silk, or Heirloom.
               </p>
             </div>
           ) : (

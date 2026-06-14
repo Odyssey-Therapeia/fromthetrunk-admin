@@ -14,6 +14,20 @@ import type { ProductWithRelations } from "@/db/queries/products";
 // ── Filter input ─────────────────────────────────────────────────────────────
 
 export type CatalogSearchFilters = {
+  /**
+   * P6-03: Free-text search term.
+   * Matched case-insensitively (ILIKE) against:
+   *   - products.name
+   *   - products.story_title
+   *   - products.story_narrative
+   *   - (products.attributes->>'fabric')
+   *
+   * Upgrade point: swap the ILIKE OR-clause for a pg_trgm similarity
+   * expression or a vector/embedding lookup here when the Control Centre
+   * (P5-05) search-term report indicates relevance uplift is needed.
+   * The port signature is unchanged — only the adapter implementation changes.
+   */
+  query?: string;
   /** Product type slug (matches productTypes.slug via typeId FK). */
   type?: string;
   /** Fabric attribute value (matches attributes->>'fabric'). */

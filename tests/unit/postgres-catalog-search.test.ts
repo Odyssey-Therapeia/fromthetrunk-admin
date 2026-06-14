@@ -148,6 +148,59 @@ function mainWhereNumbers(): number[] {
   );
 }
 
+/**
+ * Walk a Drizzle SQL AST and collect the SQL column names (e.g. "story_title")
+ * from all ILIKE clauses in the expression.
+ *
+ * Drizzle's ilike(column, value) builds an SQL node with:
+ *   queryChunks = [StringChunk(""), column_PgColumn, StringChunk(" ilike "), value, StringChunk("")]
+ * We detect an ILIKE node by checking that chunks[2] is a StringChunk whose value array
+ * contains " ilike ". The column name is in chunks[1].name.
+ *
+ * This is more discriminating than collectPrimitives() for column assertions because
+ * collectPrimitives() finds column names via table schema back-references even when
+ * a column is NOT in any predicate (the `usedTables` set in Drizzle AST leaks them).
+ */
+function extractIlikeColumnNames(
+  node: unknown,
+  seen = new WeakSet<object>()
+): string[] {
+  if (node === null || node === undefined || typeof node !== "object") return [];
+  if (seen.has(node as object)) return [];
+  seen.add(node as object);
+
+  const n = node as Record<string, unknown>;
+  const chunks = n.queryChunks;
+
+  if (Array.isArray(chunks)) {
+    // Detect an ILIKE clause: 5 chunks where chunks[2].value[0] === " ilike "
+    if (chunks.length === 5) {
+      const middle = chunks[2] as Record<string, unknown>;
+      const middleValue = middle?.value;
+      if (Array.isArray(middleValue) && middleValue[0] === " ilike ") {
+        const col = chunks[1] as Record<string, unknown>;
+        if (typeof col.name === "string") {
+          return [col.name];
+        }
+      }
+    }
+    // Otherwise recurse into each chunk
+    const results: string[] = [];
+    for (const chunk of chunks) {
+      results.push(...extractIlikeColumnNames(chunk, seen));
+    }
+    return results;
+  }
+  return [];
+}
+
+/**
+ * Extract ILIKE column names from the MAIN product query WHERE (index 0).
+ */
+function mainWhereIlikeColumns(): string[] {
+  return extractIlikeColumnNames(capturedWhereArgs[0]);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -691,5 +744,226 @@ describe("P4-03 tag-condition integration — tags filter resolves via product_t
     const strings = mainWhereStrings();
     expect(strings).toContain("linen");
     expect(strings).not.toContain("silk");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P6-03: Free-text query (ILIKE over name / storyTitle / storyNarrative / attributes-fabric)
+// ---------------------------------------------------------------------------
+
+describe("searchProducts — free-text query (P6-03)", () => {
+  it("CatalogSearchFilters accepts a query field (port shape)", async () => {
+    // Type-level: ensure query is accepted without TS error
+    const filters: CatalogSearchFilters = { query: "banarasi" };
+    expect(typeof filters.query).toBe("string");
+  });
+
+  it("WHERE contains the ILIKE pattern for the query term (name column)", async () => {
+    pushProduct({ id: "q-name", name: "Banarasi Brocade Saree" });
+    await searchProducts({ query: "banarasi" });
+    const strings = mainWhereStrings();
+    // The ILIKE pattern %banarasi% must appear in the WHERE predicate
+    expect(strings.some((s) => s.toLowerCase().includes("banarasi"))).toBe(true);
+    expect(strings).toContain("published");
+  });
+
+  it("WHERE for query='banarasi' does NOT contain a different term (DISCRIMINATING)", async () => {
+    pushProduct({ id: "q-disc", name: "Banarasi Brocade Saree" });
+    await searchProducts({ query: "banarasi" });
+    const strings = mainWhereStrings();
+    expect(strings.some((s) => s.toLowerCase().includes("banarasi"))).toBe(true);
+    // Must not accidentally contain an unrelated term
+    expect(strings.some((s) => s.toLowerCase().includes("kanjeevaram"))).toBe(false);
+  });
+
+  it("a query matching the product name returns the product", async () => {
+    pushProduct({ id: "q-match", name: "Kanjeevaram Silk Saree" });
+    const { products } = await searchProducts({ query: "kanjeevaram" });
+    expect(products).toHaveLength(1);
+    expect(products[0].id).toBe("q-match");
+  });
+
+  it("a non-matching query returns no products", async () => {
+    pushEmpty();
+    const { products } = await searchProducts({ query: "xyznomatch" });
+    expect(products).toHaveLength(0);
+  });
+
+  // ── Mutation-proof column tests ─────────────────────────────────────────────
+  //
+  // Strategy: the adapter builds an OR clause with 4 ILIKE predicates:
+  //   ilike(products.name, term)           -- adds %term% once
+  //   ilike(products.storyTitle, term)     -- adds %term% once
+  //   ilike(products.storyNarrative, term) -- adds %term% once
+  //   sql`(attributes->>'fabric') ILIKE ${term}` -- adds %term% once
+  //
+  // So with any query active, collectPrimitives finds the %term% string exactly 4
+  // times. Dropping ANY single ILIKE clause reduces the count to 3 and fails the
+  // test. This is mutation-resistant: it fails both if a clause is deleted AND if
+  // a clause is redirected to a wrong column (the term count is unchanged but the
+  // column-specific fragment assertions below would fail for attributes).
+  //
+  // NOTE: The `->>'fabric') ILIKE ` string literal is a unique fragment of the
+  // attributes sql`` clause — asserting it appears pins the JSONB extraction
+  // expression in the WHERE. If the attributes clause is dropped or rewritten to
+  // ilike(products.name, term), this string disappears and the test fails.
+
+  it("WHERE contains the ILIKE pattern for storyTitle column search (mutation-proof: term appears 4×)", async () => {
+    // Use a term distinct from any column name / schema metadata string
+    const uniqueTerm = "heirloomtitle99";
+    pushProduct({ id: "q-story" });
+    await searchProducts({ query: uniqueTerm });
+    const strings = mainWhereStrings();
+    const pattern = `%${uniqueTerm}%`;
+    // The term must appear in WHERE (at minimum: ilike(name, term) contributes one)
+    const occurrences = strings.filter((s) => s === pattern);
+    // With 4 ILIKE clauses, the bound parameter appears exactly 4 times.
+    // Dropping storyTitle, storyNarrative, or attributes-fabric reduces this to 3.
+    expect(occurrences.length).toBe(4);
+  });
+
+  it("WHERE contains the ILIKE pattern for storyNarrative column search (mutation-proof: term appears 4×)", async () => {
+    const uniqueTerm = "vintagenarr88";
+    pushProduct({ id: "q-narrative" });
+    await searchProducts({ query: uniqueTerm });
+    const strings = mainWhereStrings();
+    const pattern = `%${uniqueTerm}%`;
+    const occurrences = strings.filter((s) => s === pattern);
+    // Must be 4; drops to 3 if storyNarrative clause is removed
+    expect(occurrences.length).toBe(4);
+  });
+
+  it("WHERE contains the ILIKE pattern for attributes fabric search (mutation-proof: term appears 4×, JSONB fragment present)", async () => {
+    const uniqueTerm = "silkattr77";
+    pushProduct({ id: "q-fabric-attr", attributes: { fabric: "silk" } });
+    await searchProducts({ query: uniqueTerm });
+    const strings = mainWhereStrings();
+    const pattern = `%${uniqueTerm}%`;
+    const occurrences = strings.filter((s) => s === pattern);
+    // Must be 4; drops to 3 if attributes-fabric clause is removed
+    expect(occurrences.length).toBe(4);
+    // Additionally assert the JSONB extraction fragment is in the WHERE AST.
+    // This string only appears when the sql`(attributes->>'fabric') ILIKE ${term}`
+    // clause is active — redirecting to ilike(products.name, term) removes it.
+    expect(strings.some((s) => s.includes("->>'fabric') ILIKE "))).toBe(true);
+  });
+
+  it("mutation guard — dropping any ILIKE clause reduces term-occurrence count to <4 (documents the invariant)", async () => {
+    // This test documents and locks in the count invariant.
+    // If an adapter change reduces OR-clause count (e.g., removes storyNarrative),
+    // the term appears fewer than 4 times and the tests above will FAIL.
+    // Here we verify the count is exactly 4 with a fresh unique token.
+    const uniqueTerm = "uniquetoken55";
+    pushProduct({ id: "q-guard" });
+    await searchProducts({ query: uniqueTerm });
+    const strings = mainWhereStrings();
+    const pattern = `%${uniqueTerm}%`;
+    expect(strings.filter((s) => s === pattern).length).toBe(4);
+  });
+
+  it("storyNarrative-only match: WHERE has 4 ILIKE clauses regardless of which field the value is in", async () => {
+    // Verifies the adapter always builds all 4 clauses when query is non-empty.
+    // A product whose only match would be storyNarrative still gets all 4 clauses
+    // in the WHERE — the clause count (4) is the discriminating invariant.
+    //
+    // NOTE: column names (story_title, story_narrative) appear in the WHERE
+    // AST via table schema back-references even for unrelated queries, so we
+    // cannot use their presence as a discriminating assertion. The term count
+    // (4×) is the only reliable mutation guard for clause-set completeness.
+    const uniqueTerm = "handloomweave";
+    pushProduct({ id: "q-narrative-only" });
+    await searchProducts({ query: uniqueTerm });
+    const strings = mainWhereStrings();
+    const pattern = `%${uniqueTerm}%`;
+    expect(strings.filter((s) => s === pattern).length).toBe(4);
+    // The attributes JSONB fragment is the one clause-specific identifier that
+    // does NOT appear via schema back-references:
+    expect(strings.some((s) => s.includes("->>'fabric') ILIKE "))).toBe(true);
+  });
+
+  // ── Column-identity tests (using extractIlikeColumnNames AST walker) ─────────
+  //
+  // These tests use the ILIKE-clause-specific AST walker that navigates into each
+  // ILIKE node's queryChunks to extract the actual SQL column names.
+  // This is more discriminating than collectPrimitives() which cannot distinguish
+  // column names used in predicates from those that appear in schema back-refs.
+  //
+  // Mutation 2 detection: redirecting storyTitle→storyEra or storyNarrative→storyProvenance
+  // changes the column names in the ILIKE queryChunks. These tests fail for that mutation.
+
+  it("ILIKE clauses target story_title column (NOT story_era, story_provenance, or other wrong columns)", async () => {
+    pushProduct({ id: "q-col-story-title" });
+    await searchProducts({ query: "heirloom" });
+    const cols = mainWhereIlikeColumns();
+    expect(cols).toContain("story_title");
+    expect(cols).not.toContain("story_era");
+    expect(cols).not.toContain("story_provenance");
+  });
+
+  it("ILIKE clauses target story_narrative column (NOT story_era or story_provenance)", async () => {
+    pushProduct({ id: "q-col-story-narrative" });
+    await searchProducts({ query: "heirloom" });
+    const cols = mainWhereIlikeColumns();
+    expect(cols).toContain("story_narrative");
+    expect(cols).not.toContain("story_era");
+    expect(cols).not.toContain("story_provenance");
+  });
+
+  it("ILIKE clauses target name column", async () => {
+    pushProduct({ id: "q-col-name" });
+    await searchProducts({ query: "heirloom" });
+    const cols = mainWhereIlikeColumns();
+    expect(cols).toContain("name");
+  });
+
+  it("draft product is excluded (published-only gate persists with query)", async () => {
+    // The mock returns empty — simulating the adapter filtered out the draft
+    pushEmpty();
+    const { products } = await searchProducts({ query: "banarasi" });
+    expect(products).toHaveLength(0);
+    // The WHERE must still contain 'published'
+    const strings = mainWhereStrings();
+    expect(strings).toContain("published");
+  });
+
+  it("query combines with fabric filter (AND semantics)", async () => {
+    pushProduct({
+      id: "q-combo",
+      name: "Banarasi Silk Saree",
+      attributes: { fabric: "silk" },
+    });
+    await searchProducts({ query: "banarasi", fabric: "silk" });
+    const strings = mainWhereStrings();
+    expect(strings.some((s) => s.toLowerCase().includes("banarasi"))).toBe(true);
+    expect(strings).toContain("silk");
+    expect(strings).toContain("published");
+  });
+
+  it("query combines with priceMax filter (AND semantics)", async () => {
+    pushProduct({ id: "q-price", name: "Kanjivaram Saree", pricePaise: 20000 });
+    await searchProducts({ query: "kanjivaram", priceMax: 50000 });
+    const strings = mainWhereStrings();
+    const numbers = mainWhereNumbers();
+    expect(strings.some((s) => s.toLowerCase().includes("kanjivaram"))).toBe(true);
+    expect(numbers).toContain(50000);
+  });
+
+  it("omitting query is a no-op (existing no-filter behaviour unchanged)", async () => {
+    pushProduct({ id: "q-noop" });
+    const { products } = await searchProducts({});
+    expect(products).toHaveLength(1);
+    // WHERE must still contain 'published' but no ILIKE pattern
+    const strings = mainWhereStrings();
+    expect(strings).toContain("published");
+  });
+
+  it("empty-string query is treated as no-op (no ILIKE clause added)", async () => {
+    pushProduct({ id: "q-empty-str" });
+    const { products } = await searchProducts({ query: "" });
+    expect(products).toHaveLength(1);
+    const strings = mainWhereStrings();
+    expect(strings).toContain("published");
+    // Empty query must NOT introduce an ILIKE pattern (%%  is truthy-match-all)
+    expect(strings.some((s) => s.startsWith("%") && s.endsWith("%"))).toBe(false);
   });
 });

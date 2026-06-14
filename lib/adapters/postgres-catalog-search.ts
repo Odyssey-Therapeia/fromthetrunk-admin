@@ -31,7 +31,7 @@
  * would interfere with queue-based test mocks.
  */
 
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
 import { hydrateProducts as hydrateProductsQuery } from "@/db/queries/products";
@@ -130,10 +130,51 @@ async function buildFacets(): Promise<CatalogFacets> {
 export function createPostgresCatalogSearch(): CatalogSearchPort {
   return {
     async searchProducts(filters: CatalogSearchFilters) {
-      const { type, fabric, priceMin, priceMax, availability, tags: tagSlugs } = filters;
+      const { query, type, fabric, priceMin, priceMax, availability, tags: tagSlugs } = filters;
 
       // Build WHERE clauses — all ANDed.
       const whereClauses = [eq(products.status, "published" as const)];
+
+      // P6-03: Free-text search via ILIKE (case-insensitive substring match).
+      //
+      // Choice: ILIKE-only (no pg_trgm extension or GIN index).
+      //
+      // Rationale: FTT is a one-of-one boutique with a small catalog (tens to
+      // hundreds of products). A sequential ILIKE scan is fast enough at this
+      // scale. The status-index narrows the scan to published rows only, so the
+      // number of rows examined is small.
+      //
+      // Performance trade-off vs trigram:
+      //   ILIKE: no extension, no migration, no index maintenance overhead.
+      //   Works well for small catalogs. At ~10k+ rows, pg_trgm + GIN index
+      //   would give sub-millisecond lookups instead of full-scan ILIKE.
+      //
+      // Upgrade path (when volume warrants it):
+      //   1. Add migration: CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      //      CREATE INDEX CONCURRENTLY products_search_gin
+      //        ON products USING gin (
+      //          (name || ' ' || COALESCE(story_title,'') || ' ' ||
+      //           COALESCE(story_narrative,'') || ' ' ||
+      //           COALESCE(attributes->>'fabric','')) gin_trgm_ops
+      //        );
+      //   2. Replace ilike() calls with sql`... % ${term}` similarity predicates.
+      //   The port signature is unchanged — only this block changes.
+      //
+      // Searchable columns: name, storyTitle, storyNarrative, attributes->'fabric'.
+      // (storyTitle and storyNarrative carry the curated narrative that makes each
+      //  piece findable by era/provenance/designer story; attributes->>'fabric' is
+      //  the canonical fabric value from P4-01.)
+      if (query && query.trim().length > 0) {
+        const term = `%${query.trim()}%`;
+        whereClauses.push(
+          or(
+            ilike(products.name, term),
+            ilike(products.storyTitle, term),
+            ilike(products.storyNarrative, term),
+            sql`(${products.attributes}->>'fabric') ILIKE ${term}`
+          )!
+        );
+      }
 
       // Price bounds
       if (typeof priceMin === "number") {
