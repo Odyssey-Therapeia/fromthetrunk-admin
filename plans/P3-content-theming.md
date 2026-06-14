@@ -49,7 +49,9 @@ draftMode + signed expiring preview token (P1-11 pattern); Publish = freeze vers
 ### P3-08: Remaining v1 blocks
 image+text, story/editorial, FAQ (+FAQPage JSON-LD — rendered-output test per P1-16 pattern), newsletter, announcement bar, spacer.
 **Depends**: P3-05.
-- [ ]
+- [x] (2026-06-14, 169e45b, "6 blocks → CLOSED registry, each propsSchema+Renderer(tokens-only)+editorMeta validated on save AND render [mutation-proven; unknown-type rejected]; all editable in P3-05 composer via BLOCK_EDITOR_SCHEMAS. FAQ emits schema.org FAQPage JSON-LD proven by rendered-output test [P1-16; </script> escaped via safeJsonLd; mutation-proven from items]. newsletter-signup forwards editor copy to ONE <Newsletter> [props now optional+fallback; double-heading fixed, one-h3 mutation-proven]; posts to real /api/v2/newsletter/subscribe. announcement bar NON-DISMISSIBLE v1 per block-inventory BLOCK-08 [principal decision]. New FT-12 list-of-text FieldType REPORTED+wired+render-tested. Adopts forms-types.test.ts. tsc 0; 1062 tests; opus 3-lens REJECT→repair→ACCEPT.")
+- [ ] P3-08a: tests/unit/forms-types.test.ts:296-326 has two weak FT-12 onChange sub-tests (renderToStaticMarkup doesn't fire events → captured array empty; the real proofs are the markup-render tests at :277-294/:328-335 which DID fail under mutation) — replace with a real DOM+fireEvent interaction test OR delete the two padding tests. Also fix the stale comment in lib/content/blocks/newsletter-signup.tsx:11-13 (says Newsletter "accepts no props / hardcoded copy / rendered server-side" — all now false).
+- [ ] P3-08b: announcement bar is non-dismissible v1 (matches block-inventory BLOCK-08; "dismissible" in the P3-08 packet wording was an over-spec, resolved by principal decision). If dismissibility is wanted later: add a "use client" island (dismiss button + per-message localStorage/cookie key) AND reconcile block-inventory.md BLOCK-08 to match. Deferred enhancement.
 
 ### P3-09: Navigation & redirects managers
 Menu editor (header/footer slots) from `navigation_menus`; redirects table consulted in middleware/proxy with loop guard; admin CRUD. Ladder: +L2.
