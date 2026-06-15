@@ -23,9 +23,24 @@ export const createOrderSchema = z.object({
   items: z.array(orderItemSchema).min(1),
   shippingAddress: shippingAddressSchema,
   shippingMethod: z.enum(["express", "standard"]).optional().default("standard"),
+  /**
+   * P6-02: Optional discount code supplied by the customer.
+   * The server validates + applies the code — the CLIENT never computes amounts.
+   * Invalid/expired/ineligible codes return a 400 with a clear error message.
+   */
+  discountCode: z.string().trim().toUpperCase().max(64).optional(),
 });
 
 export const orderStatusPatchSchema = z.object({
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
   status: z.enum(["pending", "confirmed", "shipped", "delivered"]),
+});
+
+export const orderNotePatchSchema = z.object({
+  note: z.string().max(500),
+});
+
+export const orderTrackingPatchSchema = z.object({
+  trackingNumber: z.string().max(200).nullable().optional(),
+  trackingCarrier: z.string().max(100).nullable().optional(),
 });

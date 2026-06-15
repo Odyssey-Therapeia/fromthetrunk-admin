@@ -1,4 +1,7 @@
 import { rawSql, withRetry } from "@/db";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("ai:extensions");
 
 let vectorReadyPromise: null | Promise<boolean> = null;
 let embeddingsTableReadyPromise: null | Promise<boolean> = null;
@@ -21,7 +24,7 @@ const memoizeReadiness = async (
         })
         .catch((error) => {
           setCurrent(null);
-          console.warn(`[ai] Unable to verify ${label}.`, error);
+          log.warn("Unable to verify readiness", { label, err: error as Record<string, unknown> });
           return false;
         }),
     );

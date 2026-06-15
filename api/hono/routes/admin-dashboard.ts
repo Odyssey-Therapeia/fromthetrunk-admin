@@ -4,6 +4,9 @@ import { activityQuerySchema } from "@/api/hono/schemas/admin-dashboard";
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import type { HonoBindings } from "@/api/hono/types";
 import { getDashboardMetrics, getRecentActivity } from "@/db/queries/dashboard";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("admin:dashboard");
 
 export const registerAdminDashboardRoutes = (
   app: OpenAPIHono<HonoBindings>,
@@ -25,7 +28,7 @@ export const registerAdminDashboardRoutes = (
         const metrics = await getDashboardMetrics();
         return c.json(metrics, 200);
       } catch (err) {
-        console.error("[admin/dashboard] Failed to load metrics:", err);
+        log.error("Failed to load metrics", { err: err as Record<string, unknown> });
         return c.json(
           { error: "Failed to load dashboard metrics" },
           500,
@@ -57,7 +60,7 @@ export const registerAdminDashboardRoutes = (
         }));
         return c.json(serialized, 200);
       } catch (err) {
-        console.error("[admin/dashboard] Failed to load activity:", err);
+        log.error("Failed to load activity", { err: err as Record<string, unknown> });
         return c.json(
           { error: "Failed to fetch recent activity" },
           500,

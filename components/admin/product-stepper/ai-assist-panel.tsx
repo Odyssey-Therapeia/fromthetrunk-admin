@@ -53,9 +53,12 @@ export type AiAssistPanelProps = {
   uploaded: ProductStepperMedia[];
 };
 
+// P4-02: steps updated to match stepper.tsx (Type, Photos, Details, Attributes, Story, Pricing, Preview)
 const STEPS = [
+  "Type",
   "Photos",
   "Details",
+  "Attributes",
   "Story",
   "Pricing",
   "Preview",

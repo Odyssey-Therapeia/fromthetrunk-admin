@@ -42,7 +42,7 @@ export const registerCartRoutes = (app: OpenAPIHono<HonoBindings>) => {
       tags: ["Cart"],
     }),
     async (c) => {
-      const rateLimited = rateLimitResponse(c.req.raw, "cart:reserve", {
+      const rateLimited = await rateLimitResponse(c.req.raw, "cart:reserve", {
         limit: 10,
         windowSeconds: 60,
       });

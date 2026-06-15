@@ -7,6 +7,7 @@ import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
 import {
   adminCreateUserInputSchema,
   adminResetPasswordInputSchema,
+  requestEmailChangeInputSchema,
   signUpInputSchema,
   updateMeInputSchema,
   updatePasswordInputSchema,
@@ -17,8 +18,13 @@ import { claimCheckoutShell, getUserByEmail, getUserById, listUsers, updateUser 
 import { requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
 import { sendEmail } from "@/lib/email/send";
-import { welcomeEmail } from "@/lib/email/templates";
+import { emailChangeVerificationEmail, welcomeEmail } from "@/lib/email/templates";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
+import { getSiteOrigin } from "@/lib/config/site";
+import {
+  createEmailVerificationToken,
+  verifyEmailVerificationToken,
+} from "@/lib/users/email-verification-token";
 
 export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
   app.openapi(
@@ -128,7 +134,7 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       tags: ["Users"],
     }),
     async (c) => {
-      const rateLimited = rateLimitResponse(c.req.raw, "auth:signup", {
+      const rateLimited = await rateLimitResponse(c.req.raw, "auth:signup", {
         limit: 5,
         windowSeconds: 60,
       });
@@ -434,6 +440,163 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       return c.json(updated, 200);
+    }
+  );
+
+  // ── P6-01: Email-change initiation ────────────────────────────────────────
+  // POST /me/email — sends a verification link to the new email address.
+  // The current email is NOT changed yet; it changes only after confirmation.
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/me/email",
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: requestEmailChangeInputSchema },
+          },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "Verification email sent" },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Invalid payload",
+        },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Email already in use",
+        },
+      },
+      tags: ["Users"],
+    }),
+    async (c) => {
+      const rateLimited = await rateLimitResponse(c.req.raw, "email-change:request", {
+        limit: 5,
+        windowSeconds: 60,
+      });
+      if (rateLimited) return rateLimited;
+
+      const authUserOrResponse = requireAuth(c);
+      if (authUserOrResponse instanceof Response) return authUserOrResponse;
+
+      const body = c.req.valid("json");
+      const newEmail = body.newEmail.trim().toLowerCase();
+
+      // Guard: new email must not be the same as current
+      const currentUser = await getUserById(authUserOrResponse.id);
+      if (!currentUser) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+      if (currentUser.email === newEmail) {
+        return c.json(
+          {
+            code: "EMAIL_UNCHANGED",
+            message: "The new email address is the same as the current one.",
+          },
+          400
+        );
+      }
+
+      // Guard: new email must not already belong to another account
+      const collision = await getUserByEmail(newEmail);
+      if (collision) {
+        return c.json(
+          {
+            code: "EMAIL_ALREADY_IN_USE",
+            message: "This email address is already registered to another account.",
+          },
+          409
+        );
+      }
+
+      const token = createEmailVerificationToken(authUserOrResponse.id, newEmail);
+      const verifyUrl = `${getSiteOrigin()}/account/profile/verify-email?token=${encodeURIComponent(token)}`;
+      const emailTemplate = emailChangeVerificationEmail(verifyUrl);
+
+      sendEmail({
+        to: newEmail,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+      }).catch(() => undefined);
+
+      return c.json({ success: true }, 200);
+    }
+  );
+
+  // ── P6-01: Email-change confirmation ──────────────────────────────────────
+  // GET /me/verify-email?token=... — validates the signed token and updates
+  // the email. Rejects forged, expired, or wrong-user tokens.
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/me/verify-email",
+      responses: {
+        200: { description: "Email verified and updated" },
+        400: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Invalid or expired token",
+        },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Email already in use",
+        },
+      },
+      tags: ["Users"],
+    }),
+    async (c) => {
+      const authUserOrResponse = requireAuth(c);
+      if (authUserOrResponse instanceof Response) return authUserOrResponse;
+
+      const tokenParam = c.req.query("token");
+      const result = verifyEmailVerificationToken(tokenParam);
+
+      if (!result.valid) {
+        return c.json(
+          {
+            code: "INVALID_OR_EXPIRED_TOKEN",
+            message: "The verification link is invalid or has expired.",
+          },
+          400
+        );
+      }
+
+      // Token is bound to a specific user — prevent cross-user replay
+      if (result.userId !== authUserOrResponse.id) {
+        return c.json(
+          {
+            code: "INVALID_OR_EXPIRED_TOKEN",
+            message: "The verification link is invalid or has expired.",
+          },
+          400
+        );
+      }
+
+      const newEmail = result.newEmail.toLowerCase();
+
+      // Double-check collision at confirmation time (race-condition safety)
+      const collision = await getUserByEmail(newEmail);
+      if (collision && collision.id !== authUserOrResponse.id) {
+        return c.json(
+          {
+            code: "EMAIL_ALREADY_IN_USE",
+            message: "This email address is already registered to another account.",
+          },
+          409
+        );
+      }
+
+      const updated = await updateUser(authUserOrResponse.id, {
+        email: newEmail,
+        emailVerified: new Date(),
+      });
+
+      if (!updated) {
+        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+      }
+
+      return c.json({ success: true, email: updated.email }, 200);
     }
   );
 };

@@ -1,11 +1,9 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
 
 import { errorSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
-import { db } from "@/db";
-import { products } from "@/db/schema";
 import { semanticSearchProducts } from "@/lib/ai/embeddings";
+import { searchProducts } from "@/lib/ports/catalog-search";
 
 const searchQuerySchema = z.object({
   limit: z
@@ -42,25 +40,11 @@ export const registerSearchRoutes = (app: OpenAPIHono<HonoBindings>) => {
     async (c) => {
       const query = c.req.valid("query");
       const limit = Math.min(query.limit ?? 12, 50);
-      const keyword = `%${query.q}%`;
 
-      const rows = await db
-        .select()
-        .from(products)
-        .where(
-          and(
-            or(
-              ilike(products.name, keyword),
-              ilike(products.detailsFabric, keyword),
-              ilike(products.detailsDesigner, keyword),
-              ilike(products.storyEra, keyword),
-              ilike(products.storyProvenance, keyword)
-            ),
-            eq(products.status, "published")
-          )
-        )
-        .orderBy(desc(products.createdAt))
-        .limit(limit);
+      // P6-03: delegate to the catalog-search port (ILIKE over name/storyTitle/storyNarrative/attributes)
+      // Port is published-only and swappable (see lib/ports/catalog-search.ts upgrade comment).
+      const result = await searchProducts({ query: query.q });
+      const rows = result.products.slice(0, limit);
 
       return c.json(
         {

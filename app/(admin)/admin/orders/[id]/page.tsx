@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,13 @@ export default async function AdminOrderDetailPage({
           <Badge className={badgeClassName(order.paymentStatus)} variant="outline">
             {order.paymentStatus}
           </Badge>
+          {/* P6-05: Packing slip link */}
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/admin/orders/${order.id}/packing-slip`} target="_blank">
+              <Printer className="mr-1 h-3.5 w-3.5" />
+              Packing slip
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -154,6 +161,13 @@ export default async function AdminOrderDetailPage({
                   <span>Total</span>
                   <span>{formatINR(order.totalPaise)}</span>
                 </div>
+                {/* P6-05: Refund info */}
+                {order.paymentStatus === "refunded" && order.refundedAmountPaise && (
+                  <div className="flex justify-between pt-1 text-sm text-red-600">
+                    <span>Refunded</span>
+                    <span>{formatINR(order.refundedAmountPaise)}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -200,7 +214,15 @@ export default async function AdminOrderDetailPage({
               <CardTitle>Update status</CardTitle>
             </CardHeader>
             <CardContent>
-              <OrderStatusEditor initialStatus={order.status} orderId={order.id} />
+              {/* P6-05: Pass tracking, note, and refund state to the editor */}
+              <OrderStatusEditor
+                initialNote={order.internalNote ?? null}
+                initialStatus={order.status}
+                initialTrackingCarrier={order.trackingCarrier ?? null}
+                initialTrackingNumber={order.trackingNumber ?? null}
+                isRefunded={order.paymentStatus === "refunded"}
+                orderId={order.id}
+              />
             </CardContent>
           </Card>
 
@@ -257,8 +279,58 @@ export default async function AdminOrderDetailPage({
                   {order.razorpayOrderId ?? "-"}
                 </p>
               </div>
+              {/* P6-05: Refund details */}
+              {order.refundId && (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Refund ID</p>
+                  <p className="mt-1 break-all font-mono text-xs text-red-600">
+                    {order.refundId}
+                  </p>
+                </div>
+              )}
+              {order.refundedAt && (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Refunded at</p>
+                  <p className="mt-1 text-foreground">{formatDateTime(order.refundedAt)}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* P6-05: Tracking info card */}
+          {(order.trackingNumber || order.trackingCarrier) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Shipment</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {order.trackingNumber && (
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking</p>
+                    <p className="mt-1 font-mono text-foreground">{order.trackingNumber}</p>
+                  </div>
+                )}
+                {order.trackingCarrier && (
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Carrier</p>
+                    <p className="mt-1 text-foreground">{order.trackingCarrier}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* P6-05: Internal note display */}
+          {order.internalNote && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Internal note</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.internalNote}</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

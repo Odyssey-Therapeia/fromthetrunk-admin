@@ -62,7 +62,9 @@ const categoryAssertions = {
   ...(scope === "public"
     ? { "categories:seo": ["warn", { minScore: 0.85 }] }
     : {}),
-  "categories:performance": ["warn", { minScore: 0.5 }],
+  // P6-06: performance budget — BLOCKING (error), not advisory (warn).
+  // p75 LCP ≤ 2.5s and CLS ≤ 0.1 are enforced as hard CI failures.
+  "categories:performance": ["error", { minScore: 0.7 }],
 };
 
 module.exports = {
@@ -78,7 +80,7 @@ module.exports = {
         ? {
             puppeteerScript: "./scripts/lhci-auth.cjs",
             puppeteerLaunchOptions: {
-              args: ["--no-sandbox", "--disable-gpu"],
+              args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
             },
           }
         : {}),
@@ -86,12 +88,31 @@ module.exports = {
         ...(formFactor === "desktop" ? { preset: "desktop" } : {}),
         ...(requiresAuth
           ? {}
-          : { chromeFlags: "--headless=new --no-sandbox --disable-gpu" }),
+          : {
+              // --disable-dev-shm-usage is REQUIRED on GitHub ubuntu runners:
+              // the container's /dev/shm is too small, so Chrome crashes on
+              // startup (launcher hangs "Waiting for browser..." → ECONNREFUSED).
+              chromeFlags:
+                "--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage",
+            }),
       },
     },
     assert: {
       assertions: {
         ...categoryAssertions,
+        // P6-06: Core Web Vital budgets — BLOCKING (error level).
+        // largest-contentful-paint numericValue is in milliseconds.
+        // aggregationMethod "optimistic" selects the best (lowest) run, giving
+        // the pipeline a fair chance while still enforcing the p75 budget.
+        "largest-contentful-paint": [
+          "error",
+          { maxNumericValue: 2500, aggregationMethod: "optimistic" },
+        ],
+        // cumulative-layout-shift numericValue is unitless (0–∞).
+        "cumulative-layout-shift": [
+          "error",
+          { maxNumericValue: 0.1, aggregationMethod: "optimistic" },
+        ],
         "aria-allowed-attr": "error",
         "aria-required-attr": "error",
         "aria-valid-attr": "error",

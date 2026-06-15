@@ -1,0 +1,87 @@
+/**
+ * BLOCK-10: trust-signals
+ *
+ * Block-CMS equivalent of the hardcoded TrustSignals homepage section
+ * (components/sections/trust-signals.tsx). Renders a 3-stat trust row:
+ * each stat is an icon + value + label inside a bordered card.
+ *
+ * The icons are FIXED per slot (ShieldCheck, Users, Sparkles) to match the
+ * original section exactly — only the value + label of each stat are editable.
+ * This keeps the block faithful to the live markup/classes while exposing the
+ * copy the original hardcodes.
+ *
+ * Defaults reproduce the CURRENT values in components/sections/trust-signals.tsx:
+ *   "200+"  Authenticated Sarees   (ShieldCheck)
+ *   "50+"   Happy Collectors       (Users)
+ *   "100%"  Provenance Verified    (Sparkles)
+ *
+ * propsSchema validated on SAVE and on RENDER (defense in depth via renderBlock).
+ * Renderer: RSC, theme tokens only — no raw hex or arbitrary px.
+ */
+
+import { ShieldCheck, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { z } from "zod";
+
+import type { BlockRegistryEntry } from "@/lib/content/blocks/registry";
+
+export const trustStatSchema = z.object({
+  value: z.string().max(40),
+  label: z.string().max(80),
+});
+
+export const trustSignalsPropsSchema = z.object({
+  stats: z
+    .tuple([trustStatSchema, trustStatSchema, trustStatSchema])
+    .default([
+      { value: "200+", label: "Authenticated Sarees" },
+      { value: "50+", label: "Happy Collectors" },
+      { value: "100%", label: "Provenance Verified" },
+    ]),
+});
+
+export type TrustSignalsBlockProps = z.infer<typeof trustSignalsPropsSchema>;
+export type TrustStat = z.infer<typeof trustStatSchema>;
+
+// Icons are fixed per slot to match the original section markup exactly.
+const STAT_ICONS: readonly LucideIcon[] = [ShieldCheck, Users, Sparkles];
+
+function TrustSignalsRenderer(props: Record<string, unknown>) {
+  const p = props as TrustSignalsBlockProps;
+
+  return (
+    <section className="mx-auto w-full max-w-6xl px-6">
+      <div className="grid gap-4 rounded-2xl border border-border/60 bg-card/70 p-5 shadow-soft md:grid-cols-3 md:p-6">
+        {p.stats.map((stat, index) => {
+          const Icon = STAT_ICONS[index];
+          return (
+            <div
+              key={stat.label}
+              className="flex items-center gap-3 rounded-xl border border-border/40 bg-background/70 px-4 py-3"
+            >
+              <div className="rounded-full bg-primary/10 p-2 text-primary">
+                <Icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-serif text-xl text-foreground">{stat.value}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  {stat.label}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export const trustSignalsBlock: BlockRegistryEntry = {
+  type: "trust-signals",
+  propsSchema: trustSignalsPropsSchema,
+  Renderer: TrustSignalsRenderer,
+  editorMeta: {
+    label: "Trust Signals",
+    icon: "shield-check",
+    maxPerPage: 1,
+  },
+};

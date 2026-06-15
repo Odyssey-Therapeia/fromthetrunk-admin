@@ -7,6 +7,12 @@ import { registerAddressRoutes } from "@/api/hono/routes/addresses";
 import { registerAdminDashboardRoutes } from "@/api/hono/routes/admin-dashboard";
 import { registerAdminImportRoutes } from "@/api/hono/routes/admin-import";
 import { registerAdminOrderRoutes } from "@/api/hono/routes/admin-orders";
+import { registerAdminDiscountRoutes } from "@/api/hono/routes/admin-discounts";
+import { registerDiscountRoutes } from "@/api/hono/routes/discounts";
+import { registerNavigationRoutes } from "@/api/hono/routes/navigation";
+import { registerPagesRoutes } from "@/api/hono/routes/pages";
+import { registerRedirectsRoutes } from "@/api/hono/routes/redirects";
+import { registerThemeRoutes } from "@/api/hono/routes/theme";
 import { registerCartRoutes } from "@/api/hono/routes/cart";
 import { registerCollectionRoutes } from "@/api/hono/routes/collections";
 import { registerConversationRoutes } from "@/api/hono/routes/conversations";
@@ -21,6 +27,8 @@ import { registerSearchRoutes } from "@/api/hono/routes/search";
 import { registerUserRoutes } from "@/api/hono/routes/users";
 import { registerWishlistRoutes } from "@/api/hono/routes/wishlist";
 import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
+import { registerFeedsRoutes } from "@/api/hono/routes/feeds";
+import { registerHealthRoutes } from "@/api/hono/routes/health";
 import type { HonoBindings } from "@/api/hono/types";
 import { onUncaughtError } from "@/lib/http/on-uncaught-error";
 
@@ -107,9 +115,41 @@ const adminOrdersApp = new OpenAPIHono<HonoBindings>();
 registerAdminOrderRoutes(adminOrdersApp);
 app.route("/admin/orders", adminOrdersApp);
 
+const adminDiscountsApp = new OpenAPIHono<HonoBindings>();
+registerAdminDiscountRoutes(adminDiscountsApp);
+app.route("/admin/discounts", adminDiscountsApp);
+
+const discountsApp = new OpenAPIHono<HonoBindings>();
+registerDiscountRoutes(discountsApp);
+app.route("/discounts", discountsApp);
+
+const adminPagesApp = new OpenAPIHono<HonoBindings>();
+registerPagesRoutes(adminPagesApp);
+app.route("/admin/pages", adminPagesApp);
+
+const adminThemeApp = new OpenAPIHono<HonoBindings>();
+registerThemeRoutes(adminThemeApp);
+app.route("/admin/theme", adminThemeApp);
+
+const adminNavigationApp = new OpenAPIHono<HonoBindings>();
+registerNavigationRoutes(adminNavigationApp);
+app.route("/admin/navigation", adminNavigationApp);
+
+const adminRedirectsApp = new OpenAPIHono<HonoBindings>();
+registerRedirectsRoutes(adminRedirectsApp);
+app.route("/admin/redirects", adminRedirectsApp);
+
 const conversationsApp = new OpenAPIHono<HonoBindings>();
 registerConversationRoutes(conversationsApp);
 app.route("/conversations", conversationsApp);
+
+const feedsApp = new OpenAPIHono<HonoBindings>();
+registerFeedsRoutes(feedsApp);
+app.route("/feeds", feedsApp);
+
+const healthApp = new OpenAPIHono<HonoBindings>();
+registerHealthRoutes(healthApp);
+app.route("/health", healthApp);
 
 app.onError(onUncaughtError);
 

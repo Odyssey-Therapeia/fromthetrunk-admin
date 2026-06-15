@@ -11,6 +11,9 @@ import { parseCSV } from "@/lib/import/file-parser";
 import { autoMapFields } from "@/lib/import/field-mapper";
 import { validateRow, transformRow } from "@/lib/import/row-validator";
 import { createProduct } from "@/db/queries/products";
+import { getProductTypeById } from "@/db/queries/product-types";
+import { buildTypeZodSchema } from "@/lib/catalog/type-schema";
+import type { AttributeDef } from "@/lib/catalog/type-schema";
 import { slugify } from "@/lib/utils";
 import type { FieldMapping, ImportPreviewRow } from "@/lib/ports/batch-import";
 
@@ -183,9 +186,8 @@ export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       let created = 0;
       let failed = 0;
-      const errors: Array<{ row: number; message: string }> = [];
+      const errors: Array<{ row: number; message: string; field?: string }> = [];
 
-      // Process in batches of 10
       for (let i = 0; i < cached.rows.length; i++) {
         try {
           const transformed = transformRow(cached.rows[i], mappings as FieldMapping[]);
@@ -194,6 +196,107 @@ export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
           if (!transformed.name || !transformed.storyTitle) {
             throw new Error("Missing required fields: name or storyTitle");
           }
+
+          // ── P4-06: Type-aware attribute validation ──────────────────────
+          // Extract typeId from the transformed row (mapped via "typeId" dbField).
+          const typeId =
+            typeof transformed.typeId === "string" && transformed.typeId.length > 0
+              ? transformed.typeId
+              : null;
+
+          // Collect attributes from columns prefixed "attributes_" (dbField convention)
+          // and from a standalone "attributes" JSON column (if the mapper chose it).
+          const rawAttributes: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(transformed)) {
+            if (key.startsWith("attributes_")) {
+              const attrKey = key.slice("attributes_".length);
+              if (attrKey && value !== "" && value !== undefined) {
+                rawAttributes[attrKey] = value;
+              }
+            }
+          }
+
+          // Validate attributes against type schema BEFORE persist
+          if (typeId) {
+            const productType = await getProductTypeById(typeId);
+            if (!productType) {
+              throw new Error(`Product type not found: ${typeId}`);
+            }
+
+            const attributeDefs = (productType.attributeDefs ?? []) as AttributeDef[];
+            if (attributeDefs.length > 0) {
+              // ── P4-06: Coerce CSV strings to the types expected by buildTypeZodSchema ──
+              // CSV values arrive as strings; we convert to the JS type that the schema
+              // expects so that numeric/boolean attributes validate and persist correctly.
+              const coercedAttributes: Record<string, unknown> = { ...rawAttributes };
+              for (const def of attributeDefs) {
+                const raw = coercedAttributes[def.key];
+                if (raw === undefined || raw === "") continue;
+                const strVal = String(raw);
+
+                switch (def.meta.type) {
+                  case "number":
+                  case "money-paise": {
+                    const num = Number(strVal);
+                    if (Number.isNaN(num)) {
+                      const err = new Error(
+                        `Invalid attribute "${def.key}": expected a number, got "${strVal}"`
+                      );
+                      (err as Error & { field?: string }).field = def.key;
+                      throw err;
+                    }
+                    coercedAttributes[def.key] =
+                      def.meta.type === "money-paise" ? Math.round(num) : num;
+                    break;
+                  }
+                  case "boolean": {
+                    coercedAttributes[def.key] =
+                      strVal.toLowerCase() === "true" ||
+                      strVal === "1" ||
+                      strVal.toLowerCase() === "yes";
+                    break;
+                  }
+                  case "multi-select": {
+                    // Round-trips with the export's "|" join separator
+                    coercedAttributes[def.key] = strVal
+                      .split("|")
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    break;
+                  }
+                  case "image-ref": {
+                    if (def.meta.multiple) {
+                      coercedAttributes[def.key] = strVal
+                        .split("|")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                    }
+                    break;
+                  }
+                  default:
+                    // text, textarea, rich-text, select, list-of-group, conditional —
+                    // keep as string; the schema will validate the value.
+                    break;
+                }
+              }
+              // ─────────────────────────────────────────────────────────────────
+
+              const schema = buildTypeZodSchema(attributeDefs);
+              const parseResult = schema.safeParse(coercedAttributes);
+              if (!parseResult.success) {
+                const firstIssue = parseResult.error.issues[0];
+                const fieldPath = firstIssue?.path.join(".") ?? "attribute";
+                const message = firstIssue?.message ?? "Invalid attribute value";
+                const err = new Error(`Invalid attribute "${fieldPath}": ${message}`);
+                // Attach field info for structured error reporting
+                (err as Error & { field?: string }).field = fieldPath;
+                throw err;
+              }
+              // Replace rawAttributes with the coerced+validated version for persist
+              Object.assign(rawAttributes, coercedAttributes);
+            }
+          }
+          // ────────────────────────────────────────────────────────────────
 
           await createProduct({
             name: String(transformed.name),
@@ -249,15 +352,20 @@ export const registerAdminImportRoutes = (app: OpenAPIHono<HonoBindings>) => {
               typeof transformed.collectionId === "string"
                 ? transformed.collectionId
                 : null,
+            // P4-06: persist typeId + validated attributes
+            typeId: typeId ?? undefined,
+            attributes: typeId ? rawAttributes : undefined,
             imageMediaIds: [],
             tagIds: [],
           });
           created++;
         } catch (err) {
           failed++;
+          const errorObj = err instanceof Error ? err : new Error("Unknown error");
           errors.push({
             row: i,
-            message: err instanceof Error ? err.message : "Unknown error",
+            message: errorObj.message,
+            field: (errorObj as Error & { field?: string }).field,
           });
         }
       }

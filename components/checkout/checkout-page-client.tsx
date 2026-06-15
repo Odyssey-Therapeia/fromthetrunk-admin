@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { GST_RATE, SHIPPING_TIERS, type ShippingMethod } from "@/lib/config/order-pricing";
+import { computeCheckoutEstimate, isFreeShipping } from "@/lib/checkout/estimate";
 import { formatCurrency } from "@/lib/formatters";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getCartTotals, useCartStore } from "@/lib/store/cart-store";
@@ -192,10 +193,85 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
 
   const canCheckout = true;
 
-  const shippingCost =
-    subtotal >= SHIPPING_TIERS.freeThreshold ? 0 : SHIPPING_TIERS[shippingMethod];
-  const taxAmount = Math.round(subtotal * GST_RATE);
-  const total = subtotal + shippingCost + taxAmount;
+  // P6-02: Discount code state. The client NEVER computes the discount amount —
+  // it enters a code and calls the server to validate + get the authoritative total.
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountApplied, setDiscountApplied] = useState<{
+    code: string;
+    amountPaise: number; // server-returned discount amount (display only)
+  } | null>(null);
+  const [discountError, setDiscountError] = useState<string | null>(null);
+  const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
+
+  const handleValidateDiscount = async () => {
+    const trimmedCode = discountCode.trim().toUpperCase();
+    if (!trimmedCode) return;
+
+    setDiscountError(null);
+    setIsValidatingDiscount(true);
+
+    try {
+      // Call server: send a preview request with items + code to get the
+      // server-computed discount amount. We use the validate-discount endpoint
+      // (separate from create-order) so no order is created at this stage.
+      const res = await fetch("/api/v2/discounts/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: trimmedCode,
+          // subtotalPaise is in rupees on the client (cart-store uses rupees)
+          subtotalPaise: Math.round(subtotal * 100),
+          itemProductIds: items.map((item) => item.id),
+        }),
+      });
+
+      const data = await res.json() as { discountAmountPaise?: number; message?: string };
+
+      if (!res.ok) {
+        setDiscountError(data.message ?? "Invalid discount code.");
+        setDiscountApplied(null);
+        return;
+      }
+
+      setDiscountApplied({
+        code: trimmedCode,
+        amountPaise: data.discountAmountPaise ?? 0,
+      });
+      setDiscountError(null);
+      toast.success(`Discount code ${trimmedCode} applied.`);
+    } catch {
+      setDiscountError("Unable to validate discount code. Please try again.");
+    } finally {
+      setIsValidatingDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountApplied(null);
+    setDiscountCode("");
+    setDiscountError(null);
+  };
+
+  // The summary below is a PRE-CHECKOUT estimate, rendered before the order
+  // exists. It mirrors the server's flag-OFF (GST-exclusive) math, which is the
+  // behaviour in every current environment. We deliberately do NOT read the
+  // GST-inclusive flag here: FTT_FEATURE_GST_INCLUSIVE has no NEXT_PUBLIC_
+  // prefix, so it is always false in the browser — branching on it would render
+  // an "incl. GST" label over an exclusive total whenever the server flag is ON.
+  // P6-02: when a discount is applied, the server has already told us the
+  // discountAmountPaise; we reduce the displayed subtotal accordingly. Shipping
+  // AND GST are evaluated on the DISCOUNTED subtotal — mirroring the server's
+  // calculateOrderTotals order-of-operations (razorpay.ts:225-229) — so the
+  // displayed total matches the Razorpay charge. See lib/checkout/estimate.ts.
+  // The final authoritative total is always computed server-side at order
+  // creation time.
+  const discountAmountRupees = discountApplied ? discountApplied.amountPaise / 100 : 0;
+  const { effectiveSubtotal, shippingCost, taxAmount, total } =
+    computeCheckoutEstimate({
+      subtotal,
+      shippingMethod,
+      discountAmount: discountAmountRupees,
+    });
   const taxRateLabel = new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: 2,
     style: "percent",
@@ -227,7 +303,21 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
     setError(null);
 
     try {
-      const orderPayload = {
+      const orderPayload: {
+        items: Array<{ productId: string; quantity: number }>;
+        shippingAddress: {
+          name: string;
+          line1: string;
+          city: string;
+          state: string;
+          postalCode: string;
+          country: string;
+          phone: string;
+          email: string;
+        };
+        shippingMethod: string;
+        discountCode?: string;
+      } = {
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -243,6 +333,8 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
           email: form.email,
         },
         shippingMethod,
+        // P6-02: only send code if one is validated — server validates + applies.
+        ...(discountApplied ? { discountCode: discountApplied.code } : {}),
       };
 
       const createResponse = await fetch("/api/v2/payments/create-order", {
@@ -492,7 +584,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
-                      {subtotal >= SHIPPING_TIERS.freeThreshold ? "Complimentary" : formatCurrency(SHIPPING_TIERS.standard)}
+                      {isFreeShipping(effectiveSubtotal) ? "Complimentary" : formatCurrency(SHIPPING_TIERS.standard)}
                     </span>
                   </label>
                   <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-6 transition ${shippingMethod === "express" ? "border-primary bg-primary/5" : "border-border"}`}>
@@ -511,7 +603,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                       </div>
                     </div>
                     <span className="text-sm font-bold text-foreground">
-                      {subtotal >= SHIPPING_TIERS.freeThreshold ? "Complimentary" : formatCurrency(SHIPPING_TIERS.express)}
+                      {isFreeShipping(effectiveSubtotal) ? "Complimentary" : formatCurrency(SHIPPING_TIERS.express)}
                     </span>
                   </label>
                 </div>
@@ -577,30 +669,102 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                     
                     <hr className="border-border/40" />
                     
+                    {/* P6-02: Discount code entry */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/70">
+                        Discount code
+                      </p>
+                      {discountApplied ? (
+                        <div className="flex items-center justify-between rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
+                          <div>
+                            <span className="text-xs font-bold font-mono text-accent tracking-widest">
+                              {discountApplied.code}
+                            </span>
+                            <p className="text-[10px] text-accent/80 mt-0.5">
+                              Saving {formatCurrency(discountApplied.amountPaise / 100)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveDiscount}
+                            className="text-[10px] text-foreground/50 hover:text-foreground uppercase tracking-widest underline underline-offset-2"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Input
+                            value={discountCode}
+                            onChange={(e) => {
+                              setDiscountCode(e.target.value.toUpperCase());
+                              setDiscountError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void handleValidateDiscount();
+                            }}
+                            placeholder="Enter code"
+                            className="font-mono uppercase text-sm rounded-xl border-border bg-transparent focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                            disabled={isValidatingDiscount || isSubmitting}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void handleValidateDiscount()}
+                            disabled={!discountCode.trim() || isValidatingDiscount || isSubmitting}
+                            className="rounded-xl shrink-0"
+                          >
+                            {isValidatingDiscount ? (
+                              <span className="text-[10px] uppercase tracking-widest">...</span>
+                            ) : (
+                              <span className="text-[10px] uppercase tracking-widest">Apply</span>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                      {discountError && (
+                        <p className="text-xs text-destructive font-medium">{discountError}</p>
+                      )}
+                    </div>
+
+                    <hr className="border-border/40" />
+
                     {/* Calculations */}
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-foreground/60">Subtotal</span>
                         <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
                       </div>
+                      {discountApplied && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-accent">
+                            Discount ({discountApplied.code})
+                          </span>
+                          <span className="font-bold text-accent">
+                            -{formatCurrency(discountApplied.amountPaise / 100)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-foreground/60">Shipping</span>
-                        <span className="font-bold text-emerald-700 tracking-wider">
+                        <span className="font-bold text-accent tracking-wider">
                           {shippingCost === 0 ? "COMPLIMENTARY" : formatCurrency(shippingCost)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-foreground/60">
-                          Estimated Tax ({taxRateLabel})
+                          {`Estimated Tax (${taxRateLabel})`}
                         </span>
                         <span className="font-medium text-foreground">{formatCurrency(taxAmount)}</span>
                       </div>
                     </div>
-                    
+
                     <hr className="border-border/40" />
-                    
+
                     <div className="flex justify-between items-center py-2">
-                      <span className="text-lg font-serif font-bold text-foreground">Total</span>
+                      <span className="text-lg font-serif font-bold text-foreground">
+                        Total
+                      </span>
                       <span className="text-3xl font-serif font-bold text-primary">{formatCurrency(total)}</span>
                     </div>
 

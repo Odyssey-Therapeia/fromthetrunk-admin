@@ -29,7 +29,7 @@ export const registerNewsletterRoutes = (app: OpenAPIHono<HonoBindings>) => {
       tags: ["Newsletter"],
     }),
     async (c) => {
-      const rateLimited = rateLimitResponse(c.req.raw, "newsletter:sub", {
+      const rateLimited = await rateLimitResponse(c.req.raw, "newsletter:sub", {
         limit: 3,
         windowSeconds: 60,
       });

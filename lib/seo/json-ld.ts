@@ -1,4 +1,5 @@
 import type { Product } from "@/types/domain";
+import { isGstInclusive } from "@/lib/config/flags";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import { getProductDisplayDetails } from "@/lib/products/display-details";
 import { getSiteOrigin } from "@/lib/config/site";
@@ -27,6 +28,9 @@ export function productJsonLd(product: Product): Record<string, unknown> {
       "@type": "Offer",
       price: product.pricePaise / 100,
       priceCurrency: "INR",
+      // When GST-inclusive flag is ON, the listed price is the all-in price.
+      // valueAddedTaxIncluded signals this to structured-data consumers.
+      ...(isGstInclusive() ? { valueAddedTaxIncluded: true } : {}),
       availability:
         product.stockStatus === "sold"
           ? "https://schema.org/SoldOut"

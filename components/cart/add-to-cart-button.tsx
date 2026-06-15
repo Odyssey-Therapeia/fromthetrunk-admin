@@ -11,6 +11,15 @@ import type { Product, StockStatus } from "@/types/domain";
 
 interface AddToCartButtonProps {
   product: Product;
+  /**
+   * P4-05: optional flag-gated override for the initial stock status.
+   * When isInventoryV2() is ON, the PDP passes effectiveStockStatus (derived
+   * from quantity_available + active reservations) so the button's buyability
+   * reflects v2 availability, not the raw stockStatus column.
+   * When absent (flag OFF), falls back to product.stockStatus — byte-identical
+   * to the pre-P4-05 behavior.
+   */
+  initialStatus?: StockStatus;
 }
 
 const stockLabels: Record<StockStatus, string> = {
@@ -19,7 +28,7 @@ const stockLabels: Record<StockStatus, string> = {
   sold: "Sold",
 };
 
-export function AddToCartButton({ product }: AddToCartButtonProps) {
+export function AddToCartButton({ product, initialStatus }: AddToCartButtonProps) {
   const addItem = useCartStore((state) => state.addItem);
   const hasItem = useCartStore((state) => state.hasItem);
   const [added, setAdded] = useState(false);
@@ -27,7 +36,8 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
   const inCart = hasItem(product.id);
 
   const { stockStatus } = useLiveProductStock({
-    initialStatus: product.stockStatus as StockStatus,
+    // P4-05: use effectiveStockStatus when flag ON; fall back to product.stockStatus (flag OFF).
+    initialStatus: (initialStatus ?? product.stockStatus) as StockStatus,
     productId: product.id,
     productSlug: product.slug,
   });

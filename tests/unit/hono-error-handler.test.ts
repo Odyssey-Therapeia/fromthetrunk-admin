@@ -2,6 +2,21 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onUncaughtError } from "@/lib/http/on-uncaught-error";
 
+// ---------------------------------------------------------------------------
+// Mock the logger so we can spy on log.error without console noise
+// ---------------------------------------------------------------------------
+
+const logErrorMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/log", () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: logErrorMock,
+  }),
+}));
+
 const createTestApp = () => {
   const app = new OpenAPIHono();
 
@@ -15,14 +30,12 @@ const createTestApp = () => {
 };
 
 describe("hono onError handler", () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logErrorMock.mockReset();
   });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
+    logErrorMock.mockReset();
   });
 
   it("Test A: returns 500 with generic code and message", async () => {
@@ -37,13 +50,13 @@ describe("hono onError handler", () => {
     });
   });
 
-  it("Test B: calls console.error with the hono prefix", async () => {
+  it("Test B: calls log.error with the error object", async () => {
     const app = createTestApp();
     await app.request("/boom");
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[hono:v2]",
-      expect.any(Error)
+    expect(logErrorMock).toHaveBeenCalledWith(
+      "Uncaught error",
+      expect.objectContaining({ err: expect.any(Error) })
     );
   });
 

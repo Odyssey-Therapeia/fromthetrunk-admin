@@ -1,7 +1,10 @@
 import { getProduct, type ProductWithRelations } from "@/db/queries/products";
 import { rawSql, withRetry } from "@/db";
+import { createLogger } from "@/lib/log";
 
 import { ensureProductEmbeddingsTable } from "./extensions";
+
+const log = createLogger("ai:embeddings");
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -70,14 +73,14 @@ export const createEmbedding = async (
       signal: controller.signal,
     });
   } catch (err) {
-    console.warn("[ai] Embedding request error:", { model, inputLength: input.length }, err);
+    log.warn("Embedding request error", { model, inputLength: input.length, err: err as Record<string, unknown> });
     return null;
   } finally {
     clearTimeout(timer);
   }
 
   if (!response.ok) {
-    console.warn("[ai] Embedding request failed:", { model, status: response.status });
+    log.warn("Embedding request failed", { model, status: response.status });
     return null;
   }
 

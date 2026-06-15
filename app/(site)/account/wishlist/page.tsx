@@ -27,8 +27,11 @@ const fetchWishlist = async (): Promise<Product[]> => {
 export default function WishlistPage() {
   const { data: session, status } = useSession();
 
+  // Key ["wishlist","products"] — returns Product[].
+  // Distinct from ["wishlist","ids"] used by WishlistButton (returns string[]).
+  // Both are refreshed when ["wishlist"] prefix is invalidated.
   const { data: products, isLoading, isError } = useQuery({
-    queryKey: ["wishlist"],
+    queryKey: ["wishlist", "products"],
     queryFn: fetchWishlist,
     enabled: Boolean(session?.user?.id),
   });

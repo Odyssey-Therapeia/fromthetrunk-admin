@@ -9,7 +9,31 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function Newsletter() {
+export type NewsletterProps = {
+  /** Override the email input placeholder (default: "Enter your email") */
+  inputPlaceholder?: string;
+  /** Override the subscribe button label (default: "Join the list") */
+  buttonLabel?: string;
+  /** Override the eyebrow label (default: "Private Drops") */
+  eyebrow?: string;
+  /** Override the section heading (default: "Be the first to discover new arrivals") */
+  heading?: string;
+  /** Override the body copy (default: "Receive curated drops and stories from the trunk, delivered once a fortnight.") */
+  body?: string;
+};
+
+export function Newsletter({
+  inputPlaceholder = "Enter your email",
+  buttonLabel = "Join the list",
+  eyebrow,
+  heading,
+  body,
+}: NewsletterProps = {}) {
+  const resolvedEyebrow = eyebrow ?? "Private Drops";
+  const resolvedHeading = heading ?? "Be the first to discover new arrivals";
+  const resolvedBody =
+    body ??
+    "Receive curated drops and stories from the trunk, delivered once a fortnight.";
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,14 +81,13 @@ export function Newsletter() {
         <Card className="flex flex-col gap-6 border-border/60 bg-white/70 p-8 shadow-soft md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-              Private Drops
+              {resolvedEyebrow}
             </p>
             <h3 className="font-serif text-2xl text-foreground">
-              Be the first to discover new arrivals
+              {resolvedHeading}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Receive curated drops and stories from the trunk, delivered once a
-              fortnight.
+              {resolvedBody}
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto">
@@ -81,7 +104,7 @@ export function Newsletter() {
               <Input
                 id="newsletter-email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder={inputPlaceholder}
                 className="min-w-[260px] bg-white"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -99,7 +122,7 @@ export function Newsletter() {
                   ? requiresEmailConfirmation
                     ? "Check your email"
                     : "You're on the list"
-                  : "Join the list"}
+                  : buttonLabel}
               </Button>
             </form>
             {submitted && (

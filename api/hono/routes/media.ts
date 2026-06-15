@@ -11,8 +11,8 @@ const uploadRequestSchema = z.object({
   filename: z.string().min(1),
 });
 
-const completeUploadSchema = z.object({
-  alt: z.string().optional(),
+export const completeUploadSchema = z.object({
+  alt: z.string().min(1, "Alt text is required for accessibility"),
   filename: z.string(),
   mimeType: z.string().optional(),
   pathname: z.string(),

@@ -45,3 +45,12 @@ export const updateMeInputSchema = z
     phone: z.string().trim().max(40).optional(),
   })
   .strict();
+
+/**
+ * P6-01: Email-change initiation — sends a verification link to the new email.
+ */
+export const requestEmailChangeInputSchema = z
+  .object({
+    newEmail: z.string().trim().email().max(320),
+  })
+  .strict();

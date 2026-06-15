@@ -1,4 +1,7 @@
 import { getResendClient, FROM_EMAIL } from "./resend";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("email:send");
 
 interface SendEmailOptions {
   to: string | string[];
@@ -46,7 +49,7 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
         html,
       });
       if (error) {
-        console.error("[EMAIL] Resend error:", error.message);
+        log.error("Resend error", { message: error.message });
         return false;
       }
       return true;
@@ -74,11 +77,14 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
       return true;
     }
 
-    console.log(`[EMAIL] To: ${recipients.join(", ")} | Subject: ${subject}`);
-    console.log(`[EMAIL] (Set RESEND_API_KEY or SMTP_* vars to send real emails)`);
+    log.info("Dev mock: email not sent (no transport configured)", {
+      to: recipients.join(", "),
+      subject,
+      hint: "Set RESEND_API_KEY or SMTP_* vars to send real emails",
+    });
     return true;
   } catch (error) {
-    console.error("[EMAIL] Failed to send:", error);
+    log.error("Failed to send email", { err: error as Record<string, unknown> });
     return false;
   }
 }

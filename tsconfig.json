@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "ftt-hr-gmail-workflow"
+    "ftt-hr-gmail-workflow",
+    "scripts/archive"
   ]
 }

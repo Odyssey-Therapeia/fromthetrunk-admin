@@ -1,0 +1,12 @@
+{
+  "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+  "prevId": "d4e5f6a7-b8c9-0123-defa-234567890123",
+  "version": "7",
+  "dialect": "postgresql",
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "_comment": "P4-04: Adds tags table (id serial PK, name, slug unique, category, timestamps) and product_tags junction (product_id UUID FK cascade, tag_id integer FK cascade, composite PK). Adds expression indexes on products((attributes->>'fabric')) and products((attributes->>'condition')). Full table list is inherited from 0008_snapshot — only deltas are noted here. drizzle-kit generate is bypassed (hand-authored)."
+}

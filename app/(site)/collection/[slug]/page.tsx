@@ -11,6 +11,7 @@ import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { ProductViewTracker } from "@/components/product/product-view-tracker";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
 import { WishlistButton } from "@/components/product/wishlist-button";
+import { RestockNotifyButton } from "@/components/product/restock-notify-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -25,6 +26,9 @@ import { getProductDisplayDetails } from "@/lib/products/display-details";
 import { productJsonLd, breadcrumbJsonLd, safeJsonLd } from "@/lib/seo/json-ld";
 import { buildPdpTitle, buildPdpDescription } from "@/lib/seo/pdp-meta";
 import { getSiteOrigin } from "@/lib/config/site";
+import { isInventoryV2 } from "@/lib/config/flags";
+import { deriveStockStatus } from "@/db/inventory";
+import { getActiveReservationsCount } from "@/db/queries/reservations";
 import type { Product } from "@/types/domain";
 
 interface ProductPageProps {
@@ -60,7 +64,6 @@ export async function generateMetadata({
       title: pdpTitle,
       description: pdpDescription,
       type: "website",
-      ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
     },
   };
 }
@@ -75,6 +78,18 @@ export default async function SareePage({ params }: ProductPageProps) {
   }
 
   const product = rawProduct as Product;
+
+  // P4-05: when flag ON, derive availability from quantity_available + active reservations.
+  // Flag OFF: read stockStatus directly (byte-identical to pre-P4-05 behavior).
+  // NOTE (P5 feeds mapping): lib/ports/catalog-search.ts availability filter reads
+  // stockStatus directly. Map this derived value there when P5 wires feeds.
+  const effectiveStockStatus: "available" | "reserved" | "sold" = isInventoryV2()
+    ? deriveStockStatus({
+        quantityAvailable: product.quantityAvailable,
+        activeReservationsCount: await getActiveReservationsCount(product.id),
+      })
+    : product.stockStatus;
+
   const displayDetails = getProductDisplayDetails(product);
   const allProducts = await getProducts(12, { includeDrafts });
   const relatedPool = (allProducts.docs as Product[]).filter(
@@ -209,16 +224,40 @@ export default async function SareePage({ params }: ProductPageProps) {
                 {displayDetails.length}
               </div>
             </div>
-            <AddToCartButton product={product} />
-            {product.stockStatus === "available" && (
+            {/* P4-05: pass effectiveStockStatus as initialStatus so the buy button's
+                buyability is gated by the v2 availability when flag ON.
+                Flag OFF: initialStatus equals product.stockStatus — byte-identical. */}
+            <AddToCartButton product={product} initialStatus={effectiveStockStatus} />
+            {/* P4-05: effectiveStockStatus is flag-gated: flag ON uses deriveStockStatus,
+                flag OFF uses product.stockStatus directly. */}
+            {effectiveStockStatus === "available" && (
               <p className="text-xs text-muted-foreground">
                 This is a one-of-a-kind piece. It will be reserved for you once added to your bag.
               </p>
             )}
-            {product.stockStatus === "sold" && (
-              <p className="text-xs text-muted-foreground">
-                This piece has found a new home. Browse the collection for similar treasures.
-              </p>
+            {effectiveStockStatus === "sold" && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  This piece has found a new home. Browse the collection for similar treasures.
+                </p>
+                {/* P6-04: capture restock intent for sold one-of-one items */}
+                <RestockNotifyButton
+                  productId={product.id}
+                  productName={product.name}
+                />
+              </div>
+            )}
+            {effectiveStockStatus === "reserved" && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  This piece is currently reserved. Notify me if it becomes available.
+                </p>
+                {/* P6-04: capture restock intent for reserved one-of-one items */}
+                <RestockNotifyButton
+                  productId={product.id}
+                  productName={product.name}
+                />
+              </div>
             )}
           </div>
 

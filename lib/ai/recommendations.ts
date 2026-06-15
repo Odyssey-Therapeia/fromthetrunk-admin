@@ -1,6 +1,9 @@
 import { getProduct, listProducts, type ProductWithRelations } from "@/db/queries/products";
+import { createLogger } from "@/lib/log";
 
 import { findSimilarProductsByProductId } from "./embeddings";
+
+const log = createLogger("recommendations");
 
 type Recommendation = {
   product: ProductWithRelations;
@@ -81,7 +84,7 @@ export const recommendProducts = async (productId: string, limit = 6) => {
       source: "semantic",
     }));
   } catch (err) {
-    console.warn("[recommendations] Semantic search failed, falling back to heuristics:", { productId, limit }, err);
+    log.warn("Semantic search failed, falling back to heuristics", { productId, limit, err: err as Record<string, unknown> });
   }
 
   const remainder = Math.max(limit - semanticRecommendations.length, 0);

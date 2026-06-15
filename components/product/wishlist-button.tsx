@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useGuestWishlistStore } from "@/lib/store/wishlist-store";
 
 interface WishlistButtonProps {
   productId: string;
@@ -30,16 +31,30 @@ export function WishlistButton({
   const queryClient = useQueryClient();
   const [optimisticWished, setOptimisticWished] = useState<boolean | null>(null);
 
+  // Guest store (localStorage-backed).
+  // Merge-on-login is handled by WishlistMergeOnLogin (Providers-level) — no per-button effect needed.
+  const guestHas = useGuestWishlistStore((s) => s.has);
+  const guestToggle = useGuestWishlistStore((s) => s.toggle);
+
+  // Account-backed wishlist (only when logged in).
+  // Key ["wishlist","ids"] — returns string[].
+  // Distinct from ["wishlist","products"] used by the wishlist page (returns Product[]).
+  // Invalidating ["wishlist"] (prefix) refreshes both.
   const { data: wishlist } = useQuery({
-    queryKey: ["wishlist"],
+    queryKey: ["wishlist", "ids"],
     queryFn: fetchWishlist,
     enabled: Boolean(session?.user?.id),
     staleTime: 30_000,
   });
 
+  // Determine current saved state: optimistic override → account list → guest list.
   const isInWishlist =
     optimisticWished ??
-    (wishlist ?? []).some((item) => item === productId);
+    (session?.user?.id
+      ? (wishlist ?? []).some((item) => item === productId)
+      : guestHas(productId));
+
+  // ── Account mutations ──────────────────────────────────────────────────────
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -85,9 +100,29 @@ export function WishlistButton({
     onSettled: () => setOptimisticWished(null),
   });
 
-  if (!session) return null;
-
   const isPending = addMutation.isPending || removeMutation.isPending;
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (session?.user?.id) {
+      // Logged-in path: persist to account.
+      if (isInWishlist) {
+        removeMutation.mutate();
+      } else {
+        addMutation.mutate();
+      }
+    } else {
+      // Guest path: persist to localStorage.
+      guestToggle(productId);
+      if (!isInWishlist) {
+        toast.success(`${productName} saved to wishlist`);
+      } else {
+        toast(`${productName} removed from wishlist`);
+      }
+    }
+  };
 
   return (
     <Button
@@ -99,15 +134,7 @@ export function WishlistButton({
         className
       )}
       disabled={isPending}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isInWishlist) {
-          removeMutation.mutate();
-        } else {
-          addMutation.mutate();
-        }
-      }}
+      onClick={handleClick}
       aria-label={isInWishlist ? `Remove ${productName} from wishlist` : `Save ${productName} to wishlist`}
     >
       <Heart

@@ -205,8 +205,20 @@ export function StepPhotos({
         });
         updateQueueProgress(uploadId, 80);
 
+        // Alt text is REQUIRED by the server. Prompt the user for a
+        // descriptive label for each image before completing the upload.
+        const altText = window.prompt(
+          `Alt text for "${file.name}" (required for accessibility):`
+        );
+        if (!altText || !altText.trim()) {
+          toast.error(`Alt text is required for ${file.name}. Upload cancelled.`);
+          setUploadQueue((current) => current.filter((item) => item.id !== uploadId));
+          continue;
+        }
+
         const completeResponse = await fetch("/api/v2/media/complete", {
           body: JSON.stringify({
+            alt: altText.trim(),
             filename: file.name,
             mimeType: file.type || "application/octet-stream",
             pathname: blob.pathname,

@@ -1,19 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CheckSquare,
+  ChevronDown,
+  Download,
+  Eye,
+  EyeOff,
+  FolderPlus,
+  FolderMinus,
   ImageOff,
   Package,
   Sparkles,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { ProductsGrid } from "@/components/admin/products/products-grid";
 import {
   ProductsToolbar,
@@ -82,6 +97,54 @@ const sortProducts = (
   }
 };
 
+/**
+ * P4-06: Inline tag-ID input inside a DropdownMenu item.
+ * Accepts comma-separated tag IDs (integers) and calls onApply when submitted.
+ */
+function BulkTagMenuItem({
+  label,
+  op,
+  onApply,
+}: {
+  label: string;
+  op: "add" | "remove";
+  onApply: (tagIds: number[], op: "add" | "remove") => void;
+}) {
+  const [value, setValue] = useState("");
+
+  const handleApply = (e: React.FormEvent) => {
+    e.preventDefault();
+    const ids = value
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !Number.isNaN(n) && n > 0);
+    if (ids.length === 0) return;
+    onApply(ids, op);
+    setValue("");
+  };
+
+  return (
+    <form
+      onSubmit={handleApply}
+      onClick={(e) => e.stopPropagation()}
+      className="flex flex-col gap-1.5 px-2 py-2"
+    >
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex gap-1.5">
+        <Input
+          className="h-7 text-xs"
+          placeholder="e.g. 1,2,3"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <Button size="sm" type="submit" variant="secondary" className="h-7 shrink-0 rounded-md px-2 text-xs">
+          Apply
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function StatPill({
   icon: Icon,
   label,
@@ -106,6 +169,15 @@ function StatPill({
   );
 }
 
+type CollectionSummary = { id: string; name: string; slug: string };
+
+const fetchCollections = async (): Promise<CollectionSummary[]> => {
+  const res = await fetch("/api/v2/collections");
+  if (!res.ok) return [];
+  const data = (await res.json()) as CollectionSummary[];
+  return Array.isArray(data) ? data : [];
+};
+
 export default function AdminProductsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -114,10 +186,18 @@ export default function AdminProductsPage() {
   const [sort, setSort] = useState<AdminProductSort>(DEFAULT_PRODUCT_SORT);
   const [viewMode, setViewMode] = useState<ProductViewMode>("cards");
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(
     () => new Set(),
   );
   const queryClient = useQueryClient();
+
+  // P4-06: fetch collections for bulk collection controls (lazy — only when selection active)
+  const { data: collectionsData } = useQuery({
+    queryKey: ["admin", "collections-list"],
+    queryFn: fetchCollections,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Guard against duplicate click-throughs
   const duplicatingRef = useRef<Set<string>>(new Set());
@@ -317,40 +397,132 @@ export default function AdminProductsPage() {
     ],
   );
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (selectionOnly = false) => {
     try {
-      const res = await fetch("/api/v2/products?includeDrafts=true&limit=1000");
-      if (!res.ok) throw new Error("Failed to fetch products");
-      const data = await res.json();
-
-      const headers = ["Name", "Slug", "Price (Paise)", "Status", "Stock Status", "Fabric", "Story Title"];
-      const rows = data.map((p: Record<string, unknown>) =>
-        [
-          p.name,
-          p.slug,
-          p.pricePaise,
-          p.status,
-          p.stockStatus,
-          p.detailsFabric ?? "",
-          p.storyTitle,
-        ]
-          .map(escapeCsvCell)
-          .join(","),
-      );
-      const csv = [headers.map(escapeCsvCell).join(","), ...rows].join("\n");
+      // Use the real CSV export route (P4-06) which includes attributes + tags + collections
+      let url = "/api/v2/products/export.csv?includeDrafts=true";
+      if (selectionOnly && selectedProductIds.size > 0) {
+        url += `&productIds=${Array.from(selectedProductIds).join(",")}`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Export failed");
+      const csv = await res.text();
 
       const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = objectUrl;
       a.download = "ftt-products-export.csv";
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
       toast.success("Products exported");
     } catch {
       toast.error("Export failed");
     }
-  }, []);
+  }, [selectedProductIds]);
+
+  const handleBulkSetStatus = useCallback(
+    async (newStatus: "draft" | "published") => {
+      if (selectedProductIds.size === 0) return;
+
+      const ids = Array.from(selectedProductIds);
+      setIsBulkEditing(true);
+
+      try {
+        const res = await fetch("/api/v2/products/bulk-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productIds: ids, status: newStatus }),
+        });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk edit failed"));
+        const data = (await res.json()) as { updated: number; failed: number };
+        if (data.failed > 0) {
+          toast.warning(`Updated ${data.updated}; ${data.failed} failed`);
+        } else {
+          toast.success(`${data.updated} product${data.updated === 1 ? "" : "s"} set to ${newStatus}`);
+        }
+        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        clearSelection();
+      } catch {
+        toast.error("Bulk status update failed");
+      } finally {
+        setIsBulkEditing(false);
+      }
+    },
+    [selectedProductIds, queryClient, clearSelection],
+  );
+
+  /** P4-06: Bulk add/remove products from a collection. */
+  const handleBulkCollectionOp = useCallback(
+    async (collectionId: string, op: "add" | "remove") => {
+      if (selectedProductIds.size === 0) return;
+      const ids = Array.from(selectedProductIds);
+      setIsBulkEditing(true);
+      try {
+        const body =
+          op === "add"
+            ? { productIds: ids, addCollectionId: collectionId }
+            : { productIds: ids, removeCollectionId: collectionId };
+        const res = await fetch("/api/v2/products/bulk-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk collection update failed"));
+        const data = (await res.json()) as { updated: number; failed: number };
+        if (data.failed > 0) {
+          toast.warning(`Collection updated for ${data.updated}; ${data.failed} failed`);
+        } else {
+          toast.success(
+            `${data.updated} product${data.updated === 1 ? "" : "s"} ${op === "add" ? "added to" : "removed from"} collection`
+          );
+        }
+        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        clearSelection();
+      } catch {
+        toast.error("Bulk collection update failed");
+      } finally {
+        setIsBulkEditing(false);
+      }
+    },
+    [selectedProductIds, queryClient, clearSelection],
+  );
+
+  /** P4-06: Bulk add/remove tags by tag IDs for all selected products. */
+  const handleBulkTagOp = useCallback(
+    async (tagIds: number[], op: "add" | "remove") => {
+      if (selectedProductIds.size === 0 || tagIds.length === 0) return;
+      const ids = Array.from(selectedProductIds);
+      setIsBulkEditing(true);
+      try {
+        const body =
+          op === "add"
+            ? { productIds: ids, addTagIds: tagIds }
+            : { productIds: ids, removeTagIds: tagIds };
+        const res = await fetch("/api/v2/products/bulk-edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk tag update failed"));
+        const data = (await res.json()) as { updated: number; failed: number };
+        if (data.failed > 0) {
+          toast.warning(`Tags updated for ${data.updated}; ${data.failed} failed`);
+        } else {
+          toast.success(
+            `Tags ${op === "add" ? "added to" : "removed from"} ${data.updated} product${data.updated === 1 ? "" : "s"}`
+          );
+        }
+        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        clearSelection();
+      } catch {
+        toast.error("Bulk tag update failed");
+      } finally {
+        setIsBulkEditing(false);
+      }
+    },
+    [selectedProductIds, queryClient, clearSelection],
+  );
 
   return (
     <div className="@container space-y-5">
@@ -385,7 +557,7 @@ export default function AdminProductsPage() {
         onStatusChange={setStatus}
         stockStatus={stockStatus}
         onStockStatusChange={setStockStatus}
-        onExport={handleExport}
+        onExport={() => void handleExport(false)}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
@@ -422,6 +594,119 @@ export default function AdminProductsPage() {
                 <X className="h-3.5 w-3.5" />
                 Clear
               </Button>
+              {/* Export selection */}
+              <Button
+                onClick={() => void handleExport(true)}
+                size="sm"
+                type="button"
+                variant="outline"
+                className="gap-1.5 rounded-lg"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+              </Button>
+              {/* Bulk status change */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    disabled={isBulkEditing}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                    className="gap-1.5 rounded-lg"
+                  >
+                    {isBulkEditing ? "Updating..." : "Set status"}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => void handleBulkSetStatus("published")}
+                    className="gap-2"
+                  >
+                    <Eye className="h-4 w-4 text-green-600" />
+                    Publish selected
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => void handleBulkSetStatus("draft")}
+                    className="gap-2"
+                  >
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    Set to draft
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {/* P4-06: Bulk collection add/remove */}
+              {(collectionsData?.length ?? 0) > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      disabled={isBulkEditing}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      className="gap-1.5 rounded-lg"
+                    >
+                      <FolderPlus className="h-3.5 w-3.5" />
+                      Collection
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                    {collectionsData?.map((col) => (
+                      <div key={col.id}>
+                        <DropdownMenuItem
+                          data-testid={`bulk-add-collection-${col.id}`}
+                          onClick={() => void handleBulkCollectionOp(col.id, "add")}
+                          className="gap-2"
+                        >
+                          <FolderPlus className="h-4 w-4 text-green-600" />
+                          Add to {col.name}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          data-testid={`bulk-remove-collection-${col.id}`}
+                          onClick={() => void handleBulkCollectionOp(col.id, "remove")}
+                          className="gap-2"
+                        >
+                          <FolderMinus className="h-4 w-4 text-muted-foreground" />
+                          Remove from {col.name}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </div>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {/* P4-06: Bulk tag add/remove (by numeric tag ID) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    disabled={isBulkEditing}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    className="gap-1.5 rounded-lg"
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    Tags
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <BulkTagMenuItem
+                    label="Add tag IDs"
+                    op="add"
+                    onApply={handleBulkTagOp}
+                  />
+                  <DropdownMenuSeparator />
+                  <BulkTagMenuItem
+                    label="Remove tag IDs"
+                    op="remove"
+                    onApply={handleBulkTagOp}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 disabled={isBulkDeleting}
                 onClick={() => void handleBulkDelete()}

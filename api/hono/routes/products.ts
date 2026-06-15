@@ -2,6 +2,8 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 
 import { errorSchema, idParamSchema, slugParamSchema } from "@/api/hono/schemas/common";
 import {
+  bulkEditSchema,
+  exportQuerySchema,
   listProductsQuerySchema,
   recommendationQuerySchema,
   productPatchSchema,
@@ -16,12 +18,27 @@ import { suggestTagIds } from "@/lib/ai/tag-suggestions";
 import {
   createProduct,
   deleteProduct,
+  deriveQuantityAvailable,
   duplicateProduct,
   getProduct,
   getProductBySlug,
+  getProductsByIds,
   listProducts,
   updateProduct,
+  updateProductsBatch,
+  bulkSetProductTags,
 } from "@/db/queries/products";
+import {
+  bulkAddProductsToCollection,
+  bulkRemoveProductsFromCollection,
+} from "@/db/queries/collections";
+import { isInventoryV2 } from "@/lib/config/flags";
+
+/** Escape a CSV cell per RFC 4180. */
+const escapeCsvCell = (value: unknown): string => {
+  const str = value == null ? "" : String(value);
+  return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
 
 const parseDate = (value: null | string | undefined) => {
   if (value === undefined) return undefined;
@@ -157,6 +174,122 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         },
         200
       );
+    }
+  );
+
+  // ── P4-06: CSV export ─────────────────────────────────────────────────────
+  // MUST be registered before /{slug} so "/export.csv" is not matched as a slug.
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/export.csv",
+      request: {
+        query: exportQuerySchema,
+      },
+      responses: {
+        200: { description: "CSV export" },
+        403: { description: "Forbidden" },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const query = c.req.valid("query");
+
+      // Resolve product rows — selection or full list
+      let rows: Awaited<ReturnType<typeof listProducts>>["rows"];
+      if (query.productIds && query.productIds.length > 0) {
+        rows = await getProductsByIds(query.productIds, { includeDrafts: true });
+      } else {
+        const result = await listProducts({ includeDrafts: true, limit: 5000 });
+        rows = result.rows;
+      }
+
+      // Collect all attribute keys across all products
+      const allAttrKeys = new Set<string>();
+      for (const product of rows) {
+        if (product.attributes && typeof product.attributes === "object") {
+          for (const key of Object.keys(product.attributes)) {
+            allAttrKeys.add(key);
+          }
+        }
+      }
+      const attrKeys = Array.from(allAttrKeys).sort();
+
+      // Build header row
+      const baseHeaders = [
+        "id",
+        "name",
+        "slug",
+        "status",
+        "stockStatus",
+        "pricePaise",
+        "originalPricePaise",
+        "featured",
+        "storyTitle",
+        "storyNarrative",
+        "storyProvenance",
+        "storyEra",
+        "detailsFabric",
+        "detailsLength",
+        "detailsWidth",
+        "detailsCondition",
+        "detailsDesigner",
+        "typeId",
+        "collectionId",
+        "collectionName",
+        "collectionSlug",
+        "tags",
+        ...attrKeys.map((k) => `attr_${k}`),
+      ];
+
+      const csvRows: string[] = [baseHeaders.map(escapeCsvCell).join(",")];
+
+      for (const product of rows) {
+        const tagNames = product.tags.map((t) => t.name).join("|");
+        const row = [
+          product.id,
+          product.name,
+          product.slug,
+          product.status,
+          product.stockStatus,
+          product.pricePaise,
+          product.originalPricePaise ?? "",
+          product.featured,
+          product.storyTitle,
+          product.storyNarrative ?? "",
+          product.storyProvenance ?? "",
+          product.storyEra ?? "",
+          product.detailsFabric ?? "",
+          product.detailsLength ?? "",
+          product.detailsWidth ?? "",
+          product.detailsCondition ?? "",
+          product.detailsDesigner ?? "",
+          product.typeId ?? "",
+          product.collectionId ?? "",
+          product.collection?.name ?? "",
+          product.collection?.slug ?? "",
+          tagNames,
+          ...attrKeys.map((k) => {
+            const v = product.attributes?.[k];
+            return Array.isArray(v) ? v.join("|") : (v ?? "");
+          }),
+        ];
+        csvRows.push(row.map(escapeCsvCell).join(","));
+      }
+
+      const csv = csvRows.join("\n");
+
+      return new Response(csv, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="ftt-products-export.csv"`,
+        },
+      });
     }
   );
 
@@ -306,8 +439,16 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
+      // P4-05: when flag ON, dual-write quantityAvailable derived from stockStatus.
+      // Flag OFF: only stockStatus is written (v1 byte-identical behavior).
+      const quantityAvailableOverride =
+        isInventoryV2() && body.stockStatus != null
+          ? { quantityAvailable: deriveQuantityAvailable(body.stockStatus) }
+          : {};
+
       const updated = await updateProduct(params.id, {
         ...body,
+        ...quantityAvailableOverride,
         reservedUntil: parseDate(body.reservedUntil),
         soldAt: parseDate(body.soldAt),
       });
@@ -351,6 +492,90 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       return c.json({ success: true }, 200);
+    }
+  );
+
+  // ── P4-06: Bulk edit ──────────────────────────────────────────────────────
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/bulk-edit",
+      request: {
+        body: {
+          content: { "application/json": { schema: bulkEditSchema } },
+          required: true,
+        },
+      },
+      responses: {
+        200: { description: "Bulk edit result" },
+        400: { description: "Validation error" },
+        403: { description: "Forbidden" },
+      },
+      tags: ["Products"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const body = c.req.valid("json");
+      const { productIds, status, addCollectionId, removeCollectionId, addTagIds, removeTagIds } = body;
+
+      // At least one operation must be requested
+      const hasOp = status !== undefined
+        || addCollectionId !== undefined
+        || removeCollectionId !== undefined
+        || (addTagIds !== undefined && addTagIds.length > 0)
+        || (removeTagIds !== undefined && removeTagIds.length > 0);
+
+      if (!hasOp) {
+        return c.json(
+          { code: "NO_OPERATION", message: "At least one bulk operation must be specified." },
+          400
+        );
+      }
+
+      let updated = 0;
+      let failed = 0;
+      const errors: Array<{ id: string; message: string }> = [];
+
+      // Status update
+      if (status !== undefined) {
+        const result = await updateProductsBatch(productIds, { status });
+        updated += result.updated;
+        failed += result.failed;
+        errors.push(...result.errors);
+      }
+
+      // Collection add
+      if (addCollectionId !== undefined) {
+        const result = await bulkAddProductsToCollection(addCollectionId, productIds);
+        updated += result.updated;
+        failed += result.failed;
+        errors.push(...result.errors);
+      }
+
+      // Collection remove
+      if (removeCollectionId !== undefined) {
+        const result = await bulkRemoveProductsFromCollection(removeCollectionId, productIds);
+        updated += result.updated;
+        failed += result.failed;
+        errors.push(...result.errors);
+      }
+
+      // Tag add/remove
+      if ((addTagIds !== undefined && addTagIds.length > 0) || (removeTagIds !== undefined && removeTagIds.length > 0)) {
+        const result = await bulkSetProductTags(
+          productIds,
+          addTagIds ?? [],
+          removeTagIds ?? []
+        );
+        updated += result.updated;
+        failed += result.failed;
+        errors.push(...result.errors);
+      }
+
+      return c.json({ updated, failed, errors }, 200);
     }
   );
 };

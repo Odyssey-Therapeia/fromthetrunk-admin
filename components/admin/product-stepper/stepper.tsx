@@ -18,12 +18,15 @@ import { slugify } from "@/lib/utils";
 
 import { LivePreviewCard } from "./live-preview-card";
 import { hasStepperChanges, serializeStepperValues } from "./autosave";
+import { buildAttributePayload } from "./attributes";
 import { getAvailabilitySaveFields } from "./availability";
+import { StepAttributes } from "./step-attributes";
 import { StepDetails } from "./step-details";
 import { StepPhotos } from "./step-photos";
 import { StepPreview } from "./step-preview";
 import { StepPricing } from "./step-pricing";
 import { StepStory } from "./step-story";
+import { StepTypeSelection } from "./step-type-selection";
 import {
   defaultStepperValues,
   type ProductStepperMedia,
@@ -36,7 +39,7 @@ type ProductStepperProps = {
   productId?: string;
 };
 
-const steps = ["Photos", "Details", "Story", "Pricing", "Preview"] as const;
+const steps = ["Type", "Photos", "Details", "Attributes", "Story", "Pricing", "Preview"] as const;
 const emptyInitialMedia: ProductStepperMedia[] = [];
 
 const toNullableText = (value: string) => {
@@ -81,7 +84,11 @@ export function ProductStepper({
     const currentSnapshot = serializeStepperValues(values);
 
     const availability = getAvailabilitySaveFields(values);
+    const attributePayload = buildAttributePayload(values);
     const payload = {
+      // P4-02: type + attributes — persisted to products.typeId + products.attributes
+      attributes: attributePayload.attributes,
+      typeId: attributePayload.typeId,
       collectionId: values.collectionId.trim() || null,
       detailsCondition: toNullableText(values.detailsCondition),
       detailsDesigner: toNullableText(values.detailsDesigner),
@@ -282,13 +289,15 @@ export function ProductStepper({
         </div>
 
         <div ref={stepContainerRef}>
-          {stepIndex === 0 ? (
+          {stepIndex === 0 ? <StepTypeSelection form={form} /> : null}
+          {stepIndex === 1 ? (
             <StepPhotos form={form} setUploaded={setUploaded} uploaded={uploaded} />
           ) : null}
-          {stepIndex === 1 ? <StepDetails form={form} /> : null}
-          {stepIndex === 2 ? <StepStory form={form} /> : null}
-          {stepIndex === 3 ? <StepPricing form={form} /> : null}
-          {stepIndex === 4 ? <StepPreview values={form.state.values} /> : null}
+          {stepIndex === 2 ? <StepDetails form={form} /> : null}
+          {stepIndex === 3 ? <StepAttributes form={form} /> : null}
+          {stepIndex === 4 ? <StepStory form={form} /> : null}
+          {stepIndex === 5 ? <StepPricing form={form} /> : null}
+          {stepIndex === 6 ? <StepPreview values={form.state.values} /> : null}
         </div>
 
         <div className="flex items-center justify-between gap-3">

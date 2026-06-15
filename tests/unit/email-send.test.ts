@@ -8,12 +8,25 @@ vi.mock("@/lib/email/resend", () => ({
   getResendClient: getResendClientMock,
 }));
 
+// Mock the logger to capture log.error calls
+const logErrorMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/log", () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: logErrorMock,
+  }),
+}));
+
 import { sendEmail } from "@/lib/email/send";
 
 describe("sendEmail (Resend path)", () => {
   beforeEach(() => {
     emailsSendMock.mockReset();
     getResendClientMock.mockReset();
+    logErrorMock.mockReset();
     getResendClientMock.mockReturnValue({
       emails: { send: emailsSendMock },
     });
@@ -30,8 +43,6 @@ describe("sendEmail (Resend path)", () => {
       error: { message: "domain not verified" },
     });
 
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
     const result = await sendEmail({
       to: "customer@example.com",
       subject: "Test",
@@ -39,12 +50,10 @@ describe("sendEmail (Resend path)", () => {
     });
 
     expect(result).toBe(false);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "[EMAIL] Resend error:",
-      "domain not verified"
+    expect(logErrorMock).toHaveBeenCalledWith(
+      "Resend error",
+      expect.objectContaining({ message: "domain not verified" })
     );
-
-    consoleSpy.mockRestore();
   });
 
   it("returns true when Resend returns data without an error", async () => {
@@ -53,8 +62,6 @@ describe("sendEmail (Resend path)", () => {
       error: null,
     });
 
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
     const result = await sendEmail({
       to: "customer@example.com",
       subject: "Test",
@@ -62,14 +69,12 @@ describe("sendEmail (Resend path)", () => {
     });
 
     expect(result).toBe(true);
-    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(logErrorMock).not.toHaveBeenCalled();
     expect(emailsSendMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: ["customer@example.com"],
         subject: "Test",
       })
     );
-
-    consoleSpy.mockRestore();
   });
 });

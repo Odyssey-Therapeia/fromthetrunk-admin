@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Product } from "@/types/domain";
 
@@ -92,6 +92,45 @@ describe("JSON-LD render path", () => {
       const jsonLd = productJsonLd(fixture);
       const parsed = JSON.parse(JSON.stringify(jsonLd));
       expect(parsed.offers.availability).toBe("https://schema.org/InStock");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // GST-inclusive flag (P2-04): valueAddedTaxIncluded must reflect isGstInclusive()
+  // so the structured-data claim stays consistent with the charged total.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("productJsonLd — GST-inclusive flag", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("OFF (default): omits valueAddedTaxIncluded (price is exclusive)", () => {
+      vi.stubEnv("FTT_FEATURE_GST_INCLUSIVE", "false");
+      const jsonLd = productJsonLd(fixture);
+      const parsed = JSON.parse(JSON.stringify(jsonLd));
+
+      // No inclusive claim when the flag is off — GST is added on top elsewhere.
+      expect(parsed.offers).not.toHaveProperty("valueAddedTaxIncluded");
+      // Price is still the listed price in rupees.
+      expect(parsed.offers.price).toBe(fixture.pricePaise / 100);
+    });
+
+    it("OFF when env var absent: omits valueAddedTaxIncluded", () => {
+      vi.unstubAllEnvs();
+      delete process.env.FTT_FEATURE_GST_INCLUSIVE;
+      const jsonLd = productJsonLd(fixture);
+      const parsed = JSON.parse(JSON.stringify(jsonLd));
+      expect(parsed.offers).not.toHaveProperty("valueAddedTaxIncluded");
+    });
+
+    it("ON: marks valueAddedTaxIncluded true and price is the all-in price", () => {
+      vi.stubEnv("FTT_FEATURE_GST_INCLUSIVE", "true");
+      const jsonLd = productJsonLd(fixture);
+      const parsed = JSON.parse(JSON.stringify(jsonLd));
+
+      // Inclusive: the listed pricePaise IS the all-in price; declare it.
+      expect(parsed.offers.valueAddedTaxIncluded).toBe(true);
+      expect(parsed.offers.price).toBe(fixture.pricePaise / 100);
     });
   });
 

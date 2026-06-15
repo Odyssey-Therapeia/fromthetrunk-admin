@@ -10,9 +10,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useImportStore } from "@/lib/store/import-store";
-import { DB_FIELDS } from "@/lib/import/field-mapper";
+import { ATTRIBUTES_PREFIX, DB_FIELDS } from "@/lib/import/field-mapper";
 import { useImportWizard } from "./import-hooks";
 import { cn } from "@/lib/utils";
+
+/**
+ * Return a human-readable label for a dbField value.
+ * Attribute fields (attributes_<key>) are displayed as "attr: <key>".
+ */
+function dbFieldLabel(field: string): string {
+  if (field.startsWith(ATTRIBUTES_PREFIX)) {
+    return `attr: ${field.slice(ATTRIBUTES_PREFIX.length)}`;
+  }
+  return field;
+}
 
 export function StepMap() {
   const { mappings, updateMapping, isProcessing, totalRows } =
@@ -48,49 +59,68 @@ export function StepMap() {
           <span>DB Field</span>
         </div>
 
-        {mappings.map((mapping, i) => (
-          <div
-            key={`${mapping.csvColumn}-${i}`}
-            className="grid grid-cols-1 items-center gap-3 border-b border-border/50 px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_auto_1fr]"
-          >
-            <span className="truncate text-sm">{mapping.csvColumn}</span>
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[10px]",
-                mapping.confidence >= 0.8
-                  ? "border-green-300 text-green-700"
-                  : mapping.confidence >= 0.5
-                    ? "border-amber-300 text-amber-700"
-                    : "border-border text-muted-foreground",
-              )}
+        {mappings.map((mapping, i) => {
+          // P4-06: attributes_* dbFields are valid but not in DB_FIELDS (dynamic).
+          // We show them as a read-only label + allow "Skip" as the only other option.
+          const isAttrField = mapping.dbField.startsWith(ATTRIBUTES_PREFIX);
+          const selectValue = mapping.dbField || "__unmapped__";
+
+          return (
+            <div
+              key={`${mapping.csvColumn}-${i}`}
+              className="grid grid-cols-1 items-center gap-3 border-b border-border/50 px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_auto_1fr]"
             >
-              {mapping.confidence > 0
-                ? `${Math.round(mapping.confidence * 100)}%`
-                : "—"}
-            </Badge>
-            <Select
-              value={mapping.dbField || "__unmapped__"}
-              onValueChange={(val) =>
-                updateMapping(i, val === "__unmapped__" ? "" : val)
-              }
-            >
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__unmapped__" className="text-xs text-muted-foreground">
-                  Skip
-                </SelectItem>
-                {DB_FIELDS.map((field) => (
-                  <SelectItem key={field} value={field} className="text-xs">
-                    {field}
+              <span className="truncate text-sm">{mapping.csvColumn}</span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px]",
+                  mapping.confidence >= 0.8
+                    ? "border-green-300 text-green-700"
+                    : mapping.confidence >= 0.5
+                      ? "border-amber-300 text-amber-700"
+                      : "border-border text-muted-foreground",
+                )}
+              >
+                {mapping.confidence > 0
+                  ? `${Math.round(mapping.confidence * 100)}%`
+                  : "—"}
+              </Badge>
+              <Select
+                value={selectValue}
+                onValueChange={(val) =>
+                  updateMapping(i, val === "__unmapped__" ? "" : val)
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue>
+                    {isAttrField ? dbFieldLabel(mapping.dbField) : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unmapped__" className="text-xs text-muted-foreground">
+                    Skip
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ))}
+                  {/* P4-06: Show the auto-detected attribute target when present */}
+                  {isAttrField && (
+                    <SelectItem
+                      key={mapping.dbField}
+                      value={mapping.dbField}
+                      className="text-xs text-blue-700"
+                    >
+                      {dbFieldLabel(mapping.dbField)}
+                    </SelectItem>
+                  )}
+                  {DB_FIELDS.map((field) => (
+                    <SelectItem key={field} value={field} className="text-xs">
+                      {field}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

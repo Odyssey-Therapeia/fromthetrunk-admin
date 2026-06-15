@@ -4,52 +4,66 @@ import { describe, expect, it } from "vitest";
 import { GST_RATE, SHIPPING_TIERS } from "@/lib/config/order-pricing";
 import { calculateOrderTotals, verifyPaymentSignature } from "@/lib/payments/razorpay";
 
-describe("calculateOrderTotals", () => {
-  it("calculates standard shipping + GST for small order", () => {
-    const result = calculateOrderTotals(15000, "standard");
+// calculateOrderTotals now works entirely in PAISE — the unit the routes that
+// charge the customer actually carry. SHIPPING_TIERS values are rupee tiers, so
+// the paise equivalents are scaled by 100.
+const STANDARD_PAISE = SHIPPING_TIERS.standard * 100; // 500 INR -> 50000 paise
+const EXPRESS_PAISE = SHIPPING_TIERS.express * 100; // 1200 INR -> 120000 paise
+const FREE_THRESHOLD_PAISE = SHIPPING_TIERS.freeThreshold * 100; // 25000 INR -> 2500000 paise
 
-    expect(result.subtotal).toBe(15000);
-    expect(result.shippingCost).toBe(SHIPPING_TIERS.standard);
+describe("calculateOrderTotals (flag OFF / exclusive — default)", () => {
+  it("calculates standard shipping + GST for small order", () => {
+    const subtotalPaise = 1_500_000; // 15000 INR
+    const result = calculateOrderTotals(subtotalPaise, "standard");
+
+    expect(result.subtotalPaise).toBe(subtotalPaise);
+    expect(result.shippingCostPaise).toBe(STANDARD_PAISE);
     expect(result.shippingMethod).toBe("standard");
     expect(result.taxRate).toBe(GST_RATE);
-    expect(result.taxAmount).toBe(Math.round(15000 * GST_RATE));
-    expect(result.total).toBe(15000 + SHIPPING_TIERS.standard + Math.round(15000 * GST_RATE));
+    expect(result.taxAmountPaise).toBe(Math.round(subtotalPaise * GST_RATE));
+    expect(result.totalPaise).toBe(
+      subtotalPaise + STANDARD_PAISE + Math.round(subtotalPaise * GST_RATE)
+    );
   });
 
   it("gives free shipping above threshold", () => {
-    const result = calculateOrderTotals(30000, "standard");
+    const subtotalPaise = 3_000_000; // 30000 INR > threshold
+    const result = calculateOrderTotals(subtotalPaise, "standard");
 
-    expect(result.shippingCost).toBe(0);
-    expect(result.total).toBe(30000 + Math.round(30000 * GST_RATE));
+    expect(result.shippingCostPaise).toBe(0);
+    expect(result.totalPaise).toBe(subtotalPaise + Math.round(subtotalPaise * GST_RATE));
   });
 
   it("gives free shipping for express above threshold", () => {
-    const result = calculateOrderTotals(30000, "express");
+    const result = calculateOrderTotals(3_000_000, "express");
 
-    expect(result.shippingCost).toBe(0);
+    expect(result.shippingCostPaise).toBe(0);
   });
 
   it("calculates express shipping for small order", () => {
-    const result = calculateOrderTotals(10000, "express");
+    const subtotalPaise = 1_000_000; // 10000 INR
+    const result = calculateOrderTotals(subtotalPaise, "express");
 
-    expect(result.shippingCost).toBe(SHIPPING_TIERS.express);
-    expect(result.total).toBe(10000 + SHIPPING_TIERS.express + Math.round(10000 * GST_RATE));
+    expect(result.shippingCostPaise).toBe(EXPRESS_PAISE);
+    expect(result.totalPaise).toBe(
+      subtotalPaise + EXPRESS_PAISE + Math.round(subtotalPaise * GST_RATE)
+    );
   });
 
   it("handles zero subtotal", () => {
     const result = calculateOrderTotals(0, "standard");
 
-    expect(result.subtotal).toBe(0);
-    expect(result.taxAmount).toBe(0);
-    expect(result.shippingCost).toBe(SHIPPING_TIERS.standard);
-    expect(result.total).toBe(SHIPPING_TIERS.standard);
+    expect(result.subtotalPaise).toBe(0);
+    expect(result.taxAmountPaise).toBe(0);
+    expect(result.shippingCostPaise).toBe(STANDARD_PAISE);
+    expect(result.totalPaise).toBe(STANDARD_PAISE);
   });
 
   it("handles exact threshold amount", () => {
-    const result = calculateOrderTotals(25000, "standard");
+    const result = calculateOrderTotals(FREE_THRESHOLD_PAISE, "standard");
 
     // At exactly the threshold, shipping should be free
-    expect(result.shippingCost).toBe(0);
+    expect(result.shippingCostPaise).toBe(0);
   });
 });
 

@@ -1,11 +1,17 @@
 import {
+  Activity,
+  FileText,
   FolderOpen,
   Globe,
   Image,
   LayoutDashboard,
+  Link2,
+  Menu,
   Package,
+  Palette,
   Settings,
   ShoppingCart,
+  Tag,
   Users,
 } from "lucide-react";
 
@@ -17,11 +23,17 @@ export type AdminNavItem = {
 
 export const adminNavItems: AdminNavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/control-centre", label: "Control Centre", icon: Activity },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/collections", label: "Collections", icon: FolderOpen },
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/admin/discounts", label: "Discounts", icon: Tag },
   { href: "/admin/customers", label: "Users", icon: Users },
   { href: "/admin/media", label: "Media", icon: Image },
+  { href: "/admin/pages", label: "Pages", icon: FileText },
+  { href: "/admin/theme", label: "Theme", icon: Palette },
+  { href: "/admin/navigation", label: "Navigation", icon: Menu },
+  { href: "/admin/redirects", label: "Redirects", icon: Link2 },
   { href: "/admin/globals", label: "Globals", icon: Globe },
 ];
 

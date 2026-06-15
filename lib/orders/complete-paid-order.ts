@@ -2,6 +2,8 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { db } from "@/db";
 import { addOrderEvent, getOrder } from "@/db/queries/orders";
+import { incrementDiscountUsage } from "@/db/queries/discounts";
+import { releaseReservationsByOrder } from "@/db/queries/reservations";
 import { orders, products } from "@/db/schema";
 import { getOrderNotificationRecipients } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/send";
@@ -10,6 +12,7 @@ import {
   orderPurchaseNotificationEmail,
   type EmailOrder,
 } from "@/lib/email/templates";
+import { emitAnalyticsEvent } from "@/lib/analytics/emit";
 
 type CompletePaidOrderInput = {
   orderId: string;
@@ -116,14 +119,56 @@ export async function completePaidOrder(input: CompletePaidOrderInput) {
         reservedUntil: null,
         soldAt: new Date(),
         stockStatus: "sold",
+        // Dual-write: quantity_available set to 0 on sale (v2 state mirrors stockStatus)
+        quantityAvailable: 0,
         updatedAt: new Date(),
       })
       .where(inArray(products.id, productIds));
+
+    // Dual-write: release reservation rows now that the order is paid
+    await releaseReservationsByOrder(input.orderId);
   }
 
   await addOrderEvent(input.orderId, `${input.source} payment confirmed`, "confirmed", {
     paymentId: input.paymentId,
     paymentReference: input.paymentReference ?? null,
+  });
+
+  // P6-02: Increment discount usageCount atomically now that payment is confirmed.
+  // Uses conditional UPDATE: SET usage_count = usage_count + 1 WHERE usage_count < usage_limit
+  // (or usage_limit IS NULL). The conditional guard closes the stale-read over-redemption
+  // window: if the code was exhausted between create-order and payment confirmation,
+  // incrementDiscountUsage returns false and we log an order event for review.
+  // Only the winner branch reaches here (rows.length > 0 guard above), so this
+  // call executes EXACTLY ONCE per order — no double-counting across concurrent callbacks.
+  if (existing.discountId) {
+    const incremented = await incrementDiscountUsage(existing.discountId);
+    if (!incremented) {
+      // The usage limit was exhausted between validation and confirmation (race condition).
+      // Log for review; the order is still fulfilled — do not block the customer.
+      await addOrderEvent(
+        input.orderId,
+        `discount_usage_limit_exceeded: discount ${existing.discountId} could not be incremented (limit already reached at confirmation time)`,
+        "confirmed",
+        { discountId: existing.discountId }
+      );
+    }
+  }
+
+  // Fire-and-forget: payment_completed event — winner branch only (EXACTLY ONCE).
+  // emitAnalyticsEvent() never throws; errors are caught + logged inside.
+  void emitAnalyticsEvent({
+    event_id: crypto.randomUUID(),
+    type: "payment_completed",
+    payload: {
+      orderId: input.orderId,
+      paymentId: input.paymentId,
+      paymentMethod: input.paymentMethod ?? "razorpay",
+      paymentReference: input.paymentReference ?? null,
+      source: input.source,
+      productIds,
+    },
+    occurredAt: new Date(),
   });
 
   const confirmed = await getOrder(input.orderId);

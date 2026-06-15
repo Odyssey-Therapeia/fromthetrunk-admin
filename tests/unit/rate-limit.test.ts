@@ -3,45 +3,45 @@ import { describe, expect, it } from "vitest";
 import { checkRateLimit, getRateLimitKey } from "@/lib/http/rate-limit";
 
 describe("checkRateLimit", () => {
-  it("allows requests within the limit", () => {
+  it("allows requests within the limit", async () => {
     const key = `test-allow-${Date.now()}`;
-    const result = checkRateLimit(key, { limit: 5, windowSeconds: 60 });
+    const result = await checkRateLimit(key, { limit: 5, windowSeconds: 60 });
 
     expect(result.success).toBe(true);
     expect(result.remaining).toBe(4);
   });
 
-  it("blocks requests exceeding the limit", () => {
+  it("blocks requests exceeding the limit", async () => {
     const key = `test-block-${Date.now()}`;
     const options = { limit: 2, windowSeconds: 60 };
 
-    checkRateLimit(key, options); // 1
-    checkRateLimit(key, options); // 2
-    const result = checkRateLimit(key, options); // 3 — should be blocked
+    await checkRateLimit(key, options); // 1
+    await checkRateLimit(key, options); // 2
+    const result = await checkRateLimit(key, options); // 3 — should be blocked
 
     expect(result.success).toBe(false);
     expect(result.remaining).toBe(0);
   });
 
-  it("tracks separate keys independently", () => {
+  it("tracks separate keys independently", async () => {
     const ts = Date.now();
     const keyA = `test-a-${ts}`;
     const keyB = `test-b-${ts}`;
     const options = { limit: 1, windowSeconds: 60 };
 
-    const a = checkRateLimit(keyA, options);
-    const b = checkRateLimit(keyB, options);
+    const a = await checkRateLimit(keyA, options);
+    const b = await checkRateLimit(keyB, options);
 
     expect(a.success).toBe(true);
     expect(b.success).toBe(true);
 
-    const a2 = checkRateLimit(keyA, options);
+    const a2 = await checkRateLimit(keyA, options);
     expect(a2.success).toBe(false);
   });
 
-  it("returns resetAt in the future", () => {
+  it("returns resetAt in the future", async () => {
     const key = `test-reset-${Date.now()}`;
-    const result = checkRateLimit(key, { limit: 5, windowSeconds: 60 });
+    const result = await checkRateLimit(key, { limit: 5, windowSeconds: 60 });
 
     expect(result.resetAt).toBeGreaterThan(Date.now());
   });

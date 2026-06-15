@@ -28,6 +28,16 @@ vi.mock("@/lib/ai/tag-suggestions", () => ({
   suggestTagIds: vi.fn(),
 }));
 
+// P4-06: products route now imports collections for bulk ops; mock to avoid DB connection
+vi.mock("@/db/queries/collections", () => ({
+  bulkAddProductsToCollection: vi.fn(),
+  bulkRemoveProductsFromCollection: vi.fn(),
+}));
+
+vi.mock("@/lib/config/flags", () => ({
+  isInventoryV2: vi.fn().mockReturnValue(false),
+}));
+
 import { registerProductRoutes } from "@/api/hono/routes/products";
 
 const productRoutes = () => {

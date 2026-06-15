@@ -1,16 +1,83 @@
+"use client";
+
 import { useState } from "react";
 
+import type {
+  FormAsyncValidateOrFn,
+  FormValidateOrFn,
+  ReactFormExtendedApi,
+} from "@tanstack/react-form";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  productDetailsSchema,
+  detailsFullWidthKeys,
+} from "@/components/admin/schema-form/product-details.schema";
+import { SchemaForm } from "@/components/admin/schema-form/schema-form";
+import { SchemaFormField } from "@/components/admin/schema-form/schema-form-field";
+
+import type { FormSchema } from "@/lib/forms/types";
+import type { ProductStepperValues } from "./types";
+
+// ---------------------------------------------------------------------------
+// Typed form handle (mirrors step-pricing.tsx pattern)
+// ---------------------------------------------------------------------------
+
+type ProductStepperSyncValidator =
+  | FormValidateOrFn<ProductStepperValues>
+  | undefined;
+type ProductStepperAsyncValidator =
+  | FormAsyncValidateOrFn<ProductStepperValues>
+  | undefined;
+
+type ProductStepperForm = ReactFormExtendedApi<
+  ProductStepperValues,
+  ProductStepperSyncValidator,
+  ProductStepperSyncValidator,
+  ProductStepperAsyncValidator,
+  ProductStepperSyncValidator,
+  ProductStepperAsyncValidator,
+  ProductStepperSyncValidator,
+  ProductStepperAsyncValidator,
+  ProductStepperSyncValidator,
+  ProductStepperAsyncValidator,
+  ProductStepperAsyncValidator,
+  unknown
+>;
 
 type StepDetailsProps = {
-  form: any;
+  form: ProductStepperForm;
 };
 
-export function StepDetails({
-  form,
-}: StepDetailsProps) {
+// ---------------------------------------------------------------------------
+// Standard field keys rendered via SchemaForm (all except tagsCsv which has
+// a custom Suggest Tags button alongside it).
+// ---------------------------------------------------------------------------
+
+const standardFieldKeys = [
+  "name",
+  "slug",
+  "collectionId",
+  "detailsFabric",
+  "detailsDesigner",
+  "detailsLength",
+  "detailsWidth",
+  "detailsCondition",
+] as const satisfies ReadonlyArray<keyof ProductStepperValues>;
+
+// Sub-schema for the 8 standard fields — derived from productDetailsSchema.
+// productDetailsSchema is the single source of truth; this is a projection.
+const standardSchema: FormSchema = {
+  fields: Object.fromEntries(
+    standardFieldKeys.map((key) => [key, productDetailsSchema.fields[key]])
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function StepDetails({ form }: StepDetailsProps) {
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<
     Array<{ category: string; id: number; name: string }>
@@ -49,171 +116,109 @@ export function StepDetails({
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Build values and errors maps from the TanStack form state.
+  // All field metadata is sourced from productDetailsSchema (single source of
+  // truth) — no hand-assembled meta objects here.
+  // -------------------------------------------------------------------------
+
+  const formValues = form.state.values as Record<string, unknown>;
+
+  const standardValues: Record<string, unknown> = Object.fromEntries(
+    standardFieldKeys.map((key) => [key, formValues[key] ?? ""])
+  );
+
+  const standardErrors: Record<string, string> = {};
+  for (const key of standardFieldKeys) {
+    const firstError = form.state.fieldMeta[key]?.errors[0];
+    if (firstError !== undefined) {
+      standardErrors[key] = String(firstError);
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <form.Field name="name">
-        {(field: any) => (
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="product-name">Internal name</Label>
-            <Input
-              id="product-name"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="Kanjeevaram Silk - Gold Border"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
+      {/* Standard fields — schema-driven via SchemaForm + productDetailsSchema.
+          Field layout (full-width) is specified via getFieldClassName. */}
+      <SchemaForm
+        schema={standardSchema}
+        values={standardValues}
+        errors={standardErrors}
+        className="contents"
+        getFieldClassName={(key) =>
+          detailsFullWidthKeys.has(key) ? "md:col-span-2" : undefined
+        }
+        onChange={(key, value) => {
+          form.setFieldValue(
+            key as keyof ProductStepperValues,
+            value as ProductStepperValues[keyof ProductStepperValues]
+          );
+        }}
+        onBlur={(key) => {
+          const fieldInfo = form.getFieldInfo(key as keyof ProductStepperValues);
+          if (fieldInfo?.instance) {
+            fieldInfo.instance.handleBlur();
+          }
+        }}
+      />
 
-      <form.Field name="slug">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="product-slug">Slug</Label>
-            <Input
-              id="product-slug"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="kanjeevaram-silk-gold-border"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="collectionId">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="collection-id">Collection ID</Label>
-            <Input
-              id="collection-id"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="UUID (optional)"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="detailsFabric">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="fabric">Fabric</Label>
-            <Input
-              id="fabric"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="Pure Silk"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="detailsDesigner">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="designer">Designer</Label>
-            <Input
-              id="designer"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="Nalli / Heritage House"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="detailsLength">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="length">Length</Label>
-            <Input
-              id="length"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder='e.g. 5.5"'
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="detailsWidth">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="width">Width</Label>
-            <Input
-              id="width"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder='e.g. 44"'
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
-      <form.Field name="detailsCondition">
-        {(field: any) => (
-          <div className="space-y-2">
-            <Label htmlFor="condition">Condition</Label>
-            <Input
-              id="condition"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="Excellent / Restored"
-              value={field.state.value}
-            />
-          </div>
-        )}
-      </form.Field>
-
+      {/* tagsCsv — metadata from productDetailsSchema (no inline meta);
+          has a custom "Suggest Tags" button as additional UI. */}
       <form.Field name="tagsCsv">
-        {(field: any) => (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="tags">Tag IDs (comma separated)</Label>
-              <Button
-                onClick={handleSuggestTags}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {isSuggesting ? "Suggesting..." : "Suggest Tags"}
-              </Button>
-            </div>
-            <Input
-              id="tags"
-              onBlur={field.handleBlur}
-              onChange={(event) => field.handleChange(event.target.value)}
-              placeholder="1, 2, 7"
-              value={field.state.value}
-            />
-            {suggestedTags.length > 0 ? (
-              <div className="space-y-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                <p>Suggested tags:</p>
-                <p>
-                  {suggestedTags
-                    .map((tag) => `${tag.name} (#${tag.id})`)
-                    .join(", ")}
-                </p>
+        {(field) => {
+          const tagFieldMeta = productDetailsSchema.fields["tagsCsv"].meta;
+          const tagError =
+            field.state.meta.errors[0] !== undefined
+              ? String(field.state.meta.errors[0])
+              : undefined;
+
+          return (
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <SchemaFormField
+                  fieldKey="tagsCsv"
+                  meta={tagFieldMeta}
+                  value={field.state.value}
+                  error={tagError}
+                  formValues={formValues}
+                  onBlur={field.handleBlur}
+                  onChange={(v) => field.handleChange(v as string)}
+                />
                 <Button
-                  onClick={() =>
-                    field.handleChange(suggestedTags.map((tag) => tag.id).join(", "))
-                  }
+                  className="mt-6 shrink-0"
+                  onClick={handleSuggestTags}
                   size="sm"
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                 >
-                  Apply suggested IDs
+                  {isSuggesting ? "Suggesting..." : "Suggest Tags"}
                 </Button>
               </div>
-            ) : null}
-          </div>
-        )}
+              {suggestedTags.length > 0 ? (
+                <div className="space-y-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  <p>Suggested tags:</p>
+                  <p>
+                    {suggestedTags
+                      .map((tag) => `${tag.name} (#${tag.id})`)
+                      .join(", ")}
+                  </p>
+                  <Button
+                    onClick={() =>
+                      field.handleChange(
+                        suggestedTags.map((tag) => tag.id).join(", ")
+                      )
+                    }
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    Apply suggested IDs
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          );
+        }}
       </form.Field>
     </div>
   );

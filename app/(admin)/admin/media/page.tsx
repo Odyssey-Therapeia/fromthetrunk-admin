@@ -1,10 +1,12 @@
 "use client";
 
 import { put } from "@vercel/blob/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type MediaAsset = {
   filename: string;
@@ -17,9 +19,16 @@ type UploadConfig = {
   pathname: string;
 };
 
+type PendingAlt = {
+  alt: string;
+  file: File;
+};
+
 export default function AdminMediaPage() {
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingAlt[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMedia = async () => {
     const response = await fetch("/api/v2/media");
@@ -31,11 +40,34 @@ export default function AdminMediaPage() {
     void loadMedia();
   }, []);
 
-  const uploadFiles = async (files: FileList | null) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     if (!files || files.length === 0) return;
+    const entries: PendingAlt[] = Array.from(files).map((file) => ({
+      alt: "",
+      file,
+    }));
+    setPendingFiles(entries);
+  };
+
+  const updateAlt = (index: number, alt: string) => {
+    setPendingFiles((current) =>
+      current.map((entry, i) => (i === index ? { ...entry, alt } : entry))
+    );
+  };
+
+  const uploadFiles = async () => {
+    if (pendingFiles.length === 0) return;
+    // Validate: all files must have non-empty alt
+    for (const entry of pendingFiles) {
+      if (!entry.alt.trim()) {
+        alert(`Please provide alt text for "${entry.file.name}" before uploading.`);
+        return;
+      }
+    }
     setIsUploading(true);
     try {
-      for (const file of Array.from(files)) {
+      for (const { file, alt } of pendingFiles) {
         const uploadConfigResponse = await fetch("/api/v2/media/upload", {
           body: JSON.stringify({
             contentType: file.type || "application/octet-stream",
@@ -56,6 +88,7 @@ export default function AdminMediaPage() {
 
         await fetch("/api/v2/media/complete", {
           body: JSON.stringify({
+            alt: alt.trim(),
             filename: file.name,
             mimeType: file.type || "application/octet-stream",
             pathname: blob.pathname,
@@ -69,6 +102,10 @@ export default function AdminMediaPage() {
         });
       }
 
+      setPendingFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       await loadMedia();
     } finally {
       setIsUploading(false);
@@ -82,18 +119,55 @@ export default function AdminMediaPage() {
           <h2 className="text-2xl font-semibold tracking-tight">Media Library</h2>
           <p className="text-sm text-muted-foreground">Upload and manage product visuals.</p>
         </div>
+      </div>
 
-        <label>
+      {/* File picker + alt-text inputs */}
+      <div className="space-y-3 rounded-md border p-4">
+        <div>
+          <Label htmlFor="media-file-input">Choose files</Label>
           <input
-            className="hidden"
+            id="media-file-input"
+            className="mt-1 block w-full text-sm"
             multiple
-            onChange={(event) => void uploadFiles(event.target.files)}
+            onChange={handleFileChange}
+            ref={fileInputRef}
             type="file"
           />
-          <Button asChild disabled={isUploading}>
-            <span>{isUploading ? "Uploading..." : "Upload files"}</span>
-          </Button>
-        </label>
+        </div>
+
+        {pendingFiles.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Alt text (required for each image)</p>
+            {pendingFiles.map((entry, index) => (
+              <div className="flex items-center gap-3" key={`${entry.file.name}-${index}`}>
+                <span className="w-40 truncate text-xs text-muted-foreground">
+                  {entry.file.name}
+                </span>
+                <Input
+                  className="flex-1"
+                  onChange={(e) => updateAlt(index, e.target.value)}
+                  placeholder="Describe the image for screen readers"
+                  type="text"
+                  value={entry.alt}
+                />
+              </div>
+            ))}
+
+            <Button
+              disabled={isUploading || pendingFiles.some((e) => !e.alt.trim())}
+              onClick={() => void uploadFiles()}
+              type="button"
+            >
+              {isUploading ? "Uploading..." : "Upload files"}
+            </Button>
+          </div>
+        )}
+
+        {pendingFiles.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Select one or more image files. You will be prompted to enter alt text before uploading.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
