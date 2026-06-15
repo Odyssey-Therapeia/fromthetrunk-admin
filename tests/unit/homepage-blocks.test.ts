@@ -569,8 +569,10 @@ describe("MUTATION PROOF: renderBlock is the real registry dispatch", () => {
   it("renderBlock throws UnknownBlockTypeError if a fixture block type were unregistered", async () => {
     // Temporarily call renderBlock with a fake type to prove we are using the
     // REAL registry — if this throws, the real dispatch is wired.
+    // (Uses a type that is definitively NOT registered; trust-signals/how-it-works
+    // are now real registered blocks and would no longer throw.)
     await expect(
-      renderBlock({ type: "trust-signals", props: {} })
+      renderBlock({ type: "__not-a-registered-block__", props: {} })
     ).rejects.toThrow(/unknown block type/i);
   });
 

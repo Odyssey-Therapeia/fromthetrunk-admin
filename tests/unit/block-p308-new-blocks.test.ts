@@ -81,7 +81,7 @@ const VALID_UUID = "123e4567-e89b-12d3-a456-426614174000";
 // Registry: all 9 types registered
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("Block registry — all 9 block types registered", () => {
+describe("Block registry — all 11 block types registered", () => {
   const ALL_TYPES = [
     "hero",
     "rich-text",
@@ -92,10 +92,12 @@ describe("Block registry — all 9 block types registered", () => {
     "newsletter-signup",
     "announcement-bar",
     "spacer",
+    "trust-signals",
+    "how-it-works",
   ];
 
-  it("BLOCK_REGISTRY has exactly 9 entries", () => {
-    expect(BLOCK_REGISTRY.size).toBe(9);
+  it("BLOCK_REGISTRY has exactly 11 entries", () => {
+    expect(BLOCK_REGISTRY.size).toBe(11);
   });
 
   for (const type of ALL_TYPES) {
@@ -917,7 +919,7 @@ describe("spacer block", () => {
 // BLOCK_EDITOR_SCHEMAS — all 9 types have entries
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("BLOCK_EDITOR_SCHEMAS — all 9 block types have editor schemas", () => {
+describe("BLOCK_EDITOR_SCHEMAS — all 11 block types have editor schemas", () => {
   const EXPECTED_TYPES = [
     "hero",
     "rich-text",
@@ -928,10 +930,12 @@ describe("BLOCK_EDITOR_SCHEMAS — all 9 block types have editor schemas", () =>
     "newsletter-signup",
     "announcement-bar",
     "spacer",
+    "trust-signals",
+    "how-it-works",
   ];
 
-  it("BLOCK_EDITOR_SCHEMAS has exactly 9 entries", () => {
-    expect(Object.keys(BLOCK_EDITOR_SCHEMAS)).toHaveLength(9);
+  it("BLOCK_EDITOR_SCHEMAS has exactly 11 entries", () => {
+    expect(Object.keys(BLOCK_EDITOR_SCHEMAS)).toHaveLength(11);
   });
 
   for (const type of EXPECTED_TYPES) {

@@ -112,6 +112,8 @@ import { faqBlock } from "@/lib/content/blocks/faq";
 import { newsletterSignupBlock } from "@/lib/content/blocks/newsletter-signup";
 import { announcementBarBlock } from "@/lib/content/blocks/announcement-bar";
 import { spacerBlock } from "@/lib/content/blocks/spacer";
+import { trustSignalsBlock } from "@/lib/content/blocks/trust-signals";
+import { howItWorksBlock } from "@/lib/content/blocks/how-it-works";
 
 BLOCK_REGISTRY.set(heroBlock.type, heroBlock);
 BLOCK_REGISTRY.set(richTextBlock.type, richTextBlock);
@@ -122,3 +124,5 @@ BLOCK_REGISTRY.set(faqBlock.type, faqBlock);
 BLOCK_REGISTRY.set(newsletterSignupBlock.type, newsletterSignupBlock);
 BLOCK_REGISTRY.set(announcementBarBlock.type, announcementBarBlock);
 BLOCK_REGISTRY.set(spacerBlock.type, spacerBlock);
+BLOCK_REGISTRY.set(trustSignalsBlock.type, trustSignalsBlock);
+BLOCK_REGISTRY.set(howItWorksBlock.type, howItWorksBlock);

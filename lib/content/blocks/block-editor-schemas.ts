@@ -722,10 +722,122 @@ export const spacerEditorSchema: FormSchema = {
   },
 };
 
+// ── Trust-signals block schema ────────────────────────────────────────────────
+// Mirrors trustSignalsPropsSchema from lib/content/blocks/trust-signals.tsx.
+// The propsSchema models stats as a fixed 3-tuple; the editor surfaces it as a
+// list-of-group of {value, label}. Icons are fixed per slot (not editable).
+
+export const trustSignalsEditorSchema: FormSchema = {
+  fields: {
+    stats: {
+      zod: z
+        .array(
+          z.object({
+            value: z.string().max(40),
+            label: z.string().max(80),
+          })
+        )
+        .length(3),
+      meta: {
+        type: "list-of-group",
+        label: "Stats",
+        description:
+          "Three trust stats. Each has a value and a label (icons are fixed per slot).",
+        itemSchema: {
+          fields: {
+            value: {
+              zod: z.string().max(40),
+              meta: {
+                type: "text",
+                label: "Value",
+                placeholder: "e.g. 200+",
+                description: "The stat figure (max 40 chars).",
+              },
+            },
+            label: {
+              zod: z.string().max(80),
+              meta: {
+                type: "text",
+                label: "Label",
+                placeholder: "e.g. Authenticated Sarees",
+                description: "The stat caption (max 80 chars).",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+// ── How-it-works block schema ─────────────────────────────────────────────────
+// Mirrors howItWorksPropsSchema from lib/content/blocks/how-it-works.tsx
+
+export const howItWorksEditorSchema: FormSchema = {
+  fields: {
+    eyebrow: {
+      zod: z.string().max(80).default("How It Works"),
+      meta: {
+        type: "text",
+        label: "Eyebrow",
+        placeholder: "e.g. How It Works",
+        description: "Small uppercase label above the heading.",
+      },
+    },
+    heading: {
+      zod: z.string().max(200).default("From trunk to your wardrobe"),
+      meta: {
+        type: "text",
+        label: "Heading",
+        placeholder: "e.g. From trunk to your wardrobe",
+        description: "Main heading for the section.",
+      },
+    },
+    steps: {
+      zod: z
+        .array(
+          z.object({
+            title: z.string().max(80),
+            description: z.string().max(400),
+          })
+        )
+        .min(1)
+        .max(6),
+      meta: {
+        type: "list-of-group",
+        label: "Steps",
+        description: "The process steps shown as numbered cards (1–6).",
+        itemSchema: {
+          fields: {
+            title: {
+              zod: z.string().max(80),
+              meta: {
+                type: "text",
+                label: "Title",
+                placeholder: "e.g. Curate",
+                description: "The step title (max 80 chars).",
+              },
+            },
+            description: {
+              zod: z.string().max(400),
+              meta: {
+                type: "textarea",
+                label: "Description",
+                placeholder: "Describe this step…",
+                description: "The step description (max 400 chars).",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 // EDITOR_SCHEMA_BLOCK_TYPES — verifier anchor: grep for this comment to confirm
-// all nine registered block types have schemas.
+// all registered block types have schemas.
 
 export const BLOCK_EDITOR_SCHEMAS: Record<string, FormSchema> = {
   hero: heroEditorSchema,
@@ -737,4 +849,6 @@ export const BLOCK_EDITOR_SCHEMAS: Record<string, FormSchema> = {
   "newsletter-signup": newsletterSignupEditorSchema,
   "announcement-bar": announcementBarEditorSchema,
   spacer: spacerEditorSchema,
+  "trust-signals": trustSignalsEditorSchema,
+  "how-it-works": howItWorksEditorSchema,
 };
