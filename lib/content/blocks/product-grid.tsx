@@ -1,12 +1,6 @@
 import { z } from "zod";
 import Link from "next/link";
 
-import {
-  getFeaturedProducts,
-  getProducts,
-  getProductsByCollection,
-  getProductsByIds,
-} from "@/lib/data/products";
 import { ProductCard } from "@/components/product/product-card";
 import type { Product } from "@/types/domain";
 import type { BlockRegistryEntry } from "@/lib/content/blocks/registry";
@@ -36,6 +30,18 @@ const columnClass: Record<string, string> = {
 
 async function fetchProducts(props: ProductGridBlockProps): Promise<Product[]> {
   const { source, collectionSlug, tagName, productIds, limit } = props;
+
+  // The product data layer imports @/db (→ undici → node:net), which must NOT
+  // enter the browser bundle. The CLIENT page composer imports BLOCK_REGISTRY
+  // (this module) for block metadata; a static import here would drag the server
+  // DB into the client and break the editor route. Load it dynamically so it is
+  // resolved only at render time (server), keeping the registry client-safe.
+  const {
+    getFeaturedProducts,
+    getProducts,
+    getProductsByCollection,
+    getProductsByIds,
+  } = await import("@/lib/data/products");
 
   if (source === "featured") {
     const { docs } = await getFeaturedProducts(limit);
