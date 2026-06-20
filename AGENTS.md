@@ -21,7 +21,7 @@
 
 - Project is "From the Trunk" (FTT) -- curated pre-loved luxury sarees with provenance
 - GitHub org: Odyssey-Therapeia, repo: FTT-fromthetrunk
-- Production: www.fromthetrunk.shop; contact hello@fromthetrunk.com; Instagram https://www.instagram.com/from.thetrunk/
+- Production: www.fromthetrunk.shop; contact hello@fromthetrunk.shop; Instagram https://www.instagram.com/from.thetrunk/
 - Primary developer for this workspace goes by Abe
 - Branch strategy: sprint-abe (active dev) -> development (staging) -> main (production)
 - Architecture migration in progress: Payload CMS -> custom stack (Drizzle ORM + Hono/OpenAPI + NextAuth + custom admin UI)

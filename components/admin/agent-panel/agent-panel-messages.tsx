@@ -1,12 +1,10 @@
 "use client";
 
-import {
-  ThreadPrimitive,
-  MessagePrimitive,
-} from "@assistant-ui/react";
+import { ThreadPrimitive, MessagePrimitive } from "@assistant-ui/react";
 import { useSession } from "next-auth/react";
 import { Sparkles } from "lucide-react";
 
+import { useHasMounted } from "@/lib/hooks/use-has-mounted";
 import { cn } from "@/lib/utils";
 
 import { AgentQuickChips } from "./agent-quick-chips";
@@ -40,14 +38,15 @@ function ThinkingIndicator() {
 
 function ThreadWelcome() {
   const { data: session } = useSession();
+  const hasMounted = useHasMounted();
   const firstName = session?.user?.name?.split(" ")[0] ?? "Curator";
-  const greeting = getGreeting();
+  const greeting = hasMounted ? getGreeting() : "Welcome back";
 
   return (
     <ThreadPrimitive.Empty>
       <div className="flex flex-col gap-4 py-6">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6B1D1D]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4B2626]">
             <Sparkles className="h-4 w-4 text-[#c9a96e]" />
           </div>
           <div>
@@ -68,7 +67,7 @@ function ThreadWelcome() {
 function UserMessage() {
   return (
     <MessagePrimitive.Root className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#6B1D1D] px-4 py-2.5 text-sm text-white">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#4B2626] px-4 py-2.5 text-sm text-white">
         <MessagePrimitive.Content />
       </div>
     </MessagePrimitive.Root>

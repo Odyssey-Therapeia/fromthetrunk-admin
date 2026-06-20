@@ -15,9 +15,13 @@ import {
 } from "@/components/admin/schema-form/product-details.schema";
 import { SchemaForm } from "@/components/admin/schema-form/schema-form";
 import { SchemaFormField } from "@/components/admin/schema-form/schema-form-field";
+import { useRenderLog, logEvent } from "./_render-log";
 
 import type { FormSchema } from "@/lib/forms/types";
 import type { ProductStepperValues } from "./types";
+
+import { useStore } from "@tanstack/react-form";
+import { TagPicker } from "./tag-picker";
 
 // ---------------------------------------------------------------------------
 // Typed form handle (mirrors step-pricing.tsx pattern)
@@ -69,7 +73,7 @@ const standardFieldKeys = [
 // productDetailsSchema is the single source of truth; this is a projection.
 const standardSchema: FormSchema = {
   fields: Object.fromEntries(
-    standardFieldKeys.map((key) => [key, productDetailsSchema.fields[key]])
+    standardFieldKeys.map((key) => [key, productDetailsSchema.fields[key]]),
   ),
 };
 
@@ -78,6 +82,7 @@ const standardSchema: FormSchema = {
 // ---------------------------------------------------------------------------
 
 export function StepDetails({ form }: StepDetailsProps) {
+  useRenderLog("StepDetails");
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<
     Array<{ category: string; id: number; name: string }>
@@ -122,10 +127,11 @@ export function StepDetails({ form }: StepDetailsProps) {
   // truth) — no hand-assembled meta objects here.
   // -------------------------------------------------------------------------
 
-  const formValues = form.state.values as Record<string, unknown>;
+  // const formValues = form.state.values as Record<string, unknown>;
+  const formValues = useStore(form.store, (state) => state.values);
 
   const standardValues: Record<string, unknown> = Object.fromEntries(
-    standardFieldKeys.map((key) => [key, formValues[key] ?? ""])
+    standardFieldKeys.map((key) => [key, formValues[key] ?? ""]),
   );
 
   const standardErrors: Record<string, string> = {};
@@ -135,6 +141,12 @@ export function StepDetails({ form }: StepDetailsProps) {
       standardErrors[key] = String(firstError);
     }
   }
+
+  const parseTagIds = (csv: string): number[] =>
+    csv
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -149,76 +161,32 @@ export function StepDetails({ form }: StepDetailsProps) {
           detailsFullWidthKeys.has(key) ? "md:col-span-2" : undefined
         }
         onChange={(key, value) => {
+          logEvent(`keystroke: ${key}`, value); // inside SchemaForm's onChange
           form.setFieldValue(
             key as keyof ProductStepperValues,
-            value as ProductStepperValues[keyof ProductStepperValues]
+            value as ProductStepperValues[keyof ProductStepperValues],
           );
         }}
         onBlur={(key) => {
-          const fieldInfo = form.getFieldInfo(key as keyof ProductStepperValues);
-          if (fieldInfo?.instance) {
-            fieldInfo.instance.handleBlur();
-          }
+          const { instance } = form.getFieldInfo(
+            key as keyof ProductStepperValues,
+          );
+          (instance as { handleBlur?: () => void } | null)?.handleBlur?.();
         }}
       />
 
       {/* tagsCsv — metadata from productDetailsSchema (no inline meta);
           has a custom "Suggest Tags" button as additional UI. */}
       <form.Field name="tagsCsv">
-        {(field) => {
-          const tagFieldMeta = productDetailsSchema.fields["tagsCsv"].meta;
-          const tagError =
-            field.state.meta.errors[0] !== undefined
-              ? String(field.state.meta.errors[0])
-              : undefined;
-
-          return (
-            <div className="space-y-2 md:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <SchemaFormField
-                  fieldKey="tagsCsv"
-                  meta={tagFieldMeta}
-                  value={field.state.value}
-                  error={tagError}
-                  formValues={formValues}
-                  onBlur={field.handleBlur}
-                  onChange={(v) => field.handleChange(v as string)}
-                />
-                <Button
-                  className="mt-6 shrink-0"
-                  onClick={handleSuggestTags}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {isSuggesting ? "Suggesting..." : "Suggest Tags"}
-                </Button>
-              </div>
-              {suggestedTags.length > 0 ? (
-                <div className="space-y-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  <p>Suggested tags:</p>
-                  <p>
-                    {suggestedTags
-                      .map((tag) => `${tag.name} (#${tag.id})`)
-                      .join(", ")}
-                  </p>
-                  <Button
-                    onClick={() =>
-                      field.handleChange(
-                        suggestedTags.map((tag) => tag.id).join(", ")
-                      )
-                    }
-                    size="sm"
-                    type="button"
-                    variant="secondary"
-                  >
-                    Apply suggested IDs
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          );
-        }}
+        {(field) => (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Tags</label>
+            <TagPicker
+              value={parseTagIds(field.state.value)}
+              onChange={(ids) => field.handleChange(ids.join(","))}
+            />
+          </div>
+        )}
       </form.Field>
     </div>
   );

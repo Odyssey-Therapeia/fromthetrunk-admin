@@ -6,10 +6,7 @@ import { draftMode } from "next/headers";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
-import {
-  getCollections,
-  getGlobals,
-} from "@/lib/data/products";
+import { getCollections, getGlobals } from "@/lib/data/products";
 import {
   DEFAULT_PRODUCT_SORT,
   getProductSortLabel,
@@ -75,14 +72,19 @@ const toArray = (v: string | string[] | undefined): string[] => {
   return Array.isArray(v) ? v : [v];
 };
 
-export default async function CollectionPage({ searchParams }: CollectionPageProps) {
+export default async function CollectionPage({
+  searchParams,
+}: CollectionPageProps) {
   const { isEnabled: includeDrafts } = await draftMode();
   const resolvedSearchParams = await Promise.resolve(searchParams);
 
   const collectionQuery = resolvedSearchParams?.collection;
   const requestedCollectionSlug = firstStr(collectionQuery);
   const activeSort = parseProductSort(resolvedSearchParams?.sort);
-  const currentPage = Math.max(1, parseInt(resolvedSearchParams?.page ?? "1", 10));
+  const currentPage = Math.max(
+    1,
+    parseInt(resolvedSearchParams?.page ?? "1", 10),
+  );
 
   // Catalog filters (P4-04)
   const activeType = firstStr(resolvedSearchParams?.type);
@@ -119,7 +121,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   const cms = collectionPage as CollectionPageContent | null;
   const collections = (visibleCollectionsResult?.docs ?? []) as Collection[];
   let activeCollection = collections.find(
-    (c) => c.slug === requestedCollectionSlug
+    (c) => c.slug === requestedCollectionSlug,
   );
   // A requested collection may have members only via the manual
   // (collection_products) or smart (rules) path, which the onlyWithProducts
@@ -138,7 +140,12 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   // to the collection-aware listing path.
   let items: Product[] = [];
   let totalDocs = 0;
-  let facets = { fabric: {} as Record<string, number>, type: {} as Record<string, number>, availability: {} as Record<string, number>, tags: {} as Record<string, number> };
+  let facets = {
+    fabric: {} as Record<string, number>,
+    type: {} as Record<string, number>,
+    availability: {} as Record<string, number>,
+    tags: {} as Record<string, number>,
+  };
 
   if (hasFilters) {
     // P4-04: filtered search via catalog-search port
@@ -152,7 +159,10 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
     });
 
     // Apply sort + pagination in-memory (same pattern as getProductsByCollection)
-    const sorted = sortProductsInMemory(result.products as unknown as Product[], activeSort);
+    const sorted = sortProductsInMemory(
+      result.products as unknown as Product[],
+      activeSort,
+    );
     totalDocs = sorted.length;
     const offset = (currentPage - 1) * ITEMS_PER_PAGE;
     items = sorted.slice(offset, offset + ITEMS_PER_PAGE);
@@ -162,11 +172,15 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
     const { getProductsByCollection } = await import("@/lib/data/products");
     const page = currentPage;
     const offset = (page - 1) * ITEMS_PER_PAGE;
-    const result = await getProductsByCollection(activeCollectionSlug, ITEMS_PER_PAGE, {
-      includeDrafts,
-      page,
-      sort: activeSort,
-    });
+    const result = await getProductsByCollection(
+      activeCollectionSlug,
+      ITEMS_PER_PAGE,
+      {
+        includeDrafts,
+        page,
+        sort: activeSort,
+      },
+    );
     items = (result?.docs ?? []) as Product[];
     totalDocs = (result as { totalDocs?: number })?.totalDocs ?? items.length;
     // Get facets for the sidebar (no filter active — full catalog counts)
@@ -262,7 +276,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:space-y-7 sm:px-6 sm:py-9 lg:space-y-4 lg:py-6">
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)] lg:items-start">
-        <div className="relative isolate min-h-[430px] overflow-hidden rounded-[1.75rem] border border-border/60 bg-trunk-brown shadow-soft sm:min-h-[400px] lg:min-h-[320px]">
+        <div className="relative isolate min-h-107.5 overflow-hidden rounded-[1.75rem] border border-border/60 bg-trunk-brown shadow-soft sm:min-h-100 lg:min-h-80">
           <Image
             src={heroPreviewImage}
             alt={previewImages[0]?.name ?? "Sunlit garden saree curation"}
@@ -271,10 +285,10 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
             sizes="(max-width: 1024px) 100vw, 60vw"
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-foreground/90 via-foreground/70 to-foreground/35 lg:bg-gradient-to-r" />
-          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-b from-foreground/90 via-foreground/70 to-foreground/35 lg:bg-linear-to-r" />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-linear-to-t from-black/50 to-transparent" />
 
-          <div className="relative flex min-h-[430px] flex-col justify-between gap-8 p-5 text-white sm:min-h-[400px] sm:p-8 lg:min-h-[320px] lg:p-7">
+          <div className="relative flex min-h-107.5 flex-col justify-between gap-8 p-5 text-white sm:min-h-100 sm:p-8 lg:min-h-80 lg:p-7">
             <div className="max-w-2xl space-y-4 lg:space-y-3">
               <p className="text-xs uppercase tracking-[0.32em] text-primary-foreground/75 sm:tracking-[0.46em]">
                 {cms?.eyebrow ?? "The Collection"}
@@ -293,13 +307,17 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                 <p className="text-[10px] uppercase tracking-[0.18em] text-primary-foreground/65 sm:tracking-[0.24em]">
                   Live pieces
                 </p>
-                <p className="mt-2 font-serif text-3xl text-white">{totalDocs}</p>
+                <p className="mt-2 font-serif text-3xl text-white">
+                  {totalDocs}
+                </p>
               </div>
               <div className="rounded-2xl border border-white/20 bg-white/14 p-3 backdrop-blur-md sm:p-4 lg:p-3">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-primary-foreground/65 sm:tracking-[0.24em]">
                   Edits
                 </p>
-                <p className="mt-2 font-serif text-3xl text-white">{collectionCount}</p>
+                <p className="mt-2 font-serif text-3xl text-white">
+                  {collectionCount}
+                </p>
               </div>
               <div className="col-span-2 rounded-2xl border border-white/20 bg-white/14 p-3 backdrop-blur-md sm:col-span-1 sm:p-4 lg:p-3">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-primary-foreground/65 sm:tracking-[0.24em]">
@@ -322,7 +340,9 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                   Filters
                 </p>
                 <h2 className="mt-1 truncate font-serif text-2xl text-foreground">
-                  {activeCollection?.name ?? cms?.filtersTitle ?? "All collections"}
+                  {activeCollection?.name ??
+                    cms?.filtersTitle ??
+                    "All collections"}
                 </h2>
               </div>
               <div className="rounded-full border border-border/70 bg-background/75 px-3 py-1 text-xs text-muted-foreground">
@@ -400,7 +420,10 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                   {fabricOptions.map(([fab, count]) => (
                     <Link
                       key={fab}
-                      href={buildUrl({ fabric: activeFabric === fab ? undefined : fab, page: 1 })}
+                      href={buildUrl({
+                        fabric: activeFabric === fab ? undefined : fab,
+                        page: 1,
+                      })}
                       className={cn(
                         "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
                         activeFabric === fab
@@ -409,7 +432,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                       )}
                     >
                       {fab}
-                      <span className="ml-1 opacity-60">({count})</span>
+                      <span className="ml-1">({count})</span>
                     </Link>
                   ))}
                 </div>
@@ -429,7 +452,8 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                   { label: "₹50k+", min: 5000000, max: undefined },
                 ].map((range) => {
                   const active =
-                    activePriceMin === range.min && activePriceMax === range.max;
+                    activePriceMin === range.min &&
+                    activePriceMax === range.max;
                   return (
                     <Link
                       key={range.label}
@@ -459,7 +483,10 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
               </p>
               <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                 <Link
-                  href={buildUrl({ availability: !activeAvailability, page: 1 })}
+                  href={buildUrl({
+                    availability: !activeAvailability,
+                    page: 1,
+                  })}
                   className={cn(
                     "shrink-0 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] transition",
                     activeAvailability
@@ -469,7 +496,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                 >
                   In stock
                   {availableCount > 0 ? (
-                    <span className="ml-1 opacity-60">({availableCount})</span>
+                    <span className="ml-1">({availableCount})</span>
                   ) : null}
                 </Link>
               </div>
@@ -499,7 +526,7 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
                         )}
                       >
                         {tagSlug}
-                        <span className="ml-1 opacity-60">({count})</span>
+                        <span className="ml-1">({count})</span>
                       </Link>
                     );
                   })}
@@ -550,7 +577,9 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
           <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
             Current edit
           </p>
-          <h2 className="mt-1 font-serif text-2xl text-foreground">{activeCollectionLabel}</h2>
+          <h2 className="mt-1 font-serif text-2xl text-foreground">
+            {activeCollectionLabel}
+          </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           {items.length} visible now, {totalDocs} total in this view
@@ -582,30 +611,47 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <nav className="flex items-center justify-center gap-2" aria-label="Pagination">
+            <nav
+              className="flex items-center justify-center gap-2"
+              aria-label="Pagination"
+            >
               {currentPage > 1 && (
-                <Button asChild variant="outline" size="sm" className="rounded-full">
-                  <Link href={buildUrl({ page: currentPage - 1 })}>Previous</Link>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                >
+                  <Link href={buildUrl({ page: currentPage - 1 })}>
+                    Previous
+                  </Link>
                 </Button>
               )}
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <Button
-                  key={page}
-                  asChild={page !== currentPage}
-                  variant={page === currentPage ? "default" : "outline"}
-                  size="sm"
-                  className="h-9 w-9 rounded-full p-0"
-                  disabled={page === currentPage}
-                >
-                  {page === currentPage ? (
-                    <span>{page}</span>
-                  ) : (
-                    <Link href={buildUrl({ page })}>{page}</Link>
-                  )}
-                </Button>
-              ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <Button
+                    key={page}
+                    asChild={page !== currentPage}
+                    variant={page === currentPage ? "default" : "outline"}
+                    size="sm"
+                    className="h-9 w-9 rounded-full p-0"
+                    disabled={page === currentPage}
+                  >
+                    {page === currentPage ? (
+                      <span>{page}</span>
+                    ) : (
+                      <Link href={buildUrl({ page })}>{page}</Link>
+                    )}
+                  </Button>
+                ),
+              )}
               {currentPage < totalPages && (
-                <Button asChild variant="outline" size="sm" className="rounded-full">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                >
                   <Link href={buildUrl({ page: currentPage + 1 })}>Next</Link>
                 </Button>
               )}
@@ -619,10 +665,9 @@ export default async function CollectionPage({ searchParams }: CollectionPagePro
 
 // ── In-memory sort (mirrors getProductsByCollection's sort logic) ──────────────
 
-function sortProductsInMemory<T extends { pricePaise: number; createdAt: unknown }>(
-  rows: T[],
-  sort: ProductSortOption
-): T[] {
+function sortProductsInMemory<
+  T extends { pricePaise: number; createdAt: unknown },
+>(rows: T[], sort: ProductSortOption): T[] {
   const createdAtMs = (r: T) => {
     const v = r.createdAt;
     return v instanceof Date ? v.getTime() : Number(v ?? 0);
@@ -631,9 +676,13 @@ function sortProductsInMemory<T extends { pricePaise: number; createdAt: unknown
   const copy = [...rows];
   switch (sort) {
     case "price-low-to-high":
-      return copy.sort((a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b));
+      return copy.sort(
+        (a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b),
+      );
     case "price-high-to-low":
-      return copy.sort((a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b));
+      return copy.sort(
+        (a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b),
+      );
     default:
       return copy.sort(byCreatedDesc);
   }

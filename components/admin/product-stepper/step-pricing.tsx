@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   FormAsyncValidateOrFn,
   FormValidateOrFn,
@@ -27,8 +28,12 @@ import {
 } from "./availability";
 import type { ProductStepperValues } from "./types";
 
-type ProductStepperSyncValidator = FormValidateOrFn<ProductStepperValues> | undefined;
-type ProductStepperAsyncValidator = FormAsyncValidateOrFn<ProductStepperValues> | undefined;
+type ProductStepperSyncValidator =
+  | FormValidateOrFn<ProductStepperValues>
+  | undefined;
+type ProductStepperAsyncValidator =
+  | FormAsyncValidateOrFn<ProductStepperValues>
+  | undefined;
 
 type ProductStepperForm = ReactFormExtendedApi<
   ProductStepperValues,
@@ -65,11 +70,11 @@ const toDateTimeLocalValue = (value: null | string) => {
   if (Number.isNaN(date.getTime())) return "";
 
   const pad = (part: number) => String(part).padStart(2, "0");
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-  ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return (
+    [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join(
+      "-",
+    ) + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
 };
 
 const toIsoTimestamp = (value: string) => {
@@ -78,19 +83,78 @@ const toIsoTimestamp = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
-const getErrorMessage = (error: unknown) => (
-  typeof error === "string" ? error : undefined
-);
+const getErrorMessage = (error: unknown) =>
+  typeof error === "string" ? error : undefined;
 
-const isProductStockStatus = (value: unknown): value is ProductStockStatus => (
-  typeof value === "string" && value in productStockStatusLabels
-);
+const isProductStockStatus = (value: unknown): value is ProductStockStatus =>
+  typeof value === "string" && value in productStockStatusLabels;
 
 const isPublishingStatus = (
-  value: unknown
-): value is ProductStepperValues["status"] => (
-  value === "draft" || value === "published"
-);
+  value: unknown,
+): value is ProductStepperValues["status"] =>
+  value === "draft" || value === "published";
+
+/**
+ * A number input backed by a local string buffer.
+ *
+ * A directly-controlled `type="number"` input can't be cleared: deleting the
+ * leading 0 produces "", `Number("")` is 0, and the controlled value snaps the
+ * text straight back to "0" (decimals break the same way — `Number("12.")` is 12,
+ * so the dot is wiped mid-type). Holding the raw text locally fixes both: the
+ * numeric *model* stays a plain number, but the *displayed text* can be empty,
+ * mid-decimal ("12."), etc.
+ *
+ * External changes to `value` (product load, reset, AI assist) are re-synced into
+ * the text during render — the same "adjust state on prop change" pattern used in
+ * stepper.tsx — so this never calls setState inside an effect.
+ */
+function NumberInput({
+  id,
+  value,
+  onValueChange,
+  onBlur,
+}: {
+  id?: string;
+  value: number;
+  onValueChange: (value: number) => void;
+  onBlur?: () => void;
+}) {
+  const [text, setText] = useState(() => (value === 0 ? "" : String(value)));
+  const [lastValue, setLastValue] = useState(value);
+
+  if (value !== lastValue) {
+    setLastValue(value);
+    const parsed = text.trim() === "" ? 0 : Number(text);
+    // Only overwrite the buffer when `value` changed from outside — not as a
+    // result of our own edit (where the buffer already parses to `value`).
+    if (!Number.isFinite(parsed) || parsed !== value) {
+      setText(value === 0 ? "" : String(value));
+    }
+  }
+
+  return (
+    <Input
+      id={id}
+      inputMode="decimal"
+      onBlur={onBlur}
+      onChange={(event) => {
+        // Allow only digits and a single decimal point.
+        const cleaned = event.target.value.replace(/[^0-9.]/g, "");
+        const dot = cleaned.indexOf(".");
+        const next =
+          dot === -1
+            ? cleaned
+            : cleaned.slice(0, dot + 1) +
+              cleaned.slice(dot + 1).replace(/\./g, "");
+        setText(next);
+        const parsed = next === "" ? 0 : Number(next);
+        if (Number.isFinite(parsed)) onValueChange(parsed);
+      }}
+      type="text"
+      value={text}
+    />
+  );
+}
 
 type AvailabilityFieldsProps = {
   form: ProductStepperForm;
@@ -104,9 +168,11 @@ function AvailabilityFields({
   stockStatus,
 }: AvailabilityFieldsProps) {
   const selectedOption = productStockStatusOptions.find(
-    (option) => option.value === stockStatus
+    (option) => option.value === stockStatus,
   );
-  const reservedUntilLabel = formatAvailabilityTimestamp(form.state.values.reservedUntil);
+  const reservedUntilLabel = formatAvailabilityTimestamp(
+    form.state.values.reservedUntil,
+  );
   const soldAtLabel = formatAvailabilityTimestamp(form.state.values.soldAt);
 
   return (
@@ -163,7 +229,7 @@ function AvailabilityFields({
         >
           {(reservedField) => {
             const reservedUntilError = getErrorMessage(
-              reservedField.state.meta.errors[0]
+              reservedField.state.meta.errors[0],
             );
 
             return (
@@ -176,7 +242,9 @@ function AvailabilityFields({
                   min={toDateTimeLocalValue(new Date().toISOString())}
                   onBlur={reservedField.handleBlur}
                   onChange={(event) =>
-                    reservedField.handleChange(toIsoTimestamp(event.target.value))
+                    reservedField.handleChange(
+                      toIsoTimestamp(event.target.value),
+                    )
                   }
                   type="datetime-local"
                   value={toDateTimeLocalValue(reservedField.state.value)}
@@ -204,9 +272,7 @@ function AvailabilityFields({
   );
 }
 
-export function StepPricing({
-  form,
-}: StepPricingProps) {
+export function StepPricing({ form }: StepPricingProps) {
   const handleStockStatusChange = (stockStatus: ProductStockStatus) => {
     const next = applyStockStatusChange(
       {
@@ -214,7 +280,7 @@ export function StepPricing({
         soldAt: form.state.values.soldAt,
         stockStatus: form.state.values.stockStatus,
       },
-      stockStatus
+      stockStatus,
     );
 
     form.setFieldValue("stockStatus", next.stockStatus);
@@ -229,12 +295,10 @@ export function StepPricing({
           {(field) => (
             <div className="space-y-2">
               <Label htmlFor="price">Price (INR)</Label>
-              <Input
+              <NumberInput
                 id="price"
-                min={0}
                 onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(Number(event.target.value))}
-                type="number"
+                onValueChange={(value) => field.handleChange(value)}
                 value={field.state.value}
               />
             </div>
@@ -245,12 +309,10 @@ export function StepPricing({
           {(field) => (
             <div className="space-y-2">
               <Label htmlFor="original-price">Original price (INR)</Label>
-              <Input
+              <NumberInput
                 id="original-price"
-                min={0}
                 onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(Number(event.target.value))}
-                type="number"
+                onValueChange={(value) => field.handleChange(value)}
                 value={field.state.value}
               />
             </div>
@@ -304,7 +366,9 @@ export function StepPricing({
               <div className="flex h-10 items-center gap-3 rounded-md border px-3">
                 <Switch
                   checked={Boolean(field.state.value)}
-                  onCheckedChange={(checked) => field.handleChange(Boolean(checked))}
+                  onCheckedChange={(checked) =>
+                    field.handleChange(Boolean(checked))
+                  }
                 />
                 <span className="text-sm text-muted-foreground">
                   Highlight in featured collections

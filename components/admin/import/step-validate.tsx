@@ -38,11 +38,15 @@ export function StepValidate() {
               <p className="text-xs text-muted-foreground">Total</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-green-600">{importResult.created}</p>
+              <p className="text-2xl font-semibold text-green-600">
+                {importResult.created}
+              </p>
               <p className="text-xs text-muted-foreground">Created</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-red-600">{importResult.failed}</p>
+              <p className="text-2xl font-semibold text-red-600">
+                {importResult.failed}
+              </p>
               <p className="text-xs text-muted-foreground">Failed</p>
             </div>
           </div>
@@ -64,16 +68,25 @@ export function StepValidate() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex gap-3">
-          <Badge variant="outline" className="gap-1 border-green-300 text-green-700">
+          <Badge
+            variant="outline"
+            className="gap-1 border-green-300 text-green-700"
+          >
             <Check className="h-3 w-3" /> {validCount} valid
           </Badge>
           {warningCount > 0 && (
-            <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700">
+            <Badge
+              variant="outline"
+              className="gap-1 border-amber-300 text-amber-700"
+            >
               <AlertTriangle className="h-3 w-3" /> {warningCount} warnings
             </Badge>
           )}
           {errorCount > 0 && (
-            <Badge variant="outline" className="gap-1 border-red-300 text-red-700">
+            <Badge
+              variant="outline"
+              className="gap-1 border-red-300 text-red-700"
+            >
               <XCircle className="h-3 w-3" /> {errorCount} errors
             </Badge>
           )}
@@ -83,9 +96,7 @@ export function StepValidate() {
           disabled={isProcessing || importableCount === 0}
           className="rounded-full"
         >
-          {isProcessing
-            ? "Importing..."
-            : `Import ${importableCount} Products`}
+          {isProcessing ? "Importing..." : `Import ${importableCount} Products`}
         </Button>
       </div>
 
@@ -96,7 +107,7 @@ export function StepValidate() {
         </p>
       )}
 
-      <div className="max-h-[400px] overflow-y-auto rounded-xl border border-border/70">
+      <div className="max-h-100 overflow-y-auto rounded-xl border border-border/70">
         {validationResults.slice(0, 50).map((row) => (
           <div
             key={row.rowIndex}

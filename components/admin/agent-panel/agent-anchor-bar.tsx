@@ -31,10 +31,11 @@ function ProductPicker() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
-  const { data: products = [], isLoading, error } = useQuery<
-    ProductOption[],
-    Error
-  >({
+  const {
+    data: products = [],
+    isLoading,
+    error,
+  } = useQuery<ProductOption[], Error>({
     queryKey: ["agent-panel", "products"],
     queryFn: async () => {
       const r = await fetch("/api/v2/products?includeDrafts=true&limit=50");
@@ -63,7 +64,7 @@ function ProductPicker() {
           >
             <Package className="h-3 w-3 text-[#777]" />
             {anchoredProductId ? (
-              <span className="max-w-[140px] truncate text-xs font-medium text-[#c9a96e]">
+              <span className="max-w-35 truncate text-xs font-medium text-[#c9a96e]">
                 {anchoredProductName || "Product"}
               </span>
             ) : (
@@ -86,7 +87,7 @@ function ProductPicker() {
       <PopoverContent
         side="top"
         align="start"
-        className="w-[260px] border-[#444] bg-[#222] p-2"
+        className="w-65 border-[#444] bg-[#222] p-2"
       >
         <Input
           value={search}
@@ -94,7 +95,7 @@ function ProductPicker() {
           placeholder="Search products..."
           className="mb-2 h-8 border-[#444] bg-[#1a1a1a] text-xs text-[#e5e5e5] placeholder:text-[#666]"
         />
-        <div className="max-h-[200px] overflow-y-auto">
+        <div className="max-h-50 overflow-y-auto">
           {isLoading ? (
             <p className="py-2 text-center text-xs text-[#666]">Loading...</p>
           ) : loadError ? (
@@ -203,10 +204,18 @@ export function AgentAnchorBar() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-[#444] bg-[#222]">
-              <SelectItem value="low" className="text-xs text-[#ccc]">Low</SelectItem>
-              <SelectItem value="medium" className="text-xs text-[#ccc]">Medium</SelectItem>
-              <SelectItem value="high" className="text-xs text-[#ccc]">High</SelectItem>
-              <SelectItem value="max" className="text-xs text-[#ccc]">Max</SelectItem>
+              <SelectItem value="low" className="text-xs text-[#ccc]">
+                Low
+              </SelectItem>
+              <SelectItem value="medium" className="text-xs text-[#ccc]">
+                Medium
+              </SelectItem>
+              <SelectItem value="high" className="text-xs text-[#ccc]">
+                High
+              </SelectItem>
+              <SelectItem value="max" className="text-xs text-[#ccc]">
+                Max
+              </SelectItem>
             </SelectContent>
           </Select>
         )}

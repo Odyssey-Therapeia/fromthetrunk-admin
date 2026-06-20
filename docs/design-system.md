@@ -19,7 +19,7 @@ All semantic colors are declared in `app/globals.css` as CSS custom properties o
 | `--card-foreground` | `#2e2017` | Text on cards |
 | `--popover` | `#faf6f0` | Popover surface |
 | `--popover-foreground` | `#2e2017` | Text in popovers |
-| `--primary` | `#6b1d1d` | Brand burgundy — primary actions |
+| `--primary` | `#4b2626` | Brand maroon — primary actions |
 | `--primary-foreground` | `#f9f5ed` | Text on primary surfaces |
 | `--secondary` | `#e9e0d2` | Secondary surfaces |
 | `--secondary-foreground` | `#2e2017` | Text on secondary |
@@ -31,20 +31,20 @@ All semantic colors are declared in `app/globals.css` as CSS custom properties o
 | `--destructive-foreground` | `#ffffff` | Text on destructive |
 | `--border` | `#dccbb7` | Border / divider |
 | `--input` | `#dccbb7` | Input border |
-| `--ring` | `#6b1d1d` | Focus ring |
-| `--chart-1` | `#6b1d1d` | Chart series 1 |
+| `--ring` | `#4b2626` | Focus ring |
+| `--chart-1` | `#4b2626` | Chart series 1 |
 | `--chart-2` | `#b8860b` | Chart series 2 |
 | `--chart-3` | `#3d2b1f` | Chart series 3 |
 | `--chart-4` | `#d7bfa6` | Chart series 4 |
 | `--chart-5` | `#7b5a45` | Chart series 5 |
 | `--sidebar` | `#f6f1ea` | Admin sidebar background |
 | `--sidebar-foreground` | `#2e2017` | Admin sidebar text |
-| `--sidebar-primary` | `#6b1d1d` | Admin sidebar active item |
+| `--sidebar-primary` | `#4b2626` | Admin sidebar active item |
 | `--sidebar-primary-foreground` | `#f9f5ed` | Text on sidebar primary |
 | `--sidebar-accent` | `#e9e0d2` | Admin sidebar hover |
 | `--sidebar-accent-foreground` | `#2e2017` | Text on sidebar accent |
 | `--sidebar-border` | `#dccbb7` | Admin sidebar border |
-| `--sidebar-ring` | `#6b1d1d` | Admin sidebar focus ring |
+| `--sidebar-ring` | `#4b2626` | Admin sidebar focus ring |
 
 ### 1.2 Tailwind `@theme inline` color aliases
 
@@ -73,10 +73,10 @@ The config adds a `trunk` key for use as `text-trunk-*` / `bg-trunk-*`. These ar
 
 | Utility class | Value |
 |---|---|
-| `trunk-burgundy` | `#6B1D1D` |
+| `trunk-burgundy` | `#4B2626` |
 | `trunk-gold` | `#B8860B` |
 | `trunk-cream` | `#F5F0E8` |
-| `trunk-brown` | `#3D2B1F` |
+| `trunk-brown` | `#3C0C0F` |
 
 Note: the semantic tokens (`--primary`, `--accent`, `--background`) are preferred over these static aliases in component code.
 

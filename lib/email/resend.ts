@@ -14,4 +14,4 @@ export function getResendClient(): Resend {
 }
 
 export const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || "From the Trunk <hello@fromthetrunk.com>";
+  process.env.RESEND_FROM_EMAIL || "From the Trunk <hello@fromthetrunk.shop>";

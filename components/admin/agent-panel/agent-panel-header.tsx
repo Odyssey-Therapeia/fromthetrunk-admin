@@ -1,7 +1,5 @@
 "use client";
-
 import { History, MoreVertical, Plus, Sparkles, X } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,17 +9,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAgentStore } from "@/lib/store/agent-store";
 
-type AgentPanelHeaderProps = {
-  onToggleHistory: () => void;
-};
-
-export function AgentPanelHeader({ onToggleHistory }: AgentPanelHeaderProps) {
-  const { newChat, close } = useAgentStore();
+export function AgentPanelHeader() {
+  // Read each action individually so the header subscribes only to stable action
+  // references (they never change identity) instead of the whole store. This
+  // keeps the header from re-rendering on every streamed token / setting change,
+  // and removes the prop-drilled `onToggleHistory` that tripped the Next.js
+  // "props must be serializable" check at this client-entry boundary.
+  const newChat = useAgentStore((s) => s.newChat);
+  const close = useAgentStore((s) => s.close);
+  const toggleHistory = useAgentStore((s) => s.toggleHistory);
 
   return (
     <div className="flex items-center gap-3 border-b border-[#333] px-4 py-3">
       {/* Branded icon + title */}
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6B1D1D]">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4B2626]">
         <Sparkles className="h-4 w-4 text-[#c9a96e]" />
       </div>
       <div className="min-w-0 flex-1">
@@ -30,7 +31,6 @@ export function AgentPanelHeader({ onToggleHistory }: AgentPanelHeaderProps) {
           Curator Intelligence
         </p>
       </div>
-
       {/* Menu + close */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -54,7 +54,7 @@ export function AgentPanelHeader({ onToggleHistory }: AgentPanelHeaderProps) {
             New Chat
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={onToggleHistory}
+            onClick={() => toggleHistory()}
             className="gap-2 text-xs focus:bg-[#333] focus:text-[#e5e5e5]"
           >
             <History className="h-3.5 w-3.5" />
@@ -62,7 +62,6 @@ export function AgentPanelHeader({ onToggleHistory }: AgentPanelHeaderProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
       <Button
         onClick={close}
         size="icon"

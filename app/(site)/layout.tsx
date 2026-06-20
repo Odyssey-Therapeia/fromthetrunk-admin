@@ -61,17 +61,26 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   other: {
-    "theme-color": "#6b1d1d",
+    "theme-color": "#4b2626",
   },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
-      {/* P3-07: Inject active theme tokens as :root CSS custom-property overrides.
-          When no theme is saved, ThemeStyler returns null and globals.css defaults apply. */}
-      <ThemeStyler />
-      <body className="bg-background font-sans text-foreground">
+    <html
+      lang="en"
+      className={`${serif.variable} ${sans.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        {/* P3-07: Inject active theme tokens as :root CSS custom-property overrides.
+            When no theme is saved, ThemeStyler returns null and globals.css defaults apply. */}
+        <ThemeStyler />
+      </head>
+      <body
+        className="bg-background font-sans text-foreground"
+        suppressHydrationWarning
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -81,7 +90,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* Skip to content link for keyboard navigation */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-6 focus:py-3 focus:text-primary-foreground focus:shadow-lg"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-100 focus:rounded-full focus:bg-primary focus:px-6 focus:py-3 focus:text-primary-foreground focus:shadow-lg"
         >
           Skip to main content
         </a>

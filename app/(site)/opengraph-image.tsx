@@ -7,64 +7,63 @@ export const contentType = "image/png";
 
 export default function OGImage() {
   return new ImageResponse(
-    (
+    <div
+      style={{
+        background:
+          "linear-gradient(135deg, #3C0C0F 0%, #4B2626 50%, #B8860B 100%)",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "60px",
+      }}
+    >
       <div
         style={{
-          background: "linear-gradient(135deg, #3D2B1F 0%, #6B1D1D 50%, #B8860B 100%)",
-          width: "100%",
-          height: "100%",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          padding: "60px",
+          gap: "24px",
         }}
       >
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "24px",
+            fontSize: "24px",
+            letterSpacing: "0.4em",
+            textTransform: "uppercase" as const,
+            color: "rgba(245, 240, 232, 0.6)",
           }}
         >
-          <div
-            style={{
-              fontSize: "24px",
-              letterSpacing: "0.4em",
-              textTransform: "uppercase" as const,
-              color: "rgba(245, 240, 232, 0.6)",
-            }}
-          >
-            From the Trunk
-          </div>
-          <div
-            style={{
-              fontSize: "56px",
-              fontFamily: "Georgia, serif",
-              color: "#F5F0E8",
-              textAlign: "center",
-              lineHeight: 1.2,
-              maxWidth: "800px",
-            }}
-          >
-            Pre-Loved Luxury Sarees with Provenance
-          </div>
-          <div
-            style={{
-              fontSize: "20px",
-              color: "rgba(245, 240, 232, 0.7)",
-              textAlign: "center",
-              maxWidth: "600px",
-              lineHeight: 1.5,
-            }}
-          >
-            Curated heirloom pieces, authenticated and restored with care.
-            Each carrying the story that made it timeless.
-          </div>
+          From the Trunk
+        </div>
+        <div
+          style={{
+            fontSize: "56px",
+            fontFamily: "Georgia, serif",
+            color: "#F5F0E8",
+            textAlign: "center",
+            lineHeight: 1.2,
+            maxWidth: "800px",
+          }}
+        >
+          Pre-Loved Luxury Sarees with Provenance
+        </div>
+        <div
+          style={{
+            fontSize: "20px",
+            color: "rgba(245, 240, 232, 0.7)",
+            textAlign: "center",
+            maxWidth: "600px",
+            lineHeight: 1.5,
+          }}
+        >
+          Curated heirloom pieces, authenticated and restored with care. Each
+          carrying the story that made it timeless.
         </div>
       </div>
-    ),
-    { ...size }
+    </div>,
+    { ...size },
   );
 }

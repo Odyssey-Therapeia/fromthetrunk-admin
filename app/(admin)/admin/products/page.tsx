@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -61,7 +61,9 @@ const readApiErrorMessage = async (response: Response, fallback: string) => {
 const deleteProductById = async (id: string) => {
   const response = await fetch(`/api/v2/products/${id}`, { method: "DELETE" });
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, "Failed to delete product."));
+    throw new Error(
+      await readApiErrorMessage(response, "Failed to delete product."),
+    );
   }
 };
 
@@ -137,7 +139,12 @@ function BulkTagMenuItem({
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <Button size="sm" type="submit" variant="secondary" className="h-7 shrink-0 rounded-md px-2 text-xs">
+        <Button
+          size="sm"
+          type="submit"
+          variant="secondary"
+          className="h-7 shrink-0 rounded-md px-2 text-xs"
+        >
           Apply
         </Button>
       </div>
@@ -155,7 +162,7 @@ function StatPill({
   value: number;
 }) {
   return (
-    <div className="flex min-w-[132px] items-center gap-3 rounded-xl border border-border/70 bg-background/70 px-3 py-2 shadow-sm">
+    <div className="flex min-w-33 items-center gap-3 rounded-xl border border-border/70 bg-background/70 px-3 py-2 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <Icon className="h-4 w-4" />
       </div>
@@ -202,7 +209,11 @@ export default function AdminProductsPage() {
   // Guard against duplicate click-throughs
   const duplicatingRef = useRef<Set<string>>(new Set());
 
-  const { data: products, isLoading, refetch } = useProducts({
+  const {
+    data: products,
+    isLoading,
+    refetch,
+  } = useProducts({
     search,
     status,
     stockStatus,
@@ -224,9 +235,14 @@ export default function AdminProductsPage() {
   );
   const stats = useMemo(
     () => ({
-      drafts: baseProducts.filter((product) => product.status === "draft").length,
-      missingCover: baseProducts.filter((product) => !product.coverImageFilename).length,
-      published: baseProducts.filter((product) => product.status === "published").length,
+      drafts: baseProducts.filter((product) => product.status === "draft")
+        .length,
+      missingCover: baseProducts.filter(
+        (product) => !product.coverImageFilename,
+      ).length,
+      published: baseProducts.filter(
+        (product) => product.status === "published",
+      ).length,
       total: baseProducts.length,
     }),
     [baseProducts],
@@ -235,19 +251,27 @@ export default function AdminProductsPage() {
     () => new Set(visibleProducts.map((product) => product.id)),
     [visibleProducts],
   );
-  const selectedCount = selectedProductIds.size;
+
+  // `selectedProductIds` holds the user's raw intent (every product they've ticked).
+  // The *effective* selection is that set intersected with what's currently visible.
+  // We DERIVE it during render rather than pruning selection state inside an effect:
+  //   - removes the "setState inside an effect → cascading render" warning, and
+  //   - makes selections sticky across search/filter/sort changes (a product you
+  //     selected, then filtered out of view, then bring back is still selected).
+  // Every consumer below (count, bulk ops, export, grid) reads the EFFECTIVE set so
+  // that actions always match the count shown in the toolbar.
+  const effectiveSelectedIds = useMemo(() => {
+    const next = new Set<string>();
+    for (const id of selectedProductIds) {
+      if (visibleProductIds.has(id)) next.add(id);
+    }
+    return next;
+  }, [selectedProductIds, visibleProductIds]);
+
+  const selectedCount = effectiveSelectedIds.size;
   const allVisibleSelected =
     visibleProducts.length > 0 &&
     visibleProducts.every((product) => selectedProductIds.has(product.id));
-
-  useEffect(() => {
-    setSelectedProductIds((current) => {
-      const next = new Set(
-        Array.from(current).filter((id) => visibleProductIds.has(id)),
-      );
-      return next.size === current.size ? current : next;
-    });
-  }, [visibleProductIds]);
 
   const removeProductsFromCurrentCache = useCallback(
     (ids: string[]) => {
@@ -316,7 +340,9 @@ export default function AdminProductsPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      const productName = visibleProducts.find((product) => product.id === id)?.name;
+      const productName = visibleProducts.find(
+        (product) => product.id === id,
+      )?.name;
       if (!confirm(`Delete ${productName ?? "this product"}?`)) return;
 
       // Optimistic removal -- remove from cache immediately
@@ -344,88 +370,92 @@ export default function AdminProductsPage() {
     [refetch, queryClient, removeProductsFromCurrentCache, visibleProducts],
   );
 
-  const handleBulkDelete = useCallback(
-    async () => {
-      if (selectedProductIds.size === 0) return;
+  const handleBulkDelete = useCallback(async () => {
+    if (effectiveSelectedIds.size === 0) return;
 
-      const ids = Array.from(selectedProductIds);
-      const selectedProducts = visibleProducts.filter((product) =>
-        selectedProductIds.has(product.id),
+    const ids = Array.from(effectiveSelectedIds);
+    const selectedProducts = visibleProducts.filter((product) =>
+      effectiveSelectedIds.has(product.id),
+    );
+    const confirmMessage =
+      ids.length === 1
+        ? `Delete ${selectedProducts[0]?.name ?? "this product"}?`
+        : `Delete ${ids.length} selected products?`;
+
+    if (!confirm(confirmMessage)) return;
+
+    setIsBulkDeleting(true);
+    removeProductsFromCurrentCache(ids);
+    setSelectedProductIds(new Set());
+
+    const results = await Promise.allSettled(
+      ids.map((id) => deleteProductById(id)),
+    );
+    const failed = results.filter(
+      (result) => result.status === "rejected",
+    ).length;
+    const deletedCount = ids.length - failed;
+
+    if (failed > 0) {
+      toast.error(
+        failed === ids.length
+          ? "Failed to delete selected products."
+          : `Deleted ${deletedCount}; ${failed} failed.`,
       );
-      const confirmMessage =
-        ids.length === 1
-          ? `Delete ${selectedProducts[0]?.name ?? "this product"}?`
-          : `Delete ${ids.length} selected products?`;
-
-      if (!confirm(confirmMessage)) return;
-
-      setIsBulkDeleting(true);
-      removeProductsFromCurrentCache(ids);
-      setSelectedProductIds(new Set());
-
-      const results = await Promise.allSettled(ids.map((id) => deleteProductById(id)));
-      const failed = results.filter((result) => result.status === "rejected").length;
-      const deletedCount = ids.length - failed;
-
-      if (failed > 0) {
-        toast.error(
-          failed === ids.length
-            ? "Failed to delete selected products."
-            : `Deleted ${deletedCount}; ${failed} failed.`,
-        );
-        void refetch();
-      } else {
-        toast.success(
-          deletedCount === 1
-            ? "Product deleted."
-            : `${deletedCount} products deleted.`,
-        );
-      }
-
-      void queryClient.invalidateQueries({
-        queryKey: ["admin", "products"],
-        exact: false,
-      });
-      setIsBulkDeleting(false);
-    },
-    [
-      queryClient,
-      refetch,
-      removeProductsFromCurrentCache,
-      selectedProductIds,
-      visibleProducts,
-    ],
-  );
-
-  const handleExport = useCallback(async (selectionOnly = false) => {
-    try {
-      // Use the real CSV export route (P4-06) which includes attributes + tags + collections
-      let url = "/api/v2/products/export.csv?includeDrafts=true";
-      if (selectionOnly && selectedProductIds.size > 0) {
-        url += `&productIds=${Array.from(selectedProductIds).join(",")}`;
-      }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Export failed");
-      const csv = await res.text();
-
-      const blob = new Blob([csv], { type: "text/csv" });
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = "ftt-products-export.csv";
-      a.click();
-      URL.revokeObjectURL(objectUrl);
-      toast.success("Products exported");
-    } catch {
-      toast.error("Export failed");
+      void refetch();
+    } else {
+      toast.success(
+        deletedCount === 1
+          ? "Product deleted."
+          : `${deletedCount} products deleted.`,
+      );
     }
-  }, [selectedProductIds]);
+
+    void queryClient.invalidateQueries({
+      queryKey: ["admin", "products"],
+      exact: false,
+    });
+    setIsBulkDeleting(false);
+  }, [
+    queryClient,
+    refetch,
+    removeProductsFromCurrentCache,
+    effectiveSelectedIds,
+    visibleProducts,
+  ]);
+
+  const handleExport = useCallback(
+    async (selectionOnly = false) => {
+      try {
+        // Use the real CSV export route (P4-06) which includes attributes + tags + collections
+        let url = "/api/v2/products/export.csv?includeDrafts=true";
+        if (selectionOnly && effectiveSelectedIds.size > 0) {
+          url += `&productIds=${Array.from(effectiveSelectedIds).join(",")}`;
+        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Export failed");
+        const csv = await res.text();
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = "ftt-products-export.csv";
+        a.click();
+        URL.revokeObjectURL(objectUrl);
+        toast.success("Products exported");
+      } catch {
+        toast.error("Export failed");
+      }
+    },
+    [effectiveSelectedIds],
+  );
 
   const handleBulkSetStatus = useCallback(
     async (newStatus: "draft" | "published") => {
-      if (selectedProductIds.size === 0) return;
+      if (effectiveSelectedIds.size === 0) return;
 
-      const ids = Array.from(selectedProductIds);
+      const ids = Array.from(effectiveSelectedIds);
       setIsBulkEditing(true);
 
       try {
@@ -434,14 +464,20 @@ export default function AdminProductsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ productIds: ids, status: newStatus }),
         });
-        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk edit failed"));
+        if (!res.ok)
+          throw new Error(await readApiErrorMessage(res, "Bulk edit failed"));
         const data = (await res.json()) as { updated: number; failed: number };
         if (data.failed > 0) {
           toast.warning(`Updated ${data.updated}; ${data.failed} failed`);
         } else {
-          toast.success(`${data.updated} product${data.updated === 1 ? "" : "s"} set to ${newStatus}`);
+          toast.success(
+            `${data.updated} product${data.updated === 1 ? "" : "s"} set to ${newStatus}`,
+          );
         }
-        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        void queryClient.invalidateQueries({
+          queryKey: ["admin", "products"],
+          exact: false,
+        });
         clearSelection();
       } catch {
         toast.error("Bulk status update failed");
@@ -449,14 +485,14 @@ export default function AdminProductsPage() {
         setIsBulkEditing(false);
       }
     },
-    [selectedProductIds, queryClient, clearSelection],
+    [effectiveSelectedIds, queryClient, clearSelection],
   );
 
   /** P4-06: Bulk add/remove products from a collection. */
   const handleBulkCollectionOp = useCallback(
     async (collectionId: string, op: "add" | "remove") => {
-      if (selectedProductIds.size === 0) return;
-      const ids = Array.from(selectedProductIds);
+      if (effectiveSelectedIds.size === 0) return;
+      const ids = Array.from(effectiveSelectedIds);
       setIsBulkEditing(true);
       try {
         const body =
@@ -468,16 +504,24 @@ export default function AdminProductsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk collection update failed"));
+        if (!res.ok)
+          throw new Error(
+            await readApiErrorMessage(res, "Bulk collection update failed"),
+          );
         const data = (await res.json()) as { updated: number; failed: number };
         if (data.failed > 0) {
-          toast.warning(`Collection updated for ${data.updated}; ${data.failed} failed`);
+          toast.warning(
+            `Collection updated for ${data.updated}; ${data.failed} failed`,
+          );
         } else {
           toast.success(
-            `${data.updated} product${data.updated === 1 ? "" : "s"} ${op === "add" ? "added to" : "removed from"} collection`
+            `${data.updated} product${data.updated === 1 ? "" : "s"} ${op === "add" ? "added to" : "removed from"} collection`,
           );
         }
-        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        void queryClient.invalidateQueries({
+          queryKey: ["admin", "products"],
+          exact: false,
+        });
         clearSelection();
       } catch {
         toast.error("Bulk collection update failed");
@@ -485,14 +529,14 @@ export default function AdminProductsPage() {
         setIsBulkEditing(false);
       }
     },
-    [selectedProductIds, queryClient, clearSelection],
+    [effectiveSelectedIds, queryClient, clearSelection],
   );
 
   /** P4-06: Bulk add/remove tags by tag IDs for all selected products. */
   const handleBulkTagOp = useCallback(
     async (tagIds: number[], op: "add" | "remove") => {
-      if (selectedProductIds.size === 0 || tagIds.length === 0) return;
-      const ids = Array.from(selectedProductIds);
+      if (effectiveSelectedIds.size === 0 || tagIds.length === 0) return;
+      const ids = Array.from(effectiveSelectedIds);
       setIsBulkEditing(true);
       try {
         const body =
@@ -504,16 +548,24 @@ export default function AdminProductsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Bulk tag update failed"));
+        if (!res.ok)
+          throw new Error(
+            await readApiErrorMessage(res, "Bulk tag update failed"),
+          );
         const data = (await res.json()) as { updated: number; failed: number };
         if (data.failed > 0) {
-          toast.warning(`Tags updated for ${data.updated}; ${data.failed} failed`);
+          toast.warning(
+            `Tags updated for ${data.updated}; ${data.failed} failed`,
+          );
         } else {
           toast.success(
-            `Tags ${op === "add" ? "added to" : "removed from"} ${data.updated} product${data.updated === 1 ? "" : "s"}`
+            `Tags ${op === "add" ? "added to" : "removed from"} ${data.updated} product${data.updated === 1 ? "" : "s"}`,
           );
         }
-        void queryClient.invalidateQueries({ queryKey: ["admin", "products"], exact: false });
+        void queryClient.invalidateQueries({
+          queryKey: ["admin", "products"],
+          exact: false,
+        });
         clearSelection();
       } catch {
         toast.error("Bulk tag update failed");
@@ -521,7 +573,7 @@ export default function AdminProductsPage() {
         setIsBulkEditing(false);
       }
     },
-    [selectedProductIds, queryClient, clearSelection],
+    [effectiveSelectedIds, queryClient, clearSelection],
   );
 
   return (
@@ -532,16 +584,30 @@ export default function AdminProductsPage() {
             <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
               Catalog
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">Products</h2>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+              Products
+            </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               Manage your saree catalog.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 @3xl:grid-cols-4">
-            <StatPill icon={Package} label="Shown" value={visibleProducts.length} />
-            <StatPill icon={CheckCircle2} label="Live" value={stats.published} />
+            <StatPill
+              icon={Package}
+              label="Shown"
+              value={visibleProducts.length}
+            />
+            <StatPill
+              icon={CheckCircle2}
+              label="Live"
+              value={stats.published}
+            />
             <StatPill icon={Sparkles} label="Draft" value={stats.drafts} />
-            <StatPill icon={ImageOff} label="No Cover" value={stats.missingCover} />
+            <StatPill
+              icon={ImageOff}
+              label="No Cover"
+              value={stats.missingCover}
+            />
           </div>
         </div>
       </div>
@@ -653,12 +719,17 @@ export default function AdminProductsPage() {
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                  <DropdownMenuContent
+                    align="end"
+                    className="max-h-60 overflow-y-auto"
+                  >
                     {collectionsData?.map((col) => (
                       <div key={col.id}>
                         <DropdownMenuItem
                           data-testid={`bulk-add-collection-${col.id}`}
-                          onClick={() => void handleBulkCollectionOp(col.id, "add")}
+                          onClick={() =>
+                            void handleBulkCollectionOp(col.id, "add")
+                          }
                           className="gap-2"
                         >
                           <FolderPlus className="h-4 w-4 text-green-600" />
@@ -666,7 +737,9 @@ export default function AdminProductsPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           data-testid={`bulk-remove-collection-${col.id}`}
-                          onClick={() => void handleBulkCollectionOp(col.id, "remove")}
+                          onClick={() =>
+                            void handleBulkCollectionOp(col.id, "remove")
+                          }
                           className="gap-2"
                         >
                           <FolderMinus className="h-4 w-4 text-muted-foreground" />
@@ -727,18 +800,24 @@ export default function AdminProductsPage() {
         <div
           className={cn(
             "grid",
-            viewMode === "gallery" && "grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3",
-            viewMode === "cards" && "grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4",
-            viewMode === "compact" && "grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+            viewMode === "gallery" &&
+              "grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3",
+            viewMode === "cards" &&
+              "grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4",
+            viewMode === "compact" &&
+              "grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
             viewMode === "list" && "grid-cols-1 gap-2",
           )}
         >
           {Array.from({ length: 8 }, (_, i) => (
-            <div key={`product-skeleton-${i}`} className="rounded-xl border border-border/70 bg-card/85 p-0">
+            <div
+              key={`product-skeleton-${i}`}
+              className="rounded-xl border border-border/70 bg-card/85 p-0"
+            >
               <Skeleton
                 className={cn(
                   "w-full rounded-t-xl",
-                  viewMode === "gallery" ? "aspect-[5/4]" : "aspect-[3/4]",
+                  viewMode === "gallery" ? "aspect-5/4" : "aspect-3/4",
                   viewMode === "list" && "h-24",
                 )}
               />
@@ -756,7 +835,7 @@ export default function AdminProductsPage() {
       ) : (
         <ProductsGrid
           products={visibleProducts}
-          selectedIds={selectedProductIds}
+          selectedIds={effectiveSelectedIds}
           viewMode={viewMode}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}

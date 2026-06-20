@@ -1,4 +1,16 @@
-import { and, asc, count, desc, eq, ilike, inArray, like, ne, or, SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  like,
+  ne,
+  or,
+  SQL,
+} from "drizzle-orm";
 import { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import { db, withRetry } from "@/db";
@@ -13,7 +25,10 @@ import {
   productTags,
   tags,
 } from "@/db/schema";
-import { DEFAULT_PRODUCT_SORT, type ProductSortOption } from "@/lib/products/sort";
+import {
+  DEFAULT_PRODUCT_SORT,
+  type ProductSortOption,
+} from "@/lib/products/sort";
 import { slugify } from "@/lib/utils";
 
 type CollectionRecord = InferSelectModel<typeof collections>;
@@ -70,18 +85,27 @@ const getProductSortOrder = (sort: ProductSortOption): SQL<unknown>[] => {
 };
 
 /** @internal exported for use by the postgres-catalog-search adapter (P4-04) */
-export const hydrateProducts = async (rows: ProductRecord[]): Promise<ProductWithRelations[]> => {
+export const hydrateProducts = async (
+  rows: ProductRecord[],
+): Promise<ProductWithRelations[]> => {
   if (rows.length === 0) return [];
 
   const productIds = rows.map((row) => row.id);
   const collectionIds = Array.from(
-    new Set(rows.map((row) => row.collectionId).filter((value): value is string => Boolean(value)))
+    new Set(
+      rows
+        .map((row) => row.collectionId)
+        .filter((value): value is string => Boolean(value)),
+    ),
   );
 
   const [collectionRows, imageRows, tagRows] = await withRetry(() =>
     Promise.all([
       collectionIds.length > 0
-        ? db.select().from(collections).where(inArray(collections.id, collectionIds))
+        ? db
+            .select()
+            .from(collections)
+            .where(inArray(collections.id, collectionIds))
         : Promise.resolve([] as CollectionRecord[]),
       db
         .select({
@@ -101,7 +125,7 @@ export const hydrateProducts = async (rows: ProductRecord[]): Promise<ProductWit
         .from(productTags)
         .innerJoin(tags, eq(productTags.tagId, tags.id))
         .where(inArray(productTags.productId, productIds)),
-    ])
+    ]),
   );
 
   const collectionById = new Map(collectionRows.map((row) => [row.id, row]));
@@ -131,7 +155,9 @@ export const hydrateProducts = async (rows: ProductRecord[]): Promise<ProductWit
 
   return rows.map((row) => ({
     ...row,
-    collection: row.collectionId ? collectionById.get(row.collectionId) ?? null : null,
+    collection: row.collectionId
+      ? (collectionById.get(row.collectionId) ?? null)
+      : null,
     images: imagesByProductId.get(row.id) ?? [],
     tags: tagsByProductId.get(row.id) ?? [],
   }));
@@ -146,7 +172,7 @@ const replaceProductImages = async (productId: string, mediaIds: string[]) => {
       productId,
       mediaId,
       sortOrder: index,
-    }))
+    })),
   );
 };
 
@@ -154,10 +180,14 @@ const replaceProductTags = async (productId: string, tagIds: number[]) => {
   await db.delete(productTags).where(eq(productTags.productId, productId));
   if (tagIds.length === 0) return;
 
-  await db.insert(productTags).values(tagIds.map((tagId) => ({ productId, tagId })));
+  await db
+    .insert(productTags)
+    .values(tagIds.map((tagId) => ({ productId, tagId })));
 };
 
-export const listProducts = async (options: ListProductsOptions = {}): Promise<{ rows: ProductWithRelations[]; totalCount: number }> => {
+export const listProducts = async (
+  options: ListProductsOptions = {},
+): Promise<{ rows: ProductWithRelations[]; totalCount: number }> => {
   const {
     includeDrafts = false,
     limit = 200,
@@ -181,19 +211,21 @@ export const listProducts = async (options: ListProductsOptions = {}): Promise<{
       return query.orderBy(...getProductSortOrder(sort));
     }),
     withRetry(() =>
-      db
-        .select({ total: count() })
-        .from(products)
-        .where(whereClause)
+      db.select({ total: count() }).from(products).where(whereClause),
     ),
   ]);
 
-  return { rows: await hydrateProducts(rows), totalCount: countResult?.total ?? 0 };
+  return {
+    rows: await hydrateProducts(rows),
+    totalCount: countResult?.total ?? 0,
+  };
 };
 
-export const getProduct = async (productId: string): Promise<null | ProductWithRelations> => {
+export const getProduct = async (
+  productId: string,
+): Promise<null | ProductWithRelations> => {
   const [row] = await withRetry(() =>
-    db.select().from(products).where(eq(products.id, productId)).limit(1)
+    db.select().from(products).where(eq(products.id, productId)).limit(1),
   );
   if (!row) return null;
   const [hydrated] = await hydrateProducts([row]);
@@ -202,7 +234,7 @@ export const getProduct = async (productId: string): Promise<null | ProductWithR
 
 export const getProductBySlug = async (
   slug: string,
-  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+  options: Pick<ListProductsOptions, "includeDrafts"> = {},
 ): Promise<null | ProductWithRelations> => {
   const candidates = [...new Set([slug, slugify(slug)])];
 
@@ -212,7 +244,7 @@ export const getProductBySlug = async (
       ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
     ]);
     const [row] = await withRetry(() =>
-      db.select().from(products).where(whereClause).limit(1)
+      db.select().from(products).where(whereClause).limit(1),
     );
     if (row) {
       const [hydrated] = await hydrateProducts([row]);
@@ -224,7 +256,7 @@ export const getProductBySlug = async (
 
 export const productSlugExists = async (
   slug: string,
-  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+  options: Pick<ListProductsOptions, "includeDrafts"> = {},
 ): Promise<boolean> => {
   const candidates = [...new Set([slug, slugify(slug)])];
 
@@ -234,7 +266,7 @@ export const productSlugExists = async (
       ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
     ]);
     const [row] = await withRetry(() =>
-      db.select({ id: products.id }).from(products).where(whereClause).limit(1)
+      db.select({ id: products.id }).from(products).where(whereClause).limit(1),
     );
     if (row) return true;
   }
@@ -243,13 +275,9 @@ export const productSlugExists = async (
 };
 
 export const getFeaturedProducts = async (
-  options: ListProductsOptions = {}
+  options: ListProductsOptions = {},
 ): Promise<ProductWithRelations[]> => {
-  const {
-    includeDrafts = false,
-    limit = 4,
-    offset = 0,
-  } = options;
+  const { includeDrafts = false, limit = 4, offset = 0 } = options;
 
   const whereClause = buildWhere([
     eq(products.featured, true),
@@ -263,7 +291,7 @@ export const getFeaturedProducts = async (
       .where(whereClause)
       .orderBy(desc(products.createdAt))
       .limit(limit)
-      .offset(offset)
+      .offset(offset),
   );
 
   return hydrateProducts(rows);
@@ -272,7 +300,7 @@ export const getFeaturedProducts = async (
 export const searchProducts = async (
   query: string,
   limit = 48,
-  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+  options: Pick<ListProductsOptions, "includeDrafts"> = {},
 ): Promise<ProductWithRelations[]> => {
   const keyword = `%${query}%`;
   const whereClause = buildWhere([
@@ -281,7 +309,7 @@ export const searchProducts = async (
       ilike(products.detailsFabric, keyword),
       ilike(products.detailsDesigner, keyword),
       ilike(products.storyEra, keyword),
-      ilike(products.storyProvenance, keyword)
+      ilike(products.storyProvenance, keyword),
     ) as SQL<unknown>,
     ...(options.includeDrafts ? [] : [eq(products.status, "published")]),
   ]);
@@ -292,7 +320,7 @@ export const searchProducts = async (
       .from(products)
       .where(whereClause)
       .orderBy(desc(products.createdAt))
-      .limit(limit)
+      .limit(limit),
   );
 
   return hydrateProducts(rows);
@@ -311,7 +339,7 @@ export const searchProducts = async (
  */
 export const getProductsByIds = async (
   ids: string[],
-  options: Pick<ListProductsOptions, "includeDrafts"> = {}
+  options: Pick<ListProductsOptions, "includeDrafts"> = {},
 ): Promise<ProductWithRelations[]> => {
   if (ids.length === 0) return [];
 
@@ -321,7 +349,7 @@ export const getProductsByIds = async (
   ]);
 
   const rows = await withRetry(() =>
-    db.select().from(products).where(whereClause)
+    db.select().from(products).where(whereClause),
   );
 
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -347,7 +375,7 @@ export const getProductsByIds = async (
  */
 export const getProductsByCollection = async (
   collectionSlug: string,
-  options: ListProductsOptions = {}
+  options: ListProductsOptions = {},
 ): Promise<{ rows: ProductWithRelations[]; totalCount: number }> => {
   const {
     includeDrafts = false,
@@ -361,7 +389,7 @@ export const getProductsByCollection = async (
       .select({ id: collections.id, rules: collections.rules })
       .from(collections)
       .where(eq(collections.slug, collectionSlug))
-      .limit(1)
+      .limit(1),
   );
 
   if (!collection) return { rows: [], totalCount: 0 };
@@ -385,7 +413,7 @@ export const getProductsByCollection = async (
  */
 const sortProductsInMemory = (
   rows: ProductWithRelations[],
-  sort: ProductSortOption
+  sort: ProductSortOption,
 ): ProductWithRelations[] => {
   const byCreatedDesc = (a: ProductWithRelations, b: ProductWithRelations) =>
     b.createdAt.getTime() - a.createdAt.getTime();
@@ -394,41 +422,45 @@ const sortProductsInMemory = (
   switch (sort) {
     case "price-low-to-high":
       return copy.sort(
-        (a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b)
+        (a, b) => a.pricePaise - b.pricePaise || byCreatedDesc(a, b),
       );
     case "price-high-to-low":
       return copy.sort(
-        (a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b)
+        (a, b) => b.pricePaise - a.pricePaise || byCreatedDesc(a, b),
       );
     default:
       return copy.sort(byCreatedDesc);
   }
 };
 
-async function uniqueSlug(base: string): Promise<string> {
+async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   const existing = await withRetry(() =>
     db
-      .select({ slug: products.slug })
+      .select({ id: products.id, slug: products.slug }) // ← select id too
       .from(products)
-      .where(or(eq(products.slug, base), like(products.slug, `${base}-%`)))
+      .where(or(eq(products.slug, base), like(products.slug, `${base}-%`))),
   );
 
-  if (existing.length === 0) return base;
+  // Ignore the row we're updating — a product keeps its own slug.
+  const taken = new Set(
+    existing.filter((row) => row.id !== excludeId).map((row) => row.slug),
+  );
 
-  const taken = new Set(existing.map((r) => r.slug));
+  if (!taken.has(base)) return base;
+
   let suffix = 1;
   while (taken.has(`${base}-${suffix}`)) suffix++;
   return `${base}-${suffix}`;
 }
 
-export const createProduct = async (input: CreateProductInput): Promise<ProductWithRelations> => {
-  const {
-    imageMediaIds = [],
-    tagIds = [],
-    ...productData
-  } = input;
+export const createProduct = async (
+  input: CreateProductInput,
+): Promise<ProductWithRelations> => {
+  const { imageMediaIds = [], tagIds = [], ...productData } = input;
 
-  const slug = await uniqueSlug(slugify(productData.slug ?? "untitled-product"));
+  const slug = await uniqueSlug(
+    slugify(productData.slug ?? "untitled-product"),
+  );
 
   const created = requireFirstRow(
     await db
@@ -439,7 +471,7 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductW
         updatedAt: new Date(),
       })
       .returning({ id: products.id }),
-    "Failed to create product."
+    "Failed to create product.",
   );
 
   await Promise.all([
@@ -455,12 +487,17 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductW
   return product;
 };
 
-export const duplicateProduct = async (productId: string): Promise<null | ProductWithRelations> => {
+export const duplicateProduct = async (
+  productId: string,
+): Promise<null | ProductWithRelations> => {
   const source = await getProduct(productId);
   if (!source) return null;
 
   const duplicateSlug = await uniqueSlug(slugify(source.slug));
-  const duplicateName = source.name.trim().length > 0 ? `${source.name} Copy` : "Untitled Product Copy";
+  const duplicateName =
+    source.name.trim().length > 0
+      ? `${source.name} Copy`
+      : "Untitled Product Copy";
 
   const created = requireFirstRow(
     await db
@@ -490,7 +527,7 @@ export const duplicateProduct = async (productId: string): Promise<null | Produc
         updatedAt: new Date(),
       })
       .returning({ id: products.id }),
-    "Failed to duplicate product."
+    "Failed to duplicate product.",
   );
 
   await Promise.all([
@@ -498,11 +535,11 @@ export const duplicateProduct = async (productId: string): Promise<null | Produc
       created.id,
       [...source.images]
         .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((image) => image.media.id)
+        .map((image) => image.media.id),
     ),
     replaceProductTags(
       created.id,
-      source.tags.map((tag) => tag.id)
+      source.tags.map((tag) => tag.id),
     ),
   ]);
 
@@ -511,16 +548,12 @@ export const duplicateProduct = async (productId: string): Promise<null | Produc
 
 export const updateProduct = async (
   productId: string,
-  input: UpdateProductInput
+  input: UpdateProductInput,
 ): Promise<null | ProductWithRelations> => {
-  const {
-    imageMediaIds,
-    tagIds,
-    ...productData
-  } = input;
+  const { imageMediaIds, tagIds, ...productData } = input;
 
   if (typeof productData.slug === "string") {
-    productData.slug = slugify(productData.slug);
+    productData.slug = await uniqueSlug(slugify(productData.slug), productId);
   }
 
   const updated = getFirstRow(
@@ -531,7 +564,7 @@ export const updateProduct = async (
         updatedAt: new Date(),
       })
       .where(eq(products.id, productId))
-      .returning({ id: products.id })
+      .returning({ id: products.id }),
   );
 
   if (!updated) return null;
@@ -552,7 +585,7 @@ export const deleteProduct = async (productId: string): Promise<boolean> => {
     db
       .delete(products)
       .where(eq(products.id, productId))
-      .returning({ id: products.id })
+      .returning({ id: products.id }),
   );
 
   return deleted.length > 0;
@@ -576,7 +609,7 @@ export type BulkOperationResult = {
  */
 export const updateProductsBatch = async (
   productIds: string[],
-  input: Pick<UpdateProductInput, "status" | "stockStatus" | "featured">
+  input: Pick<UpdateProductInput, "status" | "stockStatus" | "featured">,
 ): Promise<BulkOperationResult> => {
   if (productIds.length === 0) {
     return { updated: 0, failed: 0, errors: [] };
@@ -588,7 +621,7 @@ export const updateProductsBatch = async (
         .update(products)
         .set({ ...input, updatedAt: new Date() })
         .where(inArray(products.id, productIds))
-        .returning({ id: products.id })
+        .returning({ id: products.id }),
     );
     return { updated: updated.length, failed: 0, errors: [] };
   } catch (err) {
@@ -615,7 +648,7 @@ export const updateProductsBatch = async (
 export const bulkSetProductTags = async (
   productIds: string[],
   addTagIds: number[],
-  removeTagIds: number[]
+  removeTagIds: number[],
 ): Promise<BulkOperationResult> => {
   if (productIds.length === 0) {
     return { updated: 0, failed: 0, errors: [] };
@@ -630,7 +663,7 @@ export const bulkSetProductTags = async (
     db
       .select({ productId: productTags.productId, tagId: productTags.tagId })
       .from(productTags)
-      .where(inArray(productTags.productId, productIds))
+      .where(inArray(productTags.productId, productIds)),
   );
 
   // Group by productId
@@ -674,7 +707,9 @@ export const bulkSetProductTags = async (
  *   - "available" → 1  (ready to purchase)
  *   - "reserved"  → 1  (qty stays 1 during reserve; reservation row tracks the hold)
  */
-export function deriveQuantityAvailable(stockStatus: "available" | "reserved" | "sold"): number {
+export function deriveQuantityAvailable(
+  stockStatus: "available" | "reserved" | "sold",
+): number {
   return stockStatus === "sold" ? 0 : 1;
 }
 
@@ -701,7 +736,7 @@ export function deriveQuantityAvailable(stockStatus: "available" | "reserved" | 
  */
 export const restockProduct = async (
   productId: string,
-  refundedOrderId?: string
+  refundedOrderId?: string,
 ): Promise<"restocked" | "skipped" | "not_found"> => {
   // Read the current stock status first (conditional restock)
   const [product] = await db
@@ -716,17 +751,16 @@ export const restockProduct = async (
     // Detect genuine re-sale: check if a DIFFERENT paid order has this product.
     // If refundedOrderId is provided, exclude it from the check.
     // A re-sale means another order (with paymentStatus='paid') contains this product.
-    const reSaleFilter =
-      refundedOrderId
-        ? and(
-            eq(orderItems.productId, productId),
-            ne(orderItems.orderId, refundedOrderId),
-            eq(orders.paymentStatus, "paid")
-          )
-        : and(
-            eq(orderItems.productId, productId),
-            eq(orders.paymentStatus, "paid")
-          );
+    const reSaleFilter = refundedOrderId
+      ? and(
+          eq(orderItems.productId, productId),
+          ne(orderItems.orderId, refundedOrderId),
+          eq(orders.paymentStatus, "paid"),
+        )
+      : and(
+          eq(orderItems.productId, productId),
+          eq(orders.paymentStatus, "paid"),
+        );
 
     const [reSaleRow] = await db
       .select({ orderId: orderItems.orderId })

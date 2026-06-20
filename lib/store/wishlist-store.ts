@@ -11,7 +11,11 @@
  */
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from "zustand/middleware";
 
 interface GuestWishlistState {
   productIds: string[];
@@ -28,6 +32,17 @@ interface GuestWishlistState {
   /** Clear all items (called after merge-on-login). */
   clear: () => void;
 }
+
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
+const getWishlistStorage = () => {
+  if (typeof window === "undefined") return noopStorage;
+  return window.localStorage ?? noopStorage;
+};
 
 export const useGuestWishlistStore = create<GuestWishlistState>()(
   persist(
@@ -64,10 +79,10 @@ export const useGuestWishlistStore = create<GuestWishlistState>()(
       name: "ftt-wishlist-guest-v1",
       version: 1,
       partialize: (state) => ({ productIds: state.productIds }),
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(getWishlistStorage),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
-    }
-  )
+    },
+  ),
 );

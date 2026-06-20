@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -55,7 +61,7 @@ const defaultSettings: AdminSettingsContent = {
   operations: {
     maintenanceMessage: "The storefront is under scheduled maintenance.",
     maintenanceMode: false,
-    supportEmail: "hello@fromthetrunk.com",
+    supportEmail: "hello@fromthetrunk.shop",
     supportPhone: "",
   },
 };
@@ -70,16 +76,21 @@ const passwordRequirements =
   "Use at least 8 characters with uppercase, lowercase, and a number.";
 
 const meetsPasswordRequirements = (value: string) =>
-  value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value);
+  value.length >= 8 &&
+  /[A-Z]/.test(value) &&
+  /[a-z]/.test(value) &&
+  /[0-9]/.test(value);
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<AdminSettingsContent>(defaultSettings);
+  const [settings, setSettings] =
+    useState<AdminSettingsContent>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordForm, setPasswordForm] = useState<PasswordFormState>(defaultPasswordForm);
+  const [passwordForm, setPasswordForm] =
+    useState<PasswordFormState>(defaultPasswordForm);
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,7 +101,9 @@ export default function AdminSettingsPage() {
         return;
       }
 
-      const data = (await response.json()) as { content?: Partial<AdminSettingsContent> };
+      const data = (await response.json()) as {
+        content?: Partial<AdminSettingsContent>;
+      };
       setSettings((prev) => ({
         commerce: {
           ...prev.commerce,
@@ -111,7 +124,10 @@ export default function AdminSettingsPage() {
     void load();
   }, []);
 
-  const gstPercent = useMemo(() => Math.round(settings.commerce.gstRate * 100), [settings.commerce.gstRate]);
+  const gstPercent = useMemo(
+    () => Math.round(settings.commerce.gstRate * 100),
+    [settings.commerce.gstRate],
+  );
 
   const save = async () => {
     setIsSaving(true);
@@ -124,12 +140,16 @@ export default function AdminSettingsPage() {
       body: JSON.stringify({ content: settings }),
     });
     setIsSaving(false);
-    setStatus(response.ok ? "Settings saved successfully." : `Save failed (${response.status}).`);
+    setStatus(
+      response.ok
+        ? "Settings saved successfully."
+        : `Save failed (${response.status}).`,
+    );
   };
 
   const updatePasswordField = <TKey extends keyof PasswordFormState>(
     key: TKey,
-    value: PasswordFormState[TKey]
+    value: PasswordFormState[TKey],
   ) => {
     setPasswordForm((prev) => ({
       ...prev,
@@ -193,7 +213,7 @@ export default function AdminSettingsPage() {
 
   const updateCommerce = <TKey extends keyof AdminSettingsContent["commerce"]>(
     key: TKey,
-    value: AdminSettingsContent["commerce"][TKey]
+    value: AdminSettingsContent["commerce"][TKey],
   ) => {
     setSettings((prev) => ({
       ...prev,
@@ -204,9 +224,11 @@ export default function AdminSettingsPage() {
     }));
   };
 
-  const updateIntegrations = <TKey extends keyof AdminSettingsContent["integrations"]>(
+  const updateIntegrations = <
+    TKey extends keyof AdminSettingsContent["integrations"],
+  >(
     key: TKey,
-    value: AdminSettingsContent["integrations"][TKey]
+    value: AdminSettingsContent["integrations"][TKey],
   ) => {
     setSettings((prev) => ({
       ...prev,
@@ -217,9 +239,11 @@ export default function AdminSettingsPage() {
     }));
   };
 
-  const updateOperations = <TKey extends keyof AdminSettingsContent["operations"]>(
+  const updateOperations = <
+    TKey extends keyof AdminSettingsContent["operations"],
+  >(
     key: TKey,
-    value: AdminSettingsContent["operations"][TKey]
+    value: AdminSettingsContent["operations"][TKey],
   ) => {
     setSettings((prev) => ({
       ...prev,
@@ -242,15 +266,24 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Commerce Defaults</CardTitle>
-          <CardDescription>Control shipping thresholds, tax rates, and reservation windows.</CardDescription>
+          <CardDescription>
+            Control shipping thresholds, tax rates, and reservation windows.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="free-shipping-threshold">Free Shipping Threshold (₹)</Label>
+            <Label htmlFor="free-shipping-threshold">
+              Free Shipping Threshold (₹)
+            </Label>
             <Input
               disabled={isLoading}
               id="free-shipping-threshold"
-              onChange={(event) => updateCommerce("freeShippingThreshold", Number(event.target.value || 0))}
+              onChange={(event) =>
+                updateCommerce(
+                  "freeShippingThreshold",
+                  Number(event.target.value || 0),
+                )
+              }
               type="number"
               value={settings.commerce.freeShippingThreshold}
             />
@@ -260,7 +293,9 @@ export default function AdminSettingsPage() {
             <Input
               disabled={isLoading}
               id="gst-rate"
-              onChange={(event) => updateCommerce("gstRate", Number(event.target.value || 0) / 100)}
+              onChange={(event) =>
+                updateCommerce("gstRate", Number(event.target.value || 0) / 100)
+              }
               type="number"
               value={gstPercent}
             />
@@ -270,7 +305,12 @@ export default function AdminSettingsPage() {
             <Input
               disabled={isLoading}
               id="standard-shipping"
-              onChange={(event) => updateCommerce("standardShipping", Number(event.target.value || 0))}
+              onChange={(event) =>
+                updateCommerce(
+                  "standardShipping",
+                  Number(event.target.value || 0),
+                )
+              }
               type="number"
               value={settings.commerce.standardShipping}
             />
@@ -280,7 +320,12 @@ export default function AdminSettingsPage() {
             <Input
               disabled={isLoading}
               id="express-shipping"
-              onChange={(event) => updateCommerce("expressShipping", Number(event.target.value || 0))}
+              onChange={(event) =>
+                updateCommerce(
+                  "expressShipping",
+                  Number(event.target.value || 0),
+                )
+              }
               type="number"
               value={settings.commerce.expressShipping}
             />
@@ -290,7 +335,9 @@ export default function AdminSettingsPage() {
             <Input
               disabled={isLoading}
               id="reservation-hold"
-              onChange={(event) => updateCommerce("holdMinutes", Number(event.target.value || 0))}
+              onChange={(event) =>
+                updateCommerce("holdMinutes", Number(event.target.value || 0))
+              }
               type="number"
               value={settings.commerce.holdMinutes}
             />
@@ -301,40 +348,54 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Integrations</CardTitle>
-          <CardDescription>Toggle external providers for transactional workflows.</CardDescription>
+          <CardDescription>
+            Toggle external providers for transactional workflows.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-md border p-3">
             <div>
               <p className="text-sm font-medium">Razorpay payments</p>
-              <p className="text-xs text-muted-foreground">Allow checkout and payment verification flows.</p>
+              <p className="text-xs text-muted-foreground">
+                Allow checkout and payment verification flows.
+              </p>
             </div>
             <Switch
               checked={settings.integrations.razorpayEnabled}
               disabled={isLoading}
-              onCheckedChange={(checked) => updateIntegrations("razorpayEnabled", checked)}
+              onCheckedChange={(checked) =>
+                updateIntegrations("razorpayEnabled", checked)
+              }
             />
           </div>
           <div className="flex items-center justify-between rounded-md border p-3">
             <div>
               <p className="text-sm font-medium">Resend email delivery</p>
-              <p className="text-xs text-muted-foreground">Send transactional + newsletter emails from the admin system.</p>
+              <p className="text-xs text-muted-foreground">
+                Send transactional + newsletter emails from the admin system.
+              </p>
             </div>
             <Switch
               checked={settings.integrations.resendEmailEnabled}
               disabled={isLoading}
-              onCheckedChange={(checked) => updateIntegrations("resendEmailEnabled", checked)}
+              onCheckedChange={(checked) =>
+                updateIntegrations("resendEmailEnabled", checked)
+              }
             />
           </div>
           <div className="flex items-center justify-between rounded-md border p-3">
             <div>
               <p className="text-sm font-medium">ElectricSQL live sync</p>
-              <p className="text-xs text-muted-foreground">Enable realtime order and inventory views in admin tables.</p>
+              <p className="text-xs text-muted-foreground">
+                Enable realtime order and inventory views in admin tables.
+              </p>
             </div>
             <Switch
               checked={settings.integrations.electricRealtimeEnabled}
               disabled={isLoading}
-              onCheckedChange={(checked) => updateIntegrations("electricRealtimeEnabled", checked)}
+              onCheckedChange={(checked) =>
+                updateIntegrations("electricRealtimeEnabled", checked)
+              }
             />
           </div>
         </CardContent>
@@ -343,7 +404,9 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Operations</CardTitle>
-          <CardDescription>Support channels and maintenance communication.</CardDescription>
+          <CardDescription>
+            Support channels and maintenance communication.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -352,7 +415,9 @@ export default function AdminSettingsPage() {
               <Input
                 disabled={isLoading}
                 id="support-email"
-                onChange={(event) => updateOperations("supportEmail", event.target.value)}
+                onChange={(event) =>
+                  updateOperations("supportEmail", event.target.value)
+                }
                 type="email"
                 value={settings.operations.supportEmail}
               />
@@ -362,7 +427,9 @@ export default function AdminSettingsPage() {
               <Input
                 disabled={isLoading}
                 id="support-phone"
-                onChange={(event) => updateOperations("supportPhone", event.target.value)}
+                onChange={(event) =>
+                  updateOperations("supportPhone", event.target.value)
+                }
                 value={settings.operations.supportPhone}
               />
             </div>
@@ -370,22 +437,28 @@ export default function AdminSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="maintenance-message">Maintenance Message</Label>
             <Textarea
-              className="min-h-[96px]"
+              className="min-h-24"
               disabled={isLoading}
               id="maintenance-message"
-              onChange={(event) => updateOperations("maintenanceMessage", event.target.value)}
+              onChange={(event) =>
+                updateOperations("maintenanceMessage", event.target.value)
+              }
               value={settings.operations.maintenanceMessage}
             />
           </div>
           <div className="flex items-center justify-between rounded-md border p-3">
             <div>
               <p className="text-sm font-medium">Maintenance mode</p>
-              <p className="text-xs text-muted-foreground">Show storefront maintenance banner and pause checkouts.</p>
+              <p className="text-xs text-muted-foreground">
+                Show storefront maintenance banner and pause checkouts.
+              </p>
             </div>
             <Switch
               checked={settings.operations.maintenanceMode}
               disabled={isLoading}
-              onCheckedChange={(checked) => updateOperations("maintenanceMode", checked)}
+              onCheckedChange={(checked) =>
+                updateOperations("maintenanceMode", checked)
+              }
             />
           </div>
         </CardContent>
@@ -394,7 +467,9 @@ export default function AdminSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Change Password</CardTitle>
-          <CardDescription>Update your admin password without leaving the dashboard.</CardDescription>
+          <CardDescription>
+            Update your admin password without leaving the dashboard.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
@@ -402,7 +477,9 @@ export default function AdminSettingsPage() {
               <Label htmlFor="current-password">Current Password</Label>
               <Input
                 id="current-password"
-                onChange={(event) => updatePasswordField("currentPassword", event.target.value)}
+                onChange={(event) =>
+                  updatePasswordField("currentPassword", event.target.value)
+                }
                 type="password"
                 value={passwordForm.currentPassword}
               />
@@ -411,7 +488,9 @@ export default function AdminSettingsPage() {
               <Label htmlFor="new-password">New Password</Label>
               <Input
                 id="new-password"
-                onChange={(event) => updatePasswordField("newPassword", event.target.value)}
+                onChange={(event) =>
+                  updatePasswordField("newPassword", event.target.value)
+                }
                 type="password"
                 value={passwordForm.newPassword}
               />
@@ -420,13 +499,17 @@ export default function AdminSettingsPage() {
               <Label htmlFor="confirm-new-password">Confirm New Password</Label>
               <Input
                 id="confirm-new-password"
-                onChange={(event) => updatePasswordField("confirmNewPassword", event.target.value)}
+                onChange={(event) =>
+                  updatePasswordField("confirmNewPassword", event.target.value)
+                }
                 type="password"
                 value={passwordForm.confirmNewPassword}
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{passwordRequirements}</p>
+          <p className="text-xs text-muted-foreground">
+            {passwordRequirements}
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
               disabled={isUpdatingPassword}
@@ -435,7 +518,9 @@ export default function AdminSettingsPage() {
             >
               {isUpdatingPassword ? "Updating..." : "Update Password"}
             </Button>
-            {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
+            {passwordError ? (
+              <p className="text-sm text-destructive">{passwordError}</p>
+            ) : null}
             {!passwordError && passwordStatus ? (
               <p className="text-sm text-muted-foreground">{passwordStatus}</p>
             ) : null}
@@ -446,7 +531,11 @@ export default function AdminSettingsPage() {
       <Separator />
 
       <div className="flex items-center gap-3">
-        <Button disabled={isLoading || isSaving} onClick={() => void save()} type="button">
+        <Button
+          disabled={isLoading || isSaving}
+          onClick={() => void save()}
+          type="button"
+        >
           {isSaving ? "Saving..." : "Save Settings"}
         </Button>
         {status && <p className="text-sm text-muted-foreground">{status}</p>}

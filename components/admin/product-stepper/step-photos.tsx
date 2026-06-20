@@ -1,5 +1,3 @@
-"use client";
-
 import { put } from "@vercel/blob/client";
 import Image from "next/image";
 import {
@@ -54,11 +52,7 @@ type UploadProgress = {
   progress: number;
 };
 
-export function StepPhotos({
-  form,
-  setUploaded,
-  uploaded,
-}: StepPhotosProps) {
+export function StepPhotos({ form, setUploaded, uploaded }: StepPhotosProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<UploadProgress[]>([]);
@@ -69,7 +63,7 @@ export function StepPhotos({
 
   const imageMediaIds = useMemo(
     () => form.state.values.imageMediaIds ?? [],
-    [form.state.values.imageMediaIds]
+    [form.state.values.imageMediaIds],
   );
 
   const fetchMediaRows = useCallback(async () => {
@@ -89,7 +83,9 @@ export function StepPhotos({
       return mediaRows;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Could not load media library.";
+        error instanceof Error
+          ? error.message
+          : "Could not load media library.";
       toast.error(message);
       return [];
     } finally {
@@ -126,7 +122,7 @@ export function StepPhotos({
 
   const updateQueueProgress = (id: string, progress: number) => {
     setUploadQueue((current) =>
-      current.map((item) => (item.id === id ? { ...item, progress } : item))
+      current.map((item) => (item.id === id ? { ...item, progress } : item)),
     );
   };
 
@@ -134,7 +130,7 @@ export function StepPhotos({
     setUploaded(next);
     form.setFieldValue(
       "imageMediaIds",
-      next.map((item) => item.id)
+      next.map((item) => item.id),
     );
   };
 
@@ -147,7 +143,7 @@ export function StepPhotos({
       const next = [...current, media];
       form.setFieldValue(
         "imageMediaIds",
-        next.map((item) => item.id)
+        next.map((item) => item.id),
       );
       return next;
     });
@@ -193,11 +189,17 @@ export function StepPhotos({
           method: "POST",
         });
         if (!uploadConfigResponse.ok) {
-          throw new Error(await readErrorMessage(uploadConfigResponse, `Upload URL failed for ${file.name}.`));
+          throw new Error(
+            await readErrorMessage(
+              uploadConfigResponse,
+              `Upload URL failed for ${file.name}.`,
+            ),
+          );
         }
         updateQueueProgress(uploadId, 30);
 
-        const uploadConfig = (await uploadConfigResponse.json()) as UploadConfig;
+        const uploadConfig =
+          (await uploadConfigResponse.json()) as UploadConfig;
         const blob = await put(uploadConfig.pathname, file, {
           access: "public",
           contentType: file.type || "application/octet-stream",
@@ -208,11 +210,15 @@ export function StepPhotos({
         // Alt text is REQUIRED by the server. Prompt the user for a
         // descriptive label for each image before completing the upload.
         const altText = window.prompt(
-          `Alt text for "${file.name}" (required for accessibility):`
+          `Alt text for "${file.name}" (required for accessibility):`,
         );
         if (!altText || !altText.trim()) {
-          toast.error(`Alt text is required for ${file.name}. Upload cancelled.`);
-          setUploadQueue((current) => current.filter((item) => item.id !== uploadId));
+          toast.error(
+            `Alt text is required for ${file.name}. Upload cancelled.`,
+          );
+          setUploadQueue((current) =>
+            current.filter((item) => item.id !== uploadId),
+          );
           continue;
         }
 
@@ -232,12 +238,16 @@ export function StepPhotos({
         });
         if (!completeResponse.ok) {
           throw new Error(
-            await readErrorMessage(completeResponse, `Could not persist media ${file.name}.`)
+            await readErrorMessage(
+              completeResponse,
+              `Could not persist media ${file.name}.`,
+            ),
           );
         }
         updateQueueProgress(uploadId, 100);
 
-        const mediaResponse = (await completeResponse.json()) as ProductStepperMedia;
+        const mediaResponse =
+          (await completeResponse.json()) as ProductStepperMedia;
         const uploadedMedia = {
           ...mediaResponse,
           filename: file.name,
@@ -248,10 +258,13 @@ export function StepPhotos({
           ...current.filter((item) => item.id !== uploadedMedia.id),
         ]);
         toast.success(`${file.name} uploaded.`);
-        setUploadQueue((current) => current.filter((item) => item.id !== uploadId));
+        setUploadQueue((current) =>
+          current.filter((item) => item.id !== uploadId),
+        );
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Image upload failed.";
+      const message =
+        error instanceof Error ? error.message : "Image upload failed.";
       setUploadError(message);
       toast.error(message);
     } finally {
@@ -312,7 +325,9 @@ export function StepPhotos({
 
   const reorderMedia = (targetMediaId: string) => {
     if (!draggingMediaId || draggingMediaId === targetMediaId) return;
-    const sourceIndex = uploaded.findIndex((item) => item.id === draggingMediaId);
+    const sourceIndex = uploaded.findIndex(
+      (item) => item.id === draggingMediaId,
+    );
     const targetIndex = uploaded.findIndex((item) => item.id === targetMediaId);
     if (sourceIndex < 0 || targetIndex < 0) return;
 
@@ -333,7 +348,9 @@ export function StepPhotos({
           <UploadCloud className="h-8 w-8 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">Upload product images</p>
-            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP, or AVIF up to 10MB each</p>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG, WEBP, or AVIF up to 10MB each
+            </p>
           </div>
           <input
             accept="image/*"
@@ -353,7 +370,9 @@ export function StepPhotos({
             variant="outline"
           >
             <ImagePlus className="h-3.5 w-3.5" />
-            {isMediaLibraryOpen ? "Hide media library" : "Add from media library"}
+            {isMediaLibraryOpen
+              ? "Hide media library"
+              : "Add from media library"}
           </Button>
           {isMediaLibraryOpen ? (
             <Button
@@ -376,9 +395,11 @@ export function StepPhotos({
                 Loading media...
               </div>
             ) : mediaLibrary.length > 0 ? (
-              <div className="grid max-h-[360px] gap-3 overflow-y-auto pr-1 @md:grid-cols-2 @3xl:grid-cols-3">
+              <div className="grid max-h-90 gap-3 overflow-y-auto pr-1 @md:grid-cols-2 @3xl:grid-cols-3">
                 {mediaLibrary.map((asset) => {
-                  const alreadyAttached = uploaded.some((item) => item.id === asset.id);
+                  const alreadyAttached = uploaded.some(
+                    (item) => item.id === asset.id,
+                  );
 
                   return (
                     <div
@@ -388,7 +409,7 @@ export function StepPhotos({
                       )}
                       key={asset.id}
                     >
-                      <div className="relative aspect-[4/5] overflow-hidden rounded-md border bg-muted/20">
+                      <div className="relative aspect-4/5 overflow-hidden rounded-md border bg-muted/20">
                         <Image
                           alt={asset.filename}
                           src={asset.url}
@@ -414,7 +435,9 @@ export function StepPhotos({
                           type="button"
                           variant={alreadyAttached ? "secondary" : "outline"}
                         >
-                          {alreadyAttached ? "Already attached" : "Attach image"}
+                          {alreadyAttached
+                            ? "Already attached"
+                            : "Attach image"}
                         </Button>
                       </div>
                     </div>
@@ -422,7 +445,9 @@ export function StepPhotos({
                 })}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No media assets found.</p>
+              <p className="text-sm text-muted-foreground">
+                No media assets found.
+              </p>
             )}
           </div>
         ) : null}
@@ -477,7 +502,7 @@ export function StepPhotos({
                   onDragStart={() => setDraggingMediaId(media.id)}
                   onDrop={() => reorderMedia(media.id)}
                 >
-                  <div className="relative aspect-[4/5] overflow-hidden rounded-md border">
+                  <div className="relative aspect-4/5 overflow-hidden rounded-md border">
                     <Image
                       alt={media.filename}
                       src={media.url}

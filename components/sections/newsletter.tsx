@@ -66,7 +66,7 @@ export function Newsletter({
         data.message ||
           (needsConfirmation
             ? "Check your email to confirm your subscription."
-            : "You're subscribed to private drops.")
+            : "You're subscribed to private drops."),
       );
     } catch {
       toast.error("Unable to subscribe. Please try again.");
@@ -86,9 +86,7 @@ export function Newsletter({
             <h3 className="font-serif text-2xl text-foreground">
               {resolvedHeading}
             </h3>
-            <p className="text-sm text-muted-foreground">
-              {resolvedBody}
-            </p>
+            <p className="text-sm text-muted-foreground">{resolvedBody}</p>
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto">
             <Label
@@ -105,7 +103,7 @@ export function Newsletter({
                 id="newsletter-email"
                 type="email"
                 placeholder={inputPlaceholder}
-                className="min-w-[260px] bg-white"
+                className="min-w-65 bg-white"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={submitted}
@@ -119,10 +117,10 @@ export function Newsletter({
                 {isLoading
                   ? "Subscribing..."
                   : submitted
-                  ? requiresEmailConfirmation
-                    ? "Check your email"
-                    : "You're on the list"
-                  : buttonLabel}
+                    ? requiresEmailConfirmation
+                      ? "Check your email"
+                      : "You're on the list"
+                    : buttonLabel}
               </Button>
             </form>
             {submitted && (

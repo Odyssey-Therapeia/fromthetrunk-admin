@@ -15,7 +15,7 @@
  * LIVE_PREVIEW_THEME_ADMIN -- preview region scoped with draft CSS vars
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, Palette, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -100,15 +100,20 @@ function ThemeVersionSheet({
   const handleRestore = async (version: ThemeVersion) => {
     setPendingRestoreId(version.id);
     try {
-      const res = await fetch(`/api/v2/admin/theme/versions/${version.id}/restore`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/v2/admin/theme/versions/${version.id}/restore`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) throw new Error(await readErrorMessage(res));
       toast.success("Theme version restored.");
       onRestored(version.tokens);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Unable to restore version.");
+      toast.error(
+        err instanceof Error ? err.message : "Unable to restore version.",
+      );
     } finally {
       setPendingRestoreId(null);
     }
@@ -123,8 +128,8 @@ function ThemeVersionSheet({
             Theme version history
           </SheetTitle>
           <SheetDescription>
-            All saved theme versions, newest first. Restore sets the chosen version
-            as the active theme.
+            All saved theme versions, newest first. Restore sets the chosen
+            version as the active theme.
           </SheetDescription>
         </SheetHeader>
 
@@ -153,7 +158,8 @@ function ThemeVersionSheet({
           ) : versions.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/70 bg-background/70 p-6 text-center">
               <p className="text-sm text-muted-foreground">
-                No saved versions yet. Save the theme to create your first snapshot.
+                No saved versions yet. Save the theme to create your first
+                snapshot.
               </p>
             </div>
           ) : (
@@ -202,7 +208,11 @@ function ThemeVersionSheet({
 // The preview div receives the draft tokens as an inline style attribute so
 // CSS var overrides apply ONLY within it - the rest of the admin is unaffected.
 
-function LivePreview({ draftTokens }: { draftTokens: Record<string, unknown> }) {
+function LivePreview({
+  draftTokens,
+}: {
+  draftTokens: Record<string, unknown>;
+}) {
   // Build an inline style object from the draft tokens (CSS vars only).
   const styleRecord: Record<string, string> = {};
   for (const [key, value] of Object.entries(draftTokens)) {
@@ -284,10 +294,16 @@ function LivePreview({ draftTokens }: { draftTokens: Record<string, unknown> }) 
           borderRadius: "var(--radius)",
         }}
       >
-        <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+        <p
+          className="text-sm font-medium"
+          style={{ color: "var(--foreground)" }}
+        >
           Sample card title
         </p>
-        <p className="mt-1 text-xs" style={{ color: "var(--foreground)", opacity: 0.6 }}>
+        <p
+          className="mt-1 text-xs"
+          style={{ color: "var(--foreground)", opacity: 0.6 }}
+        >
           This is how your card components will look with the current palette.
         </p>
       </div>
@@ -318,12 +334,21 @@ export default function AdminThemePage() {
     },
   });
 
-  // Seed draft from current theme once loaded
-  useEffect(() => {
-    if (currentTheme) {
-      setDraft(currentTheme.tokens);
-    }
-  }, [currentTheme]);
+  // Seed the editable draft from the saved theme. `draft` is a working copy the
+  // admin edits in place, so it's forked from server state rather than derived
+  // from the query.
+  //
+  // Seeding happens *during render* (guarded), not in an effect, which keeps the
+  // setState out of an effect body. The guard keys on `updatedAt`, so the draft
+  // re-seeds only when the saved snapshot actually changes (initial load, save,
+  // restore). Critically, a no-op background refetch — React Query refetches on
+  // window focus by default — no longer overwrites in-progress edits, which the
+  // previous effect-based version did whenever the refetched data differed.
+  const [seededFrom, setSeededFrom] = useState<string | null>(null);
+  if (currentTheme && currentTheme.updatedAt !== seededFrom) {
+    setSeededFrom(currentTheme.updatedAt);
+    setDraft(currentTheme.tokens);
+  }
 
   const handleChange = useCallback((key: string, value: unknown) => {
     setDraft((prev) => ({ ...prev, [key]: value }));

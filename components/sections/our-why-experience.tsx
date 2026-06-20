@@ -28,41 +28,34 @@ interface OurWhyExperienceProps {
   images: string[];
 }
 
-const fallbackImages = [
-  "/media/home-cover.png",
-  "/media/hero-bg.png",
-];
+const fallbackImages = ["/media/home-cover.png", "/media/hero-bg.png"];
 
 const chapters: WhyChapter[] = [
   {
     eyebrow: "Memory",
     title: "Some sarees should not end as storage.",
-    body:
-      "A trunk can hold a wedding morning, a festival visit, a mother teaching a daughter how to pleat silk. We start there, with the emotional weight already inside the piece.",
+    body: "A trunk can hold a wedding morning, a festival visit, a mother teaching a daughter how to pleat silk. We start there, with the emotional weight already inside the piece.",
     cue: "Listen for the first life of the saree.",
     imageIndex: 0,
   },
   {
     eyebrow: "Proof",
     title: "The story is beautiful only when the trust is clear.",
-    body:
-      "Each piece is inspected, photographed, documented, and priced with context. Provenance is not decoration. It is the reason someone can choose with confidence.",
+    body: "Each piece is inspected, photographed, documented, and priced with context. Provenance is not decoration. It is the reason someone can choose with confidence.",
     cue: "See authentication as part of the romance.",
     imageIndex: 1,
   },
   {
     eyebrow: "Care",
     title: "Restoration should feel quiet, not erased.",
-    body:
-      "We clean, repair, and prepare the saree without flattening its past. The goal is not to make it anonymous. The goal is to let it be worn again with dignity.",
+    body: "We clean, repair, and prepare the saree without flattening its past. The goal is not to make it anonymous. The goal is to let it be worn again with dignity.",
     cue: "Notice the work behind the calm.",
     imageIndex: 2,
   },
   {
     eyebrow: "Return",
     title: "A second owner is not an ending. It is continuity.",
-    body:
-      "From the Trunk exists so heirlooms can keep moving through real lives. Less waste, more meaning, and a more intimate way to buy luxury.",
+    body: "From the Trunk exists so heirlooms can keep moving through real lives. Less waste, more meaning, and a more intimate way to buy luxury.",
     cue: "Imagine the next room this piece enters.",
     imageIndex: 3,
   },
@@ -138,7 +131,7 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(
-      `${activeChapter.eyebrow}. ${activeChapter.title}. ${activeChapter.body}`
+      `${activeChapter.eyebrow}. ${activeChapter.title}. ${activeChapter.body}`,
     );
     utterance.rate = 0.86;
     utterance.pitch = 0.92;
@@ -160,8 +153,8 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
             sizes="100vw"
             className="object-cover transition-opacity duration-500"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-black/60 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+          <div className="absolute inset-0 bg-linear-to-r from-black/92 via-black/60 to-black/20" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-black/20" />
         </div>
 
         <div className="relative mx-auto grid min-h-[calc(100svh-8rem)] w-full max-w-7xl items-end gap-8 px-4 py-8 @[720px]:px-6 @[960px]:grid-cols-[minmax(0,1fr)_360px] @[960px]:items-center @[960px]:py-12">
@@ -219,7 +212,7 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
               <h3 className="font-serif text-3xl leading-tight text-white">
                 {activeChapter.title}
               </h3>
-              <p className="break-words text-sm leading-6 text-primary-foreground/78">
+              <p className="wrap-break-word text-sm leading-6 text-primary-foreground/78">
                 {activeChapter.body}
               </p>
               <p className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-primary-foreground/72">
@@ -235,7 +228,7 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
                   onClick={() => selectChapter(index)}
                   className={cn(
                     "h-1.5 rounded-full transition",
-                    activeIndex === index ? "bg-accent" : "bg-white/30"
+                    activeIndex === index ? "bg-accent" : "bg-white/30",
                   )}
                   aria-label={`Open ${chapter.eyebrow}`}
                 />
@@ -261,7 +254,7 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
                       "rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition",
                       activeIndex === index
                         ? "border-accent/70 bg-accent/20 text-white"
-                        : "border-white/15 bg-white/8 text-primary-foreground/62 hover:text-white"
+                        : "border-white/15 bg-white/8 text-primary-foreground/62 hover:text-white",
                     )}
                   >
                     {chapter.eyebrow}
@@ -291,8 +284,12 @@ export function OurWhyExperience({ images }: OurWhyExperienceProps) {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Icon className="h-5 w-5" />
               </div>
-              <h2 className="mt-4 font-serif text-2xl text-foreground">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
+              <h2 className="mt-4 font-serif text-2xl text-foreground">
+                {title}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {body}
+              </p>
             </div>
           ))}
         </div>

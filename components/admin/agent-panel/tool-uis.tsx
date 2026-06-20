@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   type ToolCallMessagePartStatus,
   useAssistantToolUI,
@@ -44,7 +44,9 @@ function ToolCallWrapper({
     return (
       <div className="flex items-center gap-2 rounded-lg border border-red-800/40 bg-red-950/30 p-3">
         <AlertCircle className="h-3.5 w-3.5 text-red-400" />
-        <span className="text-xs text-red-400">{label} failed to complete.</span>
+        <span className="text-xs text-red-400">
+          {label} failed to complete.
+        </span>
       </div>
     );
   }
@@ -113,17 +115,28 @@ function DraftStoryToolUI({
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
   const patchPayload = buildStoryPatchPayload(result);
-  const canApply = Boolean(anchoredProductId) && hasStoryPatchPayload(patchPayload);
+  const canApply =
+    Boolean(anchoredProductId) && hasStoryPatchPayload(patchPayload);
 
-  useEffect(() => {
+  // Reset the "applied" marker when the target product or the drafted story
+  // changes -- a freshly anchored product or a re-drafted story has not been
+  // saved yet. This is a render-phase state adjustment (React's documented
+  // "adjusting state when a prop changes" pattern), NOT an effect: it runs
+  // during render guarded by an identity comparison, so React re-renders
+  // immediately without a committed paint -- which sidesteps the cascading-
+  // render hazard the compiler flags for synchronous setState inside useEffect.
+  const appliedIdentity = [
+    anchoredProductId ?? "",
+    result?.storyTitle ?? "",
+    result?.storyNarrative ?? "",
+    result?.storyProvenance ?? "",
+    result?.storyEra ?? "",
+  ].join("\u0000");
+  const [appliedFor, setAppliedFor] = useState(appliedIdentity);
+  if (appliedFor !== appliedIdentity) {
+    setAppliedFor(appliedIdentity);
     setApplied(false);
-  }, [
-    anchoredProductId,
-    result?.storyEra,
-    result?.storyNarrative,
-    result?.storyProvenance,
-    result?.storyTitle,
-  ]);
+  }
 
   const handleCopy = () => {
     const text = [
@@ -184,7 +197,9 @@ function DraftStoryToolUI({
           : "Story saved to product.",
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save story");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save story",
+      );
     } finally {
       setApplying(false);
     }
@@ -198,14 +213,17 @@ function DraftStoryToolUI({
             <Wrench className="h-3 w-3" /> Drafted story
           </p>
           {result.storyTitle && (
-            <p className="text-sm font-semibold text-[#e5e5e5]">{result.storyTitle}</p>
+            <p className="text-sm font-semibold text-[#e5e5e5]">
+              {result.storyTitle}
+            </p>
           )}
           <p className="whitespace-pre-wrap text-xs leading-relaxed text-[#aaa]">
             {result.storyNarrative}
           </p>
           {result.storyProvenance && (
             <p className="text-xs text-[#ccc]">
-              <span className="font-medium">Provenance:</span> {result.storyProvenance}
+              <span className="font-medium">Provenance:</span>{" "}
+              {result.storyProvenance}
             </p>
           )}
           {result.storyEra && (
@@ -252,7 +270,9 @@ function SuggestTagsToolUI({
   result,
   status,
 }: {
-  result: { tags?: Array<{ id: number; name: string; category: string }> } | undefined;
+  result:
+    | { tags?: Array<{ id: number; name: string; category: string }> }
+    | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const handleCopy = () => {
@@ -277,8 +297,7 @@ function SuggestTagsToolUI({
                 variant="outline"
                 className="border-[#444] text-xs text-[#ccc]"
               >
-                {tag.name}{" "}
-                <span className="ml-1 text-[#777]">#{tag.id}</span>
+                {tag.name} <span className="ml-1 text-[#777]">#{tag.id}</span>
               </Badge>
             ))}
           </div>
@@ -341,11 +360,13 @@ function DraftMarketingCopyToolUI({
   result,
   status,
 }: {
-  result: {
-    shortDescription?: string;
-    seoTitle?: string;
-    seoDescription?: string;
-  } | undefined;
+  result:
+    | {
+        shortDescription?: string;
+        seoTitle?: string;
+        seoDescription?: string;
+      }
+    | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const handleCopy = (text: string) => {
@@ -364,7 +385,9 @@ function DraftMarketingCopyToolUI({
           </p>
           {result.shortDescription && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-[#ccc]">Short description</p>
+              <p className="text-xs font-medium text-[#ccc]">
+                Short description
+              </p>
               <p className="text-xs text-[#aaa]">{result.shortDescription}</p>
               <Button
                 size="sm"
@@ -394,7 +417,9 @@ function DraftMarketingCopyToolUI({
           )}
           {result.seoDescription && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-[#ccc]">Meta description</p>
+              <p className="text-xs font-medium text-[#ccc]">
+                Meta description
+              </p>
               <p className="text-xs text-[#aaa]">{result.seoDescription}</p>
               <Button
                 size="sm"
@@ -494,7 +519,9 @@ function CreateProductToolUI({
             <p className="text-xs text-[#aaa]">Story: {result.storyTitle}</p>
           )}
           {result.detailsFabric && (
-            <p className="text-xs text-[#aaa]">Fabric: {result.detailsFabric}</p>
+            <p className="text-xs text-[#aaa]">
+              Fabric: {result.detailsFabric}
+            </p>
           )}
           {result.pricePaise != null && result.pricePaise > 0 && (
             <p className="text-xs text-[#aaa]">
@@ -578,7 +605,11 @@ export function AgentToolUIRegistrations() {
       <DraftMarketingCopyToolUI
         result={
           result as
-            | { shortDescription?: string; seoTitle?: string; seoDescription?: string }
+            | {
+                shortDescription?: string;
+                seoTitle?: string;
+                seoDescription?: string;
+              }
             | undefined
         }
         status={status as ToolCallMessagePartStatus | undefined}

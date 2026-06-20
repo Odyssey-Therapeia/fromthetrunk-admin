@@ -33,11 +33,11 @@ export function ProductCard({ product, className }: ProductCardProps) {
       className={cn(
         "@container group transform-gpu overflow-hidden border-border/60 bg-card/80 shadow-soft transition duration-300 hover:-translate-y-1 hover:border-trunk-gold/40 hover:shadow-lift focus-within:shadow-lift",
         isSold && "opacity-75",
-        className
+        className,
       )}
     >
       <Link href={`/collection/${product.slug}`} className="block">
-        <div className="relative aspect-[3/4] @sm:aspect-[4/5] overflow-hidden">
+        <div className="relative aspect-3/4 @sm:aspect-4/5 overflow-hidden">
           {primaryImage ? (
             <Image
               src={primaryImage}
@@ -46,7 +46,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={cn(
                 "object-cover transition duration-700 group-hover:scale-105",
-                isSold && "grayscale"
+                isSold && "grayscale",
               )}
             />
           ) : (
@@ -54,7 +54,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               No image
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-black/0 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/25 via-black/0 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
 
           {isSold && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -99,10 +99,14 @@ export function ProductCard({ product, className }: ProductCardProps) {
             <ArrowUpRight className="mt-0.5 hidden @sm:block h-5 w-5 shrink-0 text-muted-foreground transition duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
           </div>
           <div className="flex items-center gap-1 @sm:gap-2">
-            <span className={cn(
-              "text-xs @sm:text-sm font-semibold",
-              isSold ? "text-muted-foreground line-through" : "text-foreground"
-            )}>
+            <span
+              className={cn(
+                "text-xs @sm:text-sm font-semibold",
+                isSold
+                  ? "text-muted-foreground line-through"
+                  : "text-foreground",
+              )}
+            >
               {formatCurrency(product.pricePaise / 100)}
             </span>
             {product.originalPricePaise && !isSold && (
