@@ -1,7 +1,10 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { put } from "@vercel/blob/client";
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,60 +17,45 @@ type MediaAsset = {
   url: string;
 };
 
-type UploadConfig = {
-  clientToken: string;
-  pathname: string;
-};
-
 type PendingAlt = {
   alt: string;
   file: File;
 };
 
+type UploadConfig = {
+  clientToken: string;
+  pathname: string;
+};
+
+const MEDIA_QUERY_KEY = ["admin-media"] as const;
+
+const EMPTY_MEDIA: MediaAsset[] = [];
+
+const fetchMedia = async (): Promise<MediaAsset[]> => {
+  const response = await fetch("/api/v2/media");
+  if (!response.ok) {
+    throw new Error(`Failed to load media (${response.status}).`);
+  }
+
+  return (await response.json()) as MediaAsset[];
+};
+
 export default function AdminMediaPage() {
-  const [media, setMedia] = useState<MediaAsset[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const queryClient = useQueryClient();
+
   const [pendingFiles, setPendingFiles] = useState<PendingAlt[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadMedia = async () => {
-    const response = await fetch("/api/v2/media");
-    const data = (await response.json()) as MediaAsset[];
-    setMedia(data);
-  };
+  const mediaQuery = useQuery({
+    queryFn: fetchMedia,
+    queryKey: MEDIA_QUERY_KEY,
+  });
 
-  useEffect(() => {
-    void loadMedia();
-  }, []);
+  const media = mediaQuery.data ?? EMPTY_MEDIA;
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    const entries: PendingAlt[] = Array.from(files).map((file) => ({
-      alt: "",
-      file,
-    }));
-    setPendingFiles(entries);
-  };
-
-  const updateAlt = (index: number, alt: string) => {
-    setPendingFiles((current) =>
-      current.map((entry, i) => (i === index ? { ...entry, alt } : entry))
-    );
-  };
-
-  const uploadFiles = async () => {
-    if (pendingFiles.length === 0) return;
-    // Validate: all files must have non-empty alt
-    for (const entry of pendingFiles) {
-      if (!entry.alt.trim()) {
-        alert(`Please provide alt text for "${entry.file.name}" before uploading.`);
-        return;
-      }
-    }
-    setIsUploading(true);
-    try {
-      for (const { file, alt } of pendingFiles) {
+  const uploadMutation = useMutation({
+    mutationFn: async (entries: PendingAlt[]) => {
+      for (const { alt, file } of entries) {
         const uploadConfigResponse = await fetch("/api/v2/media/upload", {
           body: JSON.stringify({
             contentType: file.type || "application/octet-stream",
@@ -78,7 +66,13 @@ export default function AdminMediaPage() {
           },
           method: "POST",
         });
-        const uploadConfig = (await uploadConfigResponse.json()) as UploadConfig;
+
+        if (!uploadConfigResponse.ok) {
+          throw new Error(`Failed to start upload for "${file.name}".`);
+        }
+
+        const uploadConfig =
+          (await uploadConfigResponse.json()) as UploadConfig;
 
         const blob = await put(uploadConfig.pathname, file, {
           access: "public",
@@ -86,7 +80,7 @@ export default function AdminMediaPage() {
           token: uploadConfig.clientToken,
         });
 
-        await fetch("/api/v2/media/complete", {
+        const completeResponse = await fetch("/api/v2/media/complete", {
           body: JSON.stringify({
             alt: alt.trim(),
             filename: file.name,
@@ -100,24 +94,77 @@ export default function AdminMediaPage() {
           },
           method: "POST",
         });
-      }
 
+        if (!completeResponse.ok) {
+          throw new Error(`Failed to finalize "${file.name}".`);
+        }
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Upload failed.");
+    },
+    onSuccess: async () => {
+      toast.success("Upload complete.");
       setPendingFiles([]);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      await loadMedia();
-    } finally {
-      setIsUploading(false);
+      await queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/v2/media/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error(`Failed to delete media (${response.status}).`);
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete media.",
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY });
+    },
+  });
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const entries: PendingAlt[] = Array.from(files).map((file) => ({
+      alt: "",
+      file,
+    }));
+    setPendingFiles(entries);
+  };
+
+  const updateAlt = (index: number, alt: string) => {
+    setPendingFiles((current) =>
+      current.map((entry, i) => (i === index ? { ...entry, alt } : entry)),
+    );
+  };
+
+  const handleUpload = () => {
+    if (pendingFiles.length === 0) return;
+    if (pendingFiles.some((entry) => !entry.alt.trim())) {
+      toast.error("Please provide alt text for every image before uploading.");
+      return;
     }
+    uploadMutation.mutate(pendingFiles);
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Media Library</h2>
-          <p className="text-sm text-muted-foreground">Upload and manage product visuals.</p>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Media Library
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Upload and manage product visuals.
+          </p>
         </div>
       </div>
 
@@ -137,9 +184,14 @@ export default function AdminMediaPage() {
 
         {pendingFiles.length > 0 && (
           <div className="space-y-2">
-            <p className="text-sm font-medium">Alt text (required for each image)</p>
+            <p className="text-sm font-medium">
+              Alt text (required for each image)
+            </p>
             {pendingFiles.map((entry, index) => (
-              <div className="flex items-center gap-3" key={`${entry.file.name}-${index}`}>
+              <div
+                className="flex items-center gap-3"
+                key={`${entry.file.name}-${index}`}
+              >
                 <span className="w-40 truncate text-xs text-muted-foreground">
                   {entry.file.name}
                 </span>
@@ -154,47 +206,71 @@ export default function AdminMediaPage() {
             ))}
 
             <Button
-              disabled={isUploading || pendingFiles.some((e) => !e.alt.trim())}
-              onClick={() => void uploadFiles()}
+              disabled={
+                uploadMutation.isPending ||
+                pendingFiles.some((e) => !e.alt.trim())
+              }
+              onClick={handleUpload}
               type="button"
             >
-              {isUploading ? "Uploading..." : "Upload files"}
+              {uploadMutation.isPending ? "Uploading..." : "Upload files"}
             </Button>
           </div>
         )}
 
         {pendingFiles.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Select one or more image files. You will be prompted to enter alt text before uploading.
+            Select one or more image files. You will be prompted to enter alt
+            text before uploading.
           </p>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {media.map((asset) => (
-          <Card key={asset.id}>
-            <CardContent className="space-y-2 p-3">
-              <div className="aspect-square overflow-hidden rounded-md bg-muted/20">
-                <img alt={asset.filename} className="h-full w-full object-cover" src={asset.url} />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-xs">{asset.filename}</p>
-                <Button
-                  onClick={async () => {
-                    await fetch(`/api/v2/media/${asset.id}`, { method: "DELETE" });
-                    await loadMedia();
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {mediaQuery.isError ? (
+        <p className="text-sm text-destructive">
+          {mediaQuery.error instanceof Error
+            ? mediaQuery.error.message
+            : "Failed to load media."}
+        </p>
+      ) : mediaQuery.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading media…</p>
+      ) : media.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No media uploaded yet.</p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {media.map((asset) => (
+            <Card key={asset.id}>
+              <CardContent className="space-y-2 p-3">
+                <div className="relative aspect-square overflow-hidden rounded-md bg-muted/20">
+                  <Image
+                    alt={asset.filename}
+                    className="object-cover"
+                    fill
+                    sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                    src={asset.url}
+                    unoptimized
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-xs">{asset.filename}</p>
+                  <Button
+                    disabled={
+                      deleteMutation.isPending &&
+                      deleteMutation.variables === asset.id
+                    }
+                    onClick={() => deleteMutation.mutate(asset.id)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -53,8 +53,8 @@ function HeroRenderer(props: Record<string, unknown>) {
         ) : (
           <div className="h-full w-full bg-trunk-brown" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+        <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/50 to-black/20" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-black/20" />
       </div>
 
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-20 pt-32 md:pt-36">

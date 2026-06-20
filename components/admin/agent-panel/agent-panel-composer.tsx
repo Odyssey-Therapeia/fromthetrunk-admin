@@ -14,7 +14,7 @@ export function AgentPanelComposer() {
 
       <ComposerPrimitive.Input
         placeholder="Ask anything about your store..."
-        className="min-h-[40px] flex-1 resize-none rounded-lg border border-[#444] bg-[#222] px-3 py-2.5 text-sm text-[#e5e5e5] outline-none placeholder:text-[#666] focus:border-[#c9a96e]/50 focus:ring-1 focus:ring-[#c9a96e]/30"
+        className="min-h-10 flex-1 resize-none rounded-lg border border-[#444] bg-[#222] px-3 py-2.5 text-sm text-[#e5e5e5] outline-none placeholder:text-[#666] focus:border-[#c9a96e]/50 focus:ring-1 focus:ring-[#c9a96e]/30"
         rows={1}
       />
 

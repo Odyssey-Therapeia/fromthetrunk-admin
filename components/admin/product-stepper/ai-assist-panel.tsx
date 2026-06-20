@@ -153,12 +153,14 @@ function DraftStoryToolUI({
   status,
 }: {
   form: StepperForm;
-  result: {
-    storyTitle?: string;
-    storyNarrative?: string;
-    storyProvenance?: string;
-    storyEra?: string;
-  } | undefined;
+  result:
+    | {
+        storyTitle?: string;
+        storyNarrative?: string;
+        storyProvenance?: string;
+        storyEra?: string;
+      }
+    | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const [applied, setApplied] = useState(false);
@@ -330,11 +332,13 @@ function DraftMarketingCopyToolUI({
   result,
   status,
 }: {
-  result: {
-    shortDescription?: string;
-    seoTitle?: string;
-    seoDescription?: string;
-  } | undefined;
+  result:
+    | {
+        shortDescription?: string;
+        seoTitle?: string;
+        seoDescription?: string;
+      }
+    | undefined;
   status: ToolCallMessagePartStatus | undefined;
 }) {
   const handleCopy = (text: string) => {
@@ -530,7 +534,7 @@ function ThreadWelcome() {
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium">FTT Product Assistant</p>
-          <p className="max-w-[240px] text-xs text-muted-foreground">
+          <p className="max-w-60 text-xs text-muted-foreground">
             I can help you name products, draft stories, suggest tags, and
             create marketing copy.
           </p>
@@ -546,11 +550,16 @@ function Composer() {
       <ComposerPrimitive.Input
         autoFocus
         placeholder="Ask for help with this listing..."
-        className="min-h-[40px] flex-1 resize-none rounded-lg border bg-muted/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
+        className="min-h-10 flex-1 resize-none rounded-lg border bg-muted/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
         rows={1}
       />
       <ComposerPrimitive.Send asChild>
-        <Button size="icon" variant="default" className="h-10 w-10 shrink-0" aria-label="Send message">
+        <Button
+          size="icon"
+          variant="default"
+          className="h-10 w-10 shrink-0"
+          aria-label="Send message"
+        >
           <SendHorizontal className="h-4 w-4" />
         </Button>
       </ComposerPrimitive.Send>

@@ -21,7 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { type AdminReleaseHighlight, type AdminReleaseNote } from "@/lib/admin/releases";
+import {
+  type AdminReleaseHighlight,
+  type AdminReleaseNote,
+} from "@/lib/admin/releases";
 import { hasSeenRelease, markReleaseSeen } from "@/lib/admin/release-seen";
 import { cn } from "@/lib/utils";
 
@@ -30,12 +33,13 @@ type ReleaseAnnouncementDialogProps = {
   release: AdminReleaseNote;
 };
 
-const highlightIcons: Record<AdminReleaseHighlight["area"], typeof LayoutGrid> = {
-  Admin: LayoutGrid,
-  Images,
-  Quality: ShieldCheck,
-  Storefront: Store,
-};
+const highlightIcons: Record<AdminReleaseHighlight["area"], typeof LayoutGrid> =
+  {
+    Admin: LayoutGrid,
+    Images,
+    Quality: ShieldCheck,
+    Storefront: Store,
+  };
 
 export function ReleaseAnnouncementDialog({
   adminId,
@@ -69,7 +73,7 @@ export function ReleaseAnnouncementDialog({
       }}
     >
       <DialogContent className="@container max-h-[90vh] overflow-hidden border-border/80 bg-card p-0 shadow-2xl @3xl:max-w-3xl">
-        <div className="relative overflow-hidden border-b border-border/80 bg-gradient-to-br from-card via-muted to-primary px-6 py-7 text-foreground @3xl:px-8">
+        <div className="relative overflow-hidden border-b border-border/80 bg-linear-to-br from-card via-muted to-primary px-6 py-7 text-foreground @3xl:px-8">
           <div className="absolute right-0 top-0 h-32 w-40 bg-primary/15 blur-3xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-xl">
@@ -151,7 +155,12 @@ export function ReleaseAnnouncementDialog({
           <Button type="button" variant="outline" onClick={closeAndRemember}>
             Got it
           </Button>
-          <Button asChild type="button" className="gap-2" onClick={closeAndRemember}>
+          <Button
+            asChild
+            type="button"
+            className="gap-2"
+            onClick={closeAndRemember}
+          >
             <Link href={release.demoHref}>
               {release.demoLabel}
               <ArrowRight className="h-4 w-4" />

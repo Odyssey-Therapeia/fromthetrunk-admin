@@ -1,12 +1,19 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldPlus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +54,10 @@ type UserRow = {
   role: "admin" | "customer";
 };
 
+const USERS_QUERY_KEY = ["admin-users"] as const;
+
+const EMPTY_USERS: UserRow[] = [];
+
 const defaultPasswordDraft: PasswordDraft = {
   confirmPassword: "",
   newPassword: "",
@@ -63,7 +74,10 @@ const passwordRequirements =
   "Use at least 8 characters with uppercase, lowercase, and a number.";
 
 const meetsPasswordRequirements = (value: string) =>
-  value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value);
+  value.length >= 8 &&
+  /[A-Z]/.test(value) &&
+  /[a-z]/.test(value) &&
+  /[0-9]/.test(value);
 
 const readErrorMessage = async (response: Response) => {
   try {
@@ -78,46 +92,106 @@ const readErrorMessage = async (response: Response) => {
   return `Request failed with ${response.status}`;
 };
 
+const fetchUsers = async (): Promise<UserRow[]> => {
+  const response = await fetch("/api/v2/users");
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return (await response.json()) as UserRow[];
+};
+
 export default function AdminCustomersPage() {
-  const [createAdminDraft, setCreateAdminDraft] = useState<UserDraft>(defaultUserDraft);
+  const queryClient = useQueryClient();
+
+  const [createAdminDraft, setCreateAdminDraft] =
+    useState<UserDraft>(defaultUserDraft);
   const [createAdminError, setCreateAdminError] = useState<string | null>(null);
   const [isCreateAdminOpen, setIsCreateAdminOpen] = useState(false);
-  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [passwordDraft, setPasswordDraft] = useState<PasswordDraft>(defaultPasswordDraft);
+  const [passwordDraft, setPasswordDraft] =
+    useState<PasswordDraft>(defaultPasswordDraft);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [users, setUsers] = useState<UserRow[]>([]);
   const [passwordTarget, setPasswordTarget] = useState<null | UserRow>(null);
 
-  const loadUsers = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/v2/users");
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
+  const usersQuery = useQuery({
+    queryFn: fetchUsers,
+    queryKey: USERS_QUERY_KEY,
+  });
 
-      const data = (await response.json()) as UserRow[];
-      setUsers(data);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load users.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadUsers();
-  }, [loadUsers]);
+  const users = usersQuery.data ?? EMPTY_USERS;
 
   const adminCount = useMemo(
     () => users.filter((user) => user.role === "admin").length,
-    [users]
+    [users],
   );
   const customerCount = users.length - adminCount;
 
-  const handleCreateAdmin = async () => {
+  const createAdminMutation = useMutation({
+    mutationFn: async (input: {
+      email: string;
+      name: string;
+      password: string;
+    }) => {
+      const response = await fetch("/api/v2/users/admins", {
+        body: JSON.stringify(input),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+    },
+    onError: (error) => {
+      setCreateAdminError(
+        error instanceof Error ? error.message : "Unable to create admin user.",
+      );
+    },
+    onSuccess: async () => {
+      toast.success("Admin user created.");
+      setCreateAdminDraft(defaultUserDraft);
+      setIsCreateAdminOpen(false);
+      await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (input: {
+      email: string;
+      newPassword: string;
+      userId: string;
+    }) => {
+      const response = await fetch(`/api/v2/users/${input.userId}/password`, {
+        body: JSON.stringify({
+          newPassword: input.newPassword,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "PATCH",
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+    },
+    onError: (error) => {
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update admin password.",
+      );
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(`Password updated for ${variables.email}.`);
+      setPasswordDraft(defaultPasswordDraft);
+      setPasswordTarget(null);
+    },
+  });
+
+  const handleCreateAdmin = () => {
     setCreateAdminError(null);
 
     if (!createAdminDraft.name.trim() || !createAdminDraft.email.trim()) {
@@ -135,38 +209,14 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    setIsCreatingAdmin(true);
-    try {
-      const response = await fetch("/api/v2/users/admins", {
-        body: JSON.stringify({
-          email: createAdminDraft.email.trim(),
-          name: createAdminDraft.name.trim(),
-          password: createAdminDraft.password,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      toast.success("Admin user created.");
-      setCreateAdminDraft(defaultUserDraft);
-      setIsCreateAdminOpen(false);
-      await loadUsers();
-    } catch (error) {
-      setCreateAdminError(
-        error instanceof Error ? error.message : "Unable to create admin user."
-      );
-    } finally {
-      setIsCreatingAdmin(false);
-    }
+    createAdminMutation.mutate({
+      email: createAdminDraft.email.trim(),
+      name: createAdminDraft.name.trim(),
+      password: createAdminDraft.password,
+    });
   };
 
-  const handleResetAdminPassword = async () => {
+  const handleResetAdminPassword = () => {
     if (!passwordTarget) return;
 
     setPasswordError(null);
@@ -181,32 +231,11 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    setIsResettingPassword(true);
-    try {
-      const response = await fetch(`/api/v2/users/${passwordTarget.id}/password`, {
-        body: JSON.stringify({
-          newPassword: passwordDraft.newPassword,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "PATCH",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      toast.success(`Password updated for ${passwordTarget.email}.`);
-      setPasswordDraft(defaultPasswordDraft);
-      setPasswordTarget(null);
-    } catch (error) {
-      setPasswordError(
-        error instanceof Error ? error.message : "Unable to update admin password."
-      );
-    } finally {
-      setIsResettingPassword(false);
-    }
+    resetPasswordMutation.mutate({
+      email: passwordTarget.email,
+      newPassword: passwordDraft.newPassword,
+      userId: passwordTarget.id,
+    });
   };
 
   return (
@@ -239,7 +268,8 @@ export default function AdminCustomersPage() {
             <DialogHeader>
               <DialogTitle>Create Admin User</DialogTitle>
               <DialogDescription>
-                Add another admin account with a starting password they can change later.
+                Add another admin account with a starting password they can
+                change later.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
@@ -248,7 +278,10 @@ export default function AdminCustomersPage() {
                 <Input
                   id="admin-name"
                   onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({ ...prev, name: event.target.value }))
+                    setCreateAdminDraft((prev) => ({
+                      ...prev,
+                      name: event.target.value,
+                    }))
                   }
                   value={createAdminDraft.name}
                 />
@@ -258,7 +291,10 @@ export default function AdminCustomersPage() {
                 <Input
                   id="admin-email"
                   onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({ ...prev, email: event.target.value }))
+                    setCreateAdminDraft((prev) => ({
+                      ...prev,
+                      email: event.target.value,
+                    }))
                   }
                   type="email"
                   value={createAdminDraft.email}
@@ -269,7 +305,10 @@ export default function AdminCustomersPage() {
                 <Input
                   id="admin-password"
                   onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({ ...prev, password: event.target.value }))
+                    setCreateAdminDraft((prev) => ({
+                      ...prev,
+                      password: event.target.value,
+                    }))
                   }
                   type="password"
                   value={createAdminDraft.password}
@@ -289,18 +328,22 @@ export default function AdminCustomersPage() {
                   value={createAdminDraft.confirmPassword}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">{passwordRequirements}</p>
+              <p className="text-xs text-muted-foreground">
+                {passwordRequirements}
+              </p>
               {createAdminError ? (
                 <p className="text-sm text-destructive">{createAdminError}</p>
               ) : null}
             </div>
             <DialogFooter>
               <Button
-                disabled={isCreatingAdmin}
-                onClick={() => void handleCreateAdmin()}
+                disabled={createAdminMutation.isPending}
+                onClick={handleCreateAdmin}
                 type="button"
               >
-                {isCreatingAdmin ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {createAdminMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
                 Create Admin
               </Button>
             </DialogFooter>
@@ -312,7 +355,9 @@ export default function AdminCustomersPage() {
         <Card>
           <CardHeader>
             <CardTitle>Admins</CardTitle>
-            <CardDescription>Accounts with dashboard access and management privileges.</CardDescription>
+            <CardDescription>
+              Accounts with dashboard access and management privileges.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{adminCount}</p>
@@ -321,7 +366,9 @@ export default function AdminCustomersPage() {
         <Card>
           <CardHeader>
             <CardTitle>Customers</CardTitle>
-            <CardDescription>Storefront customer accounts visible in the directory.</CardDescription>
+            <CardDescription>
+              Storefront customer accounts visible in the directory.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{customerCount}</p>
@@ -333,7 +380,8 @@ export default function AdminCustomersPage() {
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
           <CardDescription>
-            Admin accounts can have their passwords reset directly from this table.
+            Admin accounts can have their passwords reset directly from this
+            table.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -348,17 +396,32 @@ export default function AdminCustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.length > 0 ? (
+              {usersQuery.isError ? (
+                <TableRow>
+                  <TableCell className="text-destructive" colSpan={5}>
+                    {usersQuery.error instanceof Error
+                      ? usersQuery.error.message
+                      : "Failed to load users."}
+                  </TableCell>
+                </TableRow>
+              ) : users.length > 0 ? (
                 users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell>{user.name ?? (user.role === "admin" ? "Admin" : "Customer")}</TableCell>
+                    <TableCell>
+                      {user.name ??
+                        (user.role === "admin" ? "Admin" : "Customer")}
+                    </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={user.role === "admin" ? "default" : "outline"}>
+                      <Badge
+                        variant={user.role === "admin" ? "default" : "outline"}
+                      >
                         {user.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </TableCell>
                     <TableCell className="text-right">
                       {user.role === "admin" ? (
                         <Button
@@ -374,7 +437,9 @@ export default function AdminCustomersPage() {
                           Set Password
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Customer account</span>
+                        <span className="text-xs text-muted-foreground">
+                          Customer account
+                        </span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -382,7 +447,9 @@ export default function AdminCustomersPage() {
               ) : (
                 <TableRow>
                   <TableCell className="text-muted-foreground" colSpan={5}>
-                    {isLoading ? "Loading users..." : "No users found."}
+                    {usersQuery.isPending
+                      ? "Loading users..."
+                      : "No users found."}
                   </TableCell>
                 </TableRow>
               )}
@@ -416,7 +483,10 @@ export default function AdminCustomersPage() {
               <Input
                 id="reset-password"
                 onChange={(event) =>
-                  setPasswordDraft((prev) => ({ ...prev, newPassword: event.target.value }))
+                  setPasswordDraft((prev) => ({
+                    ...prev,
+                    newPassword: event.target.value,
+                  }))
                 }
                 type="password"
                 value={passwordDraft.newPassword}
@@ -436,16 +506,22 @@ export default function AdminCustomersPage() {
                 value={passwordDraft.confirmPassword}
               />
             </div>
-            <p className="text-xs text-muted-foreground">{passwordRequirements}</p>
-            {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
+            <p className="text-xs text-muted-foreground">
+              {passwordRequirements}
+            </p>
+            {passwordError ? (
+              <p className="text-sm text-destructive">{passwordError}</p>
+            ) : null}
           </div>
           <DialogFooter>
             <Button
-              disabled={isResettingPassword}
-              onClick={() => void handleResetAdminPassword()}
+              disabled={resetPasswordMutation.isPending}
+              onClick={handleResetAdminPassword}
               type="button"
             >
-              {isResettingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {resetPasswordMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
               Update Password
             </Button>
           </DialogFooter>

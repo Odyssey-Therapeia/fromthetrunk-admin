@@ -14,21 +14,11 @@ interface StoryNarrativeProps {
   embedded?: boolean;
 }
 
-function SplitWords({
-  text,
-  className,
-}: {
-  text: string;
-  className?: string;
-}) {
+function SplitWords({ text, className }: { text: string; className?: string }) {
   return (
     <span className={className} aria-label={text}>
       {text.split(" ").map((word, i) => (
-        <span
-          key={i}
-          className="split-word inline-block"
-          aria-hidden="true"
-        >
+        <span key={i} className="split-word inline-block" aria-hidden="true">
           {word}&nbsp;
         </span>
       ))}
@@ -90,7 +80,10 @@ const climaxLines = [
 
 gsap.registerPlugin(ScrollTrigger);
 
-export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps) {
+export function StoryNarrative({
+  images,
+  embedded = false,
+}: StoryNarrativeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const beatImageIndexes = beats.reduce<{
     indexes: Array<null | number>;
@@ -119,7 +112,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
     if (typeof window === "undefined") return;
 
     const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
+      "(prefers-reduced-motion: reduce)",
     ).matches;
 
     if (prefersReducedMotion) {
@@ -143,7 +136,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
       if (heroSection) {
         gsap.from(
           heroSection.querySelectorAll(
-            ".hero-eyebrow, .hero-title .split-word, .hero-subtitle"
+            ".hero-eyebrow, .hero-title .split-word, .hero-subtitle",
           ),
           {
             autoAlpha: 0,
@@ -151,7 +144,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             stagger: 0.04,
             duration: 0.8,
             ease: "power3.out",
-          }
+          },
         );
 
         mm.add("(min-width: 1024px)", () => {
@@ -208,8 +201,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
         });
 
       // Climax
-      const climaxSection =
-        containerRef.current.querySelector(".story-climax");
+      const climaxSection = containerRef.current.querySelector(".story-climax");
       if (climaxSection) {
         const climaxItems =
           climaxSection.querySelectorAll<HTMLElement>(".climax-item");
@@ -269,7 +261,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
               sizes="100vw"
               className="object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/40 to-black/10" />
           </div>
           <div className="relative mx-auto w-full max-w-5xl space-y-5 px-4 pb-20 @[640px]:px-6 @[640px]:pb-28 @[1024px]:pb-36">
             <p className="hero-eyebrow reveal-el text-xs uppercase tracking-[0.5em] text-amber-100/50">
@@ -279,7 +271,8 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
               <SplitWords text="Why we do what we do" />
             </h1>
             <p className="hero-subtitle reveal-el max-w-lg text-base text-amber-100/60 @[640px]:text-lg @[1024px]:text-xl">
-              A story of heritage, second chances, and the quiet power of a saree.
+              A story of heritage, second chances, and the quiet power of a
+              saree.
             </p>
           </div>
         </section>
@@ -324,7 +317,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
                   sizes="100vw"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+                <div className="absolute inset-0 bg-linear-to-r from-black/80 via-black/50 to-black/20" />
               </div>
               <div className="relative mx-auto w-full max-w-5xl px-4 py-20 sm:px-6">
                 {beat.paragraphs.map((p, j) => (
@@ -351,7 +344,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             <div
               className={cn(
                 "flex items-center px-4 py-12 sm:px-6 sm:py-16 lg:min-h-[min(720px,calc(100svh-6.625rem))] lg:px-10 lg:py-0",
-                isImageRight ? "lg:order-1" : "lg:order-2"
+                isImageRight ? "lg:order-1" : "lg:order-2",
               )}
             >
               <div className="mx-auto max-w-lg space-y-6 lg:max-w-none">
@@ -368,7 +361,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
             <div
               className={cn(
                 "relative min-h-[42svh] overflow-hidden sm:min-h-[48svh] lg:min-h-[min(720px,calc(100svh-6.625rem))]",
-                isImageRight ? "lg:order-2" : "lg:order-1"
+                isImageRight ? "lg:order-2" : "lg:order-1",
               )}
             >
               <div className="beat-image-wrap absolute inset-0">
@@ -394,7 +387,7 @@ export function StoryNarrative({ images, embedded = false }: StoryNarrativeProps
               className={cn(
                 "climax-item font-serif leading-tight",
                 line.size,
-                line.muted ? "text-muted-foreground" : "text-foreground"
+                line.muted ? "text-muted-foreground" : "text-foreground",
               )}
             >
               {line.text}

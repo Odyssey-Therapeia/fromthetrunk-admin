@@ -1,7 +1,11 @@
 import { create } from "zustand";
 
+export const INITIAL_AGENT_CONVERSATION_ID = "pending-agent-conversation";
+
 export type AgentPanelState = {
   isOpen: boolean;
+  /** Whether the chat-history drawer is open */
+  isHistoryOpen: boolean;
   /** Always set -- stable key for conversation persistence */
   conversationId: string;
   /** Incrementing key to force runtime remount (new chat / switch conversation) */
@@ -19,12 +23,18 @@ export type AgentPanelState = {
   pendingMessages: unknown[] | null;
   /** Admin name for personalized greeting */
   adminName: string | null;
-
   toggle: () => void;
   open: () => void;
   close: () => void;
+  /** Toggle the chat-history drawer */
+  toggleHistory: () => void;
+  /** Explicitly set the chat-history drawer open state */
+  setHistoryOpen: (open: boolean) => void;
   setConversationId: (id: string) => void;
-  anchorProduct: (productId: string | null, productName?: string | null) => void;
+  anchorProduct: (
+    productId: string | null,
+    productName?: string | null,
+  ) => void;
   setModelId: (modelId: string) => void;
   setThinkingEnabled: (enabled: boolean) => void;
   setThinkingEffort: (effort: "low" | "medium" | "high" | "max") => void;
@@ -38,7 +48,8 @@ export type AgentPanelState = {
 
 export const useAgentStore = create<AgentPanelState>((set) => ({
   isOpen: false,
-  conversationId: crypto.randomUUID(),
+  isHistoryOpen: false,
+  conversationId: INITIAL_AGENT_CONVERSATION_ID,
   runtimeKey: 0,
   anchoredProductId: null,
   anchoredProductName: null,
@@ -47,23 +58,20 @@ export const useAgentStore = create<AgentPanelState>((set) => ({
   thinkingEffort: "medium",
   pendingMessages: null,
   adminName: null,
-
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
-
+  toggleHistory: () => set((s) => ({ isHistoryOpen: !s.isHistoryOpen })),
+  setHistoryOpen: (open) => set({ isHistoryOpen: open }),
   setConversationId: (id) => set({ conversationId: id }),
-
   anchorProduct: (productId, productName) =>
     set({
       anchoredProductId: productId,
       anchoredProductName: productName ?? null,
     }),
-
   setModelId: (modelId) => set({ modelId }),
   setThinkingEnabled: (thinkingEnabled) => set({ thinkingEnabled }),
   setThinkingEffort: (thinkingEffort) => set({ thinkingEffort }),
-
   newChat: () =>
     set((s) => ({
       conversationId: crypto.randomUUID(),
@@ -72,14 +80,12 @@ export const useAgentStore = create<AgentPanelState>((set) => ({
       anchoredProductName: null,
       pendingMessages: null,
     })),
-
   switchConversation: (id, messages) =>
     set((s) => ({
       conversationId: id,
       pendingMessages: messages,
       runtimeKey: s.runtimeKey + 1,
     })),
-
   setPendingMessages: (msgs) => set({ pendingMessages: msgs }),
   setAdminName: (name) => set({ adminName: name }),
 }));

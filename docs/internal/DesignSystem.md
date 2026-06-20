@@ -12,7 +12,7 @@ Defined in `globals.css` `:root`, bridged to Tailwind via `@theme inline`.
 | Foreground | `--foreground` | `#2e2017` | Primary text (warm dark brown) |
 | Card | `--card` | `#faf6f0` | Card surfaces |
 | Card foreground | `--card-foreground` | `#2e2017` | Text on card surfaces |
-| Primary | `--primary` | `#6b1d1d` | CTA buttons, links, ring focus (deep burgundy) |
+| Primary | `--primary` | `#4b2626` | CTA buttons, links, ring focus (brand maroon) |
 | Primary foreground | `--primary-foreground` | `#f9f5ed` | Text on primary surfaces |
 | Secondary | `--secondary` | `#e9e0d2` | Secondary backgrounds, badges |
 | Secondary foreground | `--secondary-foreground` | `#2e2017` | Text on secondary surfaces |
@@ -23,7 +23,7 @@ Defined in `globals.css` `:root`, bridged to Tailwind via `@theme inline`.
 | Destructive | `--destructive` | `#b42318` | Error states, delete actions |
 | Border | `--border` | `#dccbb7` | Default borders |
 | Input | `--input` | `#dccbb7` | Input borders |
-| Ring | `--ring` | `#6b1d1d` | Focus ring (matches primary) |
+| Ring | `--ring` | `#4b2626` | Focus ring (matches primary) |
 
 Text selection uses gold overlay: `rgba(184, 134, 11, 0.35)`.
 
@@ -33,10 +33,10 @@ Extended colors in `tailwind.config.ts` under `colors.trunk`:
 
 | Token | Tailwind class | Hex | Usage |
 |-------|---------------|-----|-------|
-| Burgundy | `trunk-burgundy` | `#6B1D1D` | Brand primary, matches `--primary` |
+| Burgundy | `trunk-burgundy` | `#4B2626` | Brand primary, matches `--primary` |
 | Gold | `trunk-gold` | `#B8860B` | Brand accent, matches `--accent` |
 | Cream | `trunk-cream` | `#F5F0E8` | Brand background, matches `--background` |
-| Brown | `trunk-brown` | `#3D2B1F` | Deep contrast, badge text, overlays |
+| Brown | `trunk-brown` | `#3C0C0F` | Deep contrast, badge text, overlays |
 
 Use the semantic tokens (`bg-primary`, `text-accent`) for UI components. Use `trunk-*` tokens only for brand-specific treatments (logo lockups, marketing sections, badge accents).
 

@@ -40,8 +40,20 @@ type OrderRow = {
   totalPaise: number;
 };
 
-const statusFilters = ["all", "pending", "confirmed", "shipped", "delivered"] as const;
-const paymentFilters = ["all", "pending", "paid", "failed", "refunded"] as const;
+const statusFilters = [
+  "all",
+  "pending",
+  "confirmed",
+  "shipped",
+  "delivered",
+] as const;
+const paymentFilters = [
+  "all",
+  "pending",
+  "paid",
+  "failed",
+  "refunded",
+] as const;
 
 const statusClassName = (status: string) => {
   switch (status) {
@@ -170,7 +182,11 @@ export default function AdminOrdersPage() {
     }
 
     const data = (await response.json()) as unknown[];
-    setOrders(data.map(normalizeOrder).filter((order): order is OrderRow => Boolean(order?.id)));
+    setOrders(
+      data
+        .map(normalizeOrder)
+        .filter((order): order is OrderRow => Boolean(order?.id)),
+    );
     setLastLoadedAt(new Date());
     setError(null);
   }, [status]);
@@ -184,7 +200,11 @@ export default function AdminOrdersPage() {
         await loadOrders();
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Unable to load orders.");
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Unable to load orders.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -197,7 +217,11 @@ export default function AdminOrdersPage() {
 
     const interval = window.setInterval(() => {
       void loadOrders().catch((loadError) => {
-        setError(loadError instanceof Error ? loadError.message : "Unable to refresh orders.");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to refresh orders.",
+        );
       });
     }, 10_000);
 
@@ -211,7 +235,8 @@ export default function AdminOrdersPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return orders.filter((order) => {
-      if (paymentStatus !== "all" && order.paymentStatus !== paymentStatus) return false;
+      if (paymentStatus !== "all" && order.paymentStatus !== paymentStatus)
+        return false;
       if (!normalizedQuery) return true;
 
       const haystack = [
@@ -235,10 +260,11 @@ export default function AdminOrdersPage() {
     () => ({
       failed: orders.filter((order) => order.paymentStatus === "failed").length,
       paid: orders.filter((order) => order.paymentStatus === "paid").length,
-      pending: orders.filter((order) => order.paymentStatus === "pending").length,
+      pending: orders.filter((order) => order.paymentStatus === "pending")
+        .length,
       total: orders.length,
     }),
-    [orders]
+    [orders],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -246,7 +272,11 @@ export default function AdminOrdersPage() {
     try {
       await loadOrders();
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to refresh orders.");
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to refresh orders.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -260,7 +290,10 @@ export default function AdminOrdersPage() {
     : "Not loaded yet";
 
   const renderMobileOrder = (order: OrderRow) => (
-    <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm" key={order.id}>
+    <div
+      className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm"
+      key={order.id}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-xs font-medium text-muted-foreground">
@@ -270,7 +303,10 @@ export default function AdminOrdersPage() {
             {order.shippingName ?? "No customer name"}
           </h3>
         </div>
-        <Badge className={paymentClassName(order.paymentStatus)} variant="outline">
+        <Badge
+          className={paymentClassName(order.paymentStatus)}
+          variant="outline"
+        >
           {order.paymentStatus}
         </Badge>
       </div>
@@ -278,11 +314,15 @@ export default function AdminOrdersPage() {
       <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
         <div>
           <span className="block uppercase tracking-[0.15em]">Total</span>
-          <span className="text-sm font-semibold text-foreground">{formatINR(order.totalPaise)}</span>
+          <span className="text-sm font-semibold text-foreground">
+            {formatINR(order.totalPaise)}
+          </span>
         </div>
         <div>
           <span className="block uppercase tracking-[0.15em]">Created</span>
-          <span className="text-sm text-foreground">{formatDateTime(order.createdAt)}</span>
+          <span className="text-sm text-foreground">
+            {formatDateTime(order.createdAt)}
+          </span>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">
@@ -302,7 +342,8 @@ export default function AdminOrdersPage() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Orders</h2>
           <p className="text-sm text-muted-foreground">
-            Track paid orders, failed attempts, buyer details, and purchased sarees.
+            Track paid orders, failed attempts, buyer details, and purchased
+            sarees.
           </p>
           <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
             Last refreshed {lastLoadedLabel}
@@ -327,9 +368,16 @@ export default function AdminOrdersPage() {
           ["Pending", metrics.pending],
           ["Failed", metrics.failed],
         ].map(([label, value]) => (
-          <div className="rounded-lg border border-border bg-card p-4 shadow-sm" key={label}>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
+          <div
+            className="rounded-lg border border-border bg-card p-4 shadow-sm"
+            key={label}
+          >
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              {label}
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">
+              {value}
+            </p>
           </div>
         ))}
       </div>
@@ -353,7 +401,10 @@ export default function AdminOrdersPage() {
             />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Tabs onValueChange={(value) => setStatus(value as typeof status)} value={status}>
+            <Tabs
+              onValueChange={(value) => setStatus(value as typeof status)}
+              value={status}
+            >
               <TabsList className="w-full overflow-x-auto sm:w-auto">
                 {statusFilters.map((filter) => (
                   <TabsTrigger key={filter} value={filter}>
@@ -363,7 +414,9 @@ export default function AdminOrdersPage() {
               </TabsList>
             </Tabs>
             <Tabs
-              onValueChange={(value) => setPaymentStatus(value as typeof paymentStatus)}
+              onValueChange={(value) =>
+                setPaymentStatus(value as typeof paymentStatus)
+              }
               value={paymentStatus}
             >
               <TabsList className="w-full overflow-x-auto sm:w-auto">
@@ -418,24 +471,38 @@ export default function AdminOrdersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-[180px] space-y-1">
-                        <p className="truncate font-medium">{order.shippingName ?? "No name"}</p>
+                      <div className="max-w-45 space-y-1">
+                        <p className="truncate font-medium">
+                          {order.shippingName ?? "No name"}
+                        </p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {order.shippingEmail ?? order.shippingPhone ?? "No contact"}
+                          {order.shippingEmail ??
+                            order.shippingPhone ??
+                            "No contact"}
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[280px]">
-                      <p className="truncate text-sm">{itemSummary(order.items)}</p>
+                    <TableCell className="max-w-70">
+                      <p className="truncate text-sm">
+                        {itemSummary(order.items)}
+                      </p>
                     </TableCell>
-                    <TableCell className="font-medium">{formatINR(order.totalPaise)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatINR(order.totalPaise)}
+                    </TableCell>
                     <TableCell>
-                      <Badge className={statusClassName(order.status)} variant="outline">
+                      <Badge
+                        className={statusClassName(order.status)}
+                        variant="outline"
+                      >
                         {order.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={paymentClassName(order.paymentStatus)} variant="outline">
+                      <Badge
+                        className={paymentClassName(order.paymentStatus)}
+                        variant="outline"
+                      >
                         {order.paymentStatus}
                       </Badge>
                     </TableCell>

@@ -4,7 +4,7 @@ export default function ProductDetailLoading() {
       <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         {/* Gallery skeleton */}
         <div className="space-y-4">
-          <div className="aspect-[4/5] animate-pulse rounded-3xl bg-muted" />
+          <div className="aspect-4/5 animate-pulse rounded-3xl bg-muted" />
           <div className="flex gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div

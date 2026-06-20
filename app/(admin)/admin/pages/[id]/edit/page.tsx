@@ -193,7 +193,7 @@ function BlockRow({
   const entry = BLOCK_REGISTRY.get(block.type);
   const formSchema = BLOCK_EDITOR_SCHEMAS[block.type];
   const [localProps, setLocalProps] = useState<Record<string, unknown>>(
-    block.props
+    block.props,
   );
 
   const handleFieldChange = (key: string, value: unknown) => {
@@ -241,9 +241,7 @@ function BlockRow({
           <p className="text-sm font-medium text-foreground truncate">
             {label}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {block.type}
-          </p>
+          <p className="text-xs text-muted-foreground">{block.type}</p>
         </div>
 
         {/* Expand / remove */}
@@ -344,16 +342,25 @@ export default function PageEditorPage() {
     enabled: Boolean(page),
   });
 
-  // Seed blocks from the latest saved version (once, on first load).
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    if (!versions || versions.length === 0) return;
-    const latest = versions[0]; // newest first (listPageVersions order)
-    if (!latest.blocks || latest.blocks.length === 0) return;
-    seededRef.current = true;
-    setBlocks(versionPayloadToBlocks(latest.blocks));
-  }, [versions]);
+  // Seed the editable block list from the latest saved version as soon as that
+  // version data is available. This forks server data into local working state
+  // (blocks are edited in place), so it can't simply be derived from the query.
+  //
+  // We track the seeded pageId in state and seed *during render* (guarded)
+  // rather than in an effect: that's the React-sanctioned way to reset state
+  // when an input changes, and it keeps the setState out of an effect body.
+  // Keying to pageId (instead of a once-only ref) means navigating to a
+  // different page re-seeds correctly; because the guard only fires when pageId
+  // changes, a background refetch of the *same* page never clobbers in-progress
+  // edits. (newest first — listPageVersions order, so versions[0] is latest.)
+  const [seededPageId, setSeededPageId] = useState<string | null>(null);
+  if (versions !== undefined && seededPageId !== pageId) {
+    const latest = versions[0];
+    setSeededPageId(pageId);
+    setBlocks(
+      latest?.blocks?.length ? versionPayloadToBlocks(latest.blocks) : [],
+    );
+  }
 
   // ── Autosave ─────────────────────────────────────────────────────────────
 
@@ -381,7 +388,7 @@ export default function PageEditorPage() {
         setIsSaving(false);
       }
     },
-    [pageId]
+    [pageId],
   );
 
   const scheduleAutosave = useCallback(
@@ -391,7 +398,7 @@ export default function PageEditorPage() {
         void saveVersion(currentBlocks);
       }, AUTOSAVE_DEBOUNCE_MS);
     },
-    [saveVersion]
+    [saveVersion],
   );
 
   // ── Publish / Unpublish / Preview ─────────────────────────────────────────
@@ -439,7 +446,7 @@ export default function PageEditorPage() {
       window.open(data.previewUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Unable to generate preview link."
+        err instanceof Error ? err.message : "Unable to generate preview link.",
       );
     } finally {
       setPendingPublish(null);
@@ -452,8 +459,9 @@ export default function PageEditorPage() {
     const entry = BLOCK_REGISTRY.get(type);
     // Seed default props from block's propsSchema defaults if available
     const parseResult = entry?.propsSchema.safeParse({});
-    const defaultProps =
-      parseResult?.success ? (parseResult.data as Record<string, unknown>) : {};
+    const defaultProps = parseResult?.success
+      ? (parseResult.data as Record<string, unknown>)
+      : {};
 
     setBlocks((prev) => {
       const next = addBlock(prev, type, defaultProps);
@@ -488,7 +496,7 @@ export default function PageEditorPage() {
 
   const handlePropsChange = (
     clientId: string,
-    props: Record<string, unknown>
+    props: Record<string, unknown>,
   ) => {
     setBlocks((prev) => {
       const next = updateBlockProps(prev, clientId, props);
@@ -678,8 +686,7 @@ export default function PageEditorPage() {
                 No blocks yet
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Click &ldquo;Add block&rdquo; above to start building your
-                page.
+                Click &ldquo;Add block&rdquo; above to start building your page.
               </p>
             </div>
           ) : (
@@ -704,8 +711,7 @@ export default function PageEditorPage() {
       {/* ── Page info ── */}
       {page ? (
         <p className="text-xs text-muted-foreground">
-          Slug:{" "}
-          <span className="font-mono">/{page.slug}</span>
+          Slug: <span className="font-mono">/{page.slug}</span>
           {" · "}
           Changes autosave to a draft version.
         </p>

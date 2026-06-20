@@ -7,20 +7,32 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-const globalSlugs = ["homePage", "collectionPage", "ourStoryPage", "howItWorksPage"] as const;
+const globalSlugs = [
+  "homePage",
+  "collectionPage",
+  "ourStoryPage",
+  "howItWorksPage",
+] as const;
 
 export default function AdminGlobalsPage() {
-  const [activeSlug, setActiveSlug] = useState<(typeof globalSlugs)[number]>("homePage");
-  const [contentBySlug, setContentBySlug] = useState<Record<string, string>>({});
+  const [activeSlug, setActiveSlug] =
+    useState<(typeof globalSlugs)[number]>("homePage");
+  const [contentBySlug, setContentBySlug] = useState<Record<string, string>>(
+    {},
+  );
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadGlobal = async (slug: (typeof globalSlugs)[number]): Promise<string> => {
+  const loadGlobal = async (
+    slug: (typeof globalSlugs)[number],
+  ): Promise<string> => {
     const response = await fetch(`/api/v2/globals/${slug}`);
     if (!response.ok) {
       return "{}";
     }
 
-    const data = (await response.json()) as { content: Record<string, unknown> };
+    const data = (await response.json()) as {
+      content: Record<string, unknown>;
+    };
     return JSON.stringify(data.content ?? {}, null, 2);
   };
 
@@ -35,10 +47,15 @@ export default function AdminGlobalsPage() {
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Globals</h2>
-        <p className="text-sm text-muted-foreground">Edit page-level content JSON.</p>
+        <p className="text-sm text-muted-foreground">
+          Edit page-level content JSON.
+        </p>
       </div>
 
-      <Tabs onValueChange={(value) => setActiveSlug(value as typeof activeSlug)} value={activeSlug}>
+      <Tabs
+        onValueChange={(value) => setActiveSlug(value as typeof activeSlug)}
+        value={activeSlug}
+      >
         <TabsList>
           {globalSlugs.map((slug) => (
             <TabsTrigger key={slug} value={slug}>
@@ -49,7 +66,7 @@ export default function AdminGlobalsPage() {
       </Tabs>
 
       <Textarea
-        className="min-h-[360px] font-mono text-xs"
+        className="min-h-90 font-mono text-xs"
         onChange={(event) =>
           setContentBySlug((prev) => ({
             ...prev,
@@ -71,7 +88,9 @@ export default function AdminGlobalsPage() {
                 },
                 method: "PATCH",
               });
-              setStatus(response.ok ? "Saved" : `Save failed (${response.status})`);
+              setStatus(
+                response.ok ? "Saved" : `Save failed (${response.status})`,
+              );
             } catch {
               setStatus("Invalid JSON");
             }

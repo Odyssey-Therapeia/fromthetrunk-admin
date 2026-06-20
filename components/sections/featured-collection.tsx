@@ -21,13 +21,16 @@ interface FeaturedCollectionProps {
   content?: HomePageContent | null;
 }
 
-export function FeaturedCollection({ products, content }: FeaturedCollectionProps) {
+export function FeaturedCollection({
+  products,
+  content,
+}: FeaturedCollectionProps) {
   const productCards = products.slice(0, 4).map((product, index) => {
     const image = resolveMediaURL(product.images?.[0]);
     return {
       name: product.name,
       description: `${product.detailsFabric ?? "Heirloom"}, ${formatCurrency(
-        product.pricePaise / 100
+        product.pricePaise / 100,
       )}`,
       href: `/collection/${product.slug}`,
       cta: "View saree",
@@ -46,13 +49,15 @@ export function FeaturedCollection({ products, content }: FeaturedCollectionProp
           ) : (
             <div className="h-full w-full bg-muted" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/20 to-black/10" />
         </div>
       ),
     };
   });
 
-  const featureCardImage = resolveMediaURL(products[0]?.images?.[1] ?? products[0]?.images?.[0]);
+  const featureCardImage = resolveMediaURL(
+    products[0]?.images?.[1] ?? products[0]?.images?.[0],
+  );
 
   const featureCard = {
     name: "The Trunk Promise",
@@ -75,7 +80,7 @@ export function FeaturedCollection({ products, content }: FeaturedCollectionProp
         ) : (
           <div className="h-full w-full bg-muted" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/20 to-black/10" />
+        <div className="absolute inset-0 bg-linear-to-br from-black/70 via-black/20 to-black/10" />
       </div>
     ),
   };

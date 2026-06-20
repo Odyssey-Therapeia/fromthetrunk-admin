@@ -37,7 +37,7 @@ export type EmailOrder = {
 const brandStyles = {
   bg: "#f5f0e8",
   card: "#ffffff",
-  primary: "#6b1d1d",
+  primary: "#4b2626",
   gold: "#b8860b",
   text: "#2e2017",
   muted: "#6d5a4e",
@@ -71,7 +71,7 @@ const wrapper = (content: string) => `
     </div>
     <div style="text-align:center;margin-top:24px;font-size:11px;color:${brandStyles.muted};">
       <p>&copy; 2026 From the Trunk. All rights reserved.</p>
-      <p>If you have questions, reply to this email or contact us at hello@fromthetrunk.com</p>
+      <p>If you have questions, reply to this email or contact us at hello@fromthetrunk.shop</p>
     </div>
   </div>
 </body>
@@ -97,7 +97,7 @@ export function orderConfirmationEmail(order: EmailOrder): {
         ${formatINR(item.price * item.quantity * 100)}
       </td>
     </tr>
-  `
+  `,
     )
     .join("");
 
@@ -172,7 +172,7 @@ export function orderPurchaseNotificationEmail(
     paymentReference?: null | string;
     paymentUrl?: null | string;
     source: string;
-  }
+  },
 ): { subject: string; html: string } {
   const orderId = order.id.slice(0, 8).toUpperCase();
   const address = order.shippingAddress;
@@ -189,7 +189,7 @@ export function orderPurchaseNotificationEmail(
             ${formatINR(item.price * item.quantity * 100)}
           </td>
         </tr>
-      `
+      `,
     )
     .join("");
 
@@ -262,7 +262,7 @@ export function orderPurchaseNotificationEmail(
 
 export function orderShippedEmail(
   order: Pick<EmailOrder, "id">,
-  trackingNumber?: string
+  trackingNumber?: string,
 ): { subject: string; html: string } {
   const orderId = order.id.slice(0, 8).toUpperCase();
 
@@ -414,11 +414,14 @@ export function emailChangeVerificationEmail(verifyUrl: string): {
  * Composes a structured operations summary from the Control Centre dashboard
  * and formats it as a brand-consistent HTML email.
  */
-export function weeklyOpsDigestEmail(dashboard: import("@/lib/control-centre/compose-dashboard").ControlCentreDashboard): {
+export function weeklyOpsDigestEmail(
+  dashboard: import("@/lib/control-centre/compose-dashboard").ControlCentreDashboard,
+): {
   subject: string;
   html: string;
 } {
-  const { funnel, feedHealth, parity, indexation, cwv, reservationExpiry } = dashboard;
+  const { funnel, feedHealth, parity, indexation, cwv, reservationExpiry } =
+    dashboard;
   const now = new Date();
   const weekLabel = now.toLocaleDateString("en-IN", {
     day: "2-digit",

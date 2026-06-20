@@ -1,5 +1,3 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
 import type { MouseEvent } from "react";
@@ -55,7 +53,9 @@ function SelectionCheckbox({
         aria-label={`Select ${product.name}`}
         checked={Boolean(isSelected)}
         className="h-4 w-4 accent-primary"
-        onChange={(event) => onSelectionChange(product.id, event.target.checked)}
+        onChange={(event) =>
+          onSelectionChange(product.id, event.target.checked)
+        }
         type="checkbox"
       />
     </label>
@@ -166,7 +166,11 @@ function ProductImageFrame({
       <div
         className={cn(
           "relative overflow-hidden bg-muted/30",
-          isGallery ? "aspect-[16/10]" : isCompact ? "aspect-square" : "aspect-[3/4]",
+          isGallery
+            ? "aspect-16/10"
+            : isCompact
+              ? "aspect-square"
+              : "aspect-3/4",
         )}
       >
         {product.thumbnailUrl ? (
@@ -191,7 +195,7 @@ function ProductImageFrame({
         </div>
 
         {isGallery ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-10 text-white">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/75 via-black/35 to-transparent p-3 pt-10 text-white">
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur">
                 <ImageIcon className="h-3 w-3" />
@@ -254,7 +258,9 @@ export function ProductCard({
             <h3
               className={cn(
                 "font-medium leading-5 transition-colors hover:text-primary",
-                isCompact ? "line-clamp-2 min-h-10 text-xs" : "line-clamp-2 min-h-10 text-sm",
+                isCompact
+                  ? "line-clamp-2 min-h-10 text-xs"
+                  : "line-clamp-2 min-h-10 text-sm",
                 isGallery && "min-h-0 text-base",
               )}
             >
@@ -262,7 +268,12 @@ export function ProductCard({
             </h3>
           </Link>
           <div className="flex items-center justify-between gap-2">
-            <p className={cn("font-semibold", isCompact ? "text-sm" : "text-base")}>
+            <p
+              className={cn(
+                "font-semibold",
+                isCompact ? "text-sm" : "text-base",
+              )}
+            >
               {formatINR(product.pricePaise)}
             </p>
             {product.featured ? (
@@ -294,7 +305,11 @@ export function ProductCard({
               {getImageCountLabel(imageCount)}
             </span>
           )}
-          <ProductActions product={product} onDuplicate={onDuplicate} onDelete={onDelete} />
+          <ProductActions
+            product={product}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
+          />
         </div>
       </div>
     </div>
@@ -327,7 +342,7 @@ export function ProductListRow({
 
       <Link
         href={`/admin/products/${product.id}`}
-        className="relative h-24 w-[88px] overflow-hidden rounded-lg bg-muted/30 @[760px]:h-[88px] @[760px]:w-[72px]"
+        className="relative h-24 w-22 overflow-hidden rounded-lg bg-muted/30 @[760px]:h-22 @[760px]:w-18"
       >
         {product.thumbnailUrl ? (
           <Image
@@ -365,11 +380,17 @@ export function ProductListRow({
 
       <div className="col-span-2 col-start-2 flex items-center justify-between gap-3 @[760px]:col-auto @[760px]:block">
         <p className="text-sm font-semibold">{formatINR(product.pricePaise)}</p>
-        <p className="text-xs text-muted-foreground">{getImageCountLabel(imageCount)}</p>
+        <p className="text-xs text-muted-foreground">
+          {getImageCountLabel(imageCount)}
+        </p>
       </div>
 
       <div className="col-span-3 flex items-center justify-end @[760px]:col-auto">
-        <ProductActions product={product} onDuplicate={onDuplicate} onDelete={onDelete} />
+        <ProductActions
+          product={product}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   );

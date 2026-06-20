@@ -1,50 +1,41 @@
 name: CI
-
 on:
   pull_request:
     branches: [main, development]
   push:
     branches: [main, development]
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   lint-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: npm
-
+          node-version: 22
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
-
+        run: pnpm install --frozen-lockfile
       - name: Lint
-        run: npm run lint
-
+        run: pnpm run lint
   test:
     name: Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: npm
-
+          node-version: 22
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
-
+        run: pnpm install --frozen-lockfile
       - name: Run tests
-        run: npm test
-
+        run: pnpm run test
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -55,15 +46,13 @@ jobs:
       NEXTAUTH_SECRET: ci-build-secret-placeholder
       NEXT_PUBLIC_SERVER_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: npm
-
+          node-version: 22
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
-
+        run: pnpm install --frozen-lockfile
       - name: Build
-        run: npm run build
+        run: pnpm run build

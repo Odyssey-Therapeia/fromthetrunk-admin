@@ -32,7 +32,7 @@ export function AgentPlusMenu() {
       <PopoverContent
         side="top"
         align="start"
-        className="w-[220px] border-[#444] bg-[#222] p-1"
+        className="w-55 border-[#444] bg-[#222] p-1"
       >
         {menuItems.map((item) => {
           const Icon = item.icon;

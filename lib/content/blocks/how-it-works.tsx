@@ -83,7 +83,7 @@ function HowItWorksRenderer(props: Record<string, unknown>) {
             key={step.title}
             className="group relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-soft"
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/25 to-black/10" />
             <div className="relative z-10 flex h-full flex-col justify-between p-6 text-white">
               <div className="flex items-center justify-end">
                 <span className="text-xs uppercase tracking-[0.4em] text-white/70">

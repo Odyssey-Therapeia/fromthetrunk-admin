@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import {
   ArrowUpDown,
@@ -43,7 +41,8 @@ export const ADMIN_PRODUCT_SORT_OPTIONS = [
   },
 ] as const;
 
-export type AdminProductSort = (typeof ADMIN_PRODUCT_SORT_OPTIONS)[number]["value"];
+export type AdminProductSort =
+  (typeof ADMIN_PRODUCT_SORT_OPTIONS)[number]["value"];
 
 export type ImageFilter = "all" | "with-images" | "missing-cover";
 
@@ -92,7 +91,7 @@ export function ProductsToolbar({
   return (
     <div className="@container space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1 @[900px]:max-w-[420px]">
+        <div className="relative min-w-55 flex-1 @[900px]:max-w-105">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -104,7 +103,7 @@ export function ProductsToolbar({
         </div>
 
         <Select value={status} onValueChange={onStatusChange}>
-          <SelectTrigger className="h-10 w-[142px] rounded-xl bg-background/80">
+          <SelectTrigger className="h-10 w-35.5 rounded-xl bg-background/80">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -115,7 +114,7 @@ export function ProductsToolbar({
         </Select>
 
         <Select value={stockStatus} onValueChange={onStockStatusChange}>
-          <SelectTrigger className="h-10 w-[136px] rounded-xl bg-background/80">
+          <SelectTrigger className="h-10 w-34 rounded-xl bg-background/80">
             <SelectValue placeholder="Stock" />
           </SelectTrigger>
           <SelectContent>
@@ -130,7 +129,7 @@ export function ProductsToolbar({
           value={imageFilter}
           onValueChange={(value) => onImageFilterChange(value as ImageFilter)}
         >
-          <SelectTrigger className="h-10 w-[154px] rounded-xl bg-background/80">
+          <SelectTrigger className="h-10 w-38.5 rounded-xl bg-background/80">
             <SelectValue placeholder="Images" />
           </SelectTrigger>
           <SelectContent>
@@ -144,7 +143,7 @@ export function ProductsToolbar({
           value={sort}
           onValueChange={(value) => onSortChange(value as AdminProductSort)}
         >
-          <SelectTrigger className="h-10 w-[186px] rounded-xl bg-background/80">
+          <SelectTrigger className="h-10 w-46.5 rounded-xl bg-background/80">
             <ArrowUpDown className="h-3.5 w-3.5" />
             <SelectValue placeholder="Sort" />
           </SelectTrigger>
@@ -158,13 +157,23 @@ export function ProductsToolbar({
         </Select>
 
         <div className="ml-auto flex gap-2">
-          <Button asChild variant="outline" size="sm" className="h-10 gap-1.5 rounded-xl">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="h-10 gap-1.5 rounded-xl"
+          >
             <Link href="/admin/products/import">
               <Upload className="h-3.5 w-3.5" />
               Import
             </Link>
           </Button>
-          <Button onClick={onExport} variant="outline" size="sm" className="h-10 gap-1.5 rounded-xl">
+          <Button
+            onClick={onExport}
+            variant="outline"
+            size="sm"
+            className="h-10 gap-1.5 rounded-xl"
+          >
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>

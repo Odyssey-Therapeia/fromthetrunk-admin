@@ -23,12 +23,14 @@ import { registerNewsletterRoutes } from "@/api/hono/routes/newsletter";
 import { registerOrderRoutes } from "@/api/hono/routes/orders";
 import { registerPaymentRoutes } from "@/api/hono/routes/payments";
 import { registerProductRoutes } from "@/api/hono/routes/products";
+import { registerProductTypeRoutes } from "@/api/hono/routes/product-types";
 import { registerSearchRoutes } from "@/api/hono/routes/search";
 import { registerUserRoutes } from "@/api/hono/routes/users";
 import { registerWishlistRoutes } from "@/api/hono/routes/wishlist";
 import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
 import { registerFeedsRoutes } from "@/api/hono/routes/feeds";
 import { registerHealthRoutes } from "@/api/hono/routes/health";
+import { registerTagRoutes } from "@/api/hono/routes/tags";
 import type { HonoBindings } from "@/api/hono/types";
 import { onUncaughtError } from "@/lib/http/on-uncaught-error";
 
@@ -50,6 +52,14 @@ app.get("/docs", swaggerUI({ url: "/api/v2/openapi.json" }));
 const productsApp = new OpenAPIHono<HonoBindings>();
 registerProductRoutes(productsApp);
 app.route("/products", productsApp);
+
+const productTypesApp = new OpenAPIHono<HonoBindings>();
+registerProductTypeRoutes(productTypesApp);
+app.route("/product-types", productTypesApp);
+
+const tagsApp = new OpenAPIHono<HonoBindings>();
+registerTagRoutes(tagsApp);
+app.route("/tags", tagsApp);
 
 const collectionsApp = new OpenAPIHono<HonoBindings>();
 registerCollectionRoutes(collectionsApp);

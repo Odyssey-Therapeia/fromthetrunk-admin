@@ -42,10 +42,10 @@ const config = {
           foreground: "var(--card-foreground)",
         },
         trunk: {
-          burgundy: "#6B1D1D",
+          burgundy: "#4B2626",
           gold: "#B8860B",
           cream: "#F5F0E8",
-          brown: "#3D2B1F",
+          brown: "#3C0C0F",
         },
       },
       borderRadius: {

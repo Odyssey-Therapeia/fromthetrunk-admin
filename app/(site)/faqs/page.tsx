@@ -48,7 +48,7 @@ const FAQ_ITEMS = [
   {
     question: "Can I sell my sarees through From the Trunk?",
     answer:
-      "Yes! We welcome submissions from custodians who wish to pass on their sarees. Reach out to us at hello@fromthetrunk.com with photos and provenance details.",
+      "Yes! We welcome submissions from custodians who wish to pass on their sarees. Reach out to us at hello@fromthetrunk.shop with photos and provenance details.",
   },
   {
     question: "How do I care for my saree?",

@@ -40,42 +40,40 @@ export default async function OGImage({ params }: Props) {
   if (!product) {
     // Fallback: site-level branded image
     return new ImageResponse(
-      (
+      <div
+        style={{
+          background:
+            "linear-gradient(135deg, #3C0C0F 0%, #4B2626 50%, #B8860B 100%)",
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "60px",
+        }}
+      >
         <div
           style={{
-            background:
-              "linear-gradient(135deg, #3D2B1F 0%, #6B1D1D 50%, #B8860B 100%)",
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "60px",
+            fontSize: "56px",
+            fontFamily: "Georgia, serif",
+            color: "#F5F0E8",
+            textAlign: "center",
           }}
         >
-          <div
-            style={{
-              fontSize: "56px",
-              fontFamily: "Georgia, serif",
-              color: "#F5F0E8",
-              textAlign: "center",
-            }}
-          >
-            From the Trunk
-          </div>
-          <div
-            style={{
-              fontSize: "24px",
-              color: "rgba(245, 240, 232, 0.7)",
-              marginTop: "24px",
-            }}
-          >
-            Pre-Loved Luxury Sarees
-          </div>
+          From the Trunk
         </div>
-      ),
-      { ...size }
+        <div
+          style={{
+            fontSize: "24px",
+            color: "rgba(245, 240, 232, 0.7)",
+            marginTop: "24px",
+          }}
+        >
+          Pre-Loved Luxury Sarees
+        </div>
+      </div>,
+      { ...size },
     );
   }
 
@@ -85,105 +83,103 @@ export default async function OGImage({ params }: Props) {
   const priceDisplay = `₹${priceRupees.toLocaleString("en-IN")}`;
 
   return new ImageResponse(
-    (
-      <div
-        style={{
-          background:
-            "linear-gradient(135deg, #3D2B1F 0%, #6B1D1D 60%, #B8860B 100%)",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "stretch",
-        }}
-      >
-        {/* Product image panel */}
-        {imageUrl && (
-          <div
-            style={{
-              width: "50%",
-              overflow: "hidden",
-              position: "relative",
-              display: "flex",
-            }}
-          >
-            <img
-              src={imageUrl}
-              alt={product.name}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: "center",
-              }}
-            />
-            {/* gradient overlay so text is readable if product image bleeds */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(to right, transparent 60%, #3D2B1F 100%)",
-              }}
-            />
-          </div>
-        )}
-
-        {/* Text panel */}
+    <div
+      style={{
+        background:
+          "linear-gradient(135deg, #3C0C0F 0%, #4B2626 60%, #B8860B 100%)",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+      }}
+    >
+      {/* Product image panel */}
+      {imageUrl && (
         <div
           style={{
-            flex: 1,
+            width: "50%",
+            overflow: "hidden",
+            position: "relative",
             display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            padding: imageUrl ? "48px 56px 48px 40px" : "60px",
-            gap: "20px",
           }}
         >
+          <img
+            src={imageUrl}
+            alt={product.name}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center",
+            }}
+          />
+          {/* gradient overlay so text is readable if product image bleeds */}
           <div
             style={{
-              fontSize: "13px",
-              letterSpacing: "0.45em",
-              textTransform: "uppercase" as const,
-              color: "rgba(245, 240, 232, 0.55)",
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(to right, transparent 60%, #3C0C0F 100%)",
             }}
-          >
-            From the Trunk
-          </div>
+          />
+        </div>
+      )}
 
-          <div
-            style={{
-              fontSize: imageUrl ? "36px" : "52px",
-              fontFamily: "Georgia, serif",
-              color: "#F5F0E8",
-              lineHeight: 1.25,
-            }}
-          >
-            {title}
-          </div>
+      {/* Text panel */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: imageUrl ? "48px 56px 48px 40px" : "60px",
+          gap: "20px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "13px",
+            letterSpacing: "0.45em",
+            textTransform: "uppercase" as const,
+            color: "rgba(245, 240, 232, 0.55)",
+          }}
+        >
+          From the Trunk
+        </div>
 
-          <div
-            style={{
-              fontSize: "28px",
-              color: "#D4AF37",
-              fontFamily: "Georgia, serif",
-            }}
-          >
-            {priceDisplay}
-          </div>
+        <div
+          style={{
+            fontSize: imageUrl ? "36px" : "52px",
+            fontFamily: "Georgia, serif",
+            color: "#F5F0E8",
+            lineHeight: 1.25,
+          }}
+        >
+          {title}
+        </div>
 
-          <div
-            style={{
-              fontSize: "14px",
-              color: "rgba(245, 240, 232, 0.5)",
-              marginTop: "8px",
-            }}
-          >
-            {origin.replace(/^https?:\/\//, "")}
-          </div>
+        <div
+          style={{
+            fontSize: "28px",
+            color: "#D4AF37",
+            fontFamily: "Georgia, serif",
+          }}
+        >
+          {priceDisplay}
+        </div>
+
+        <div
+          style={{
+            fontSize: "14px",
+            color: "rgba(245, 240, 232, 0.5)",
+            marginTop: "8px",
+          }}
+        >
+          {origin.replace(/^https?:\/\//, "")}
         </div>
       </div>
-    ),
-    { ...size }
+    </div>,
+    { ...size },
   );
 }

@@ -1,5 +1,3 @@
-"use client";
-
 import { Shape, ShapeStream } from "@electric-sql/client";
 import { useEffect, useState } from "react";
 
@@ -15,7 +13,8 @@ type UseElectricShapeRowsOptions<T> = {
   table: string;
 };
 
-const shapeServiceUrl = process.env.NEXT_PUBLIC_ELECTRIC_SHAPE_URL?.trim() || "";
+const shapeServiceUrl =
+  process.env.NEXT_PUBLIC_ELECTRIC_SHAPE_URL?.trim() || "";
 
 export const useElectricShapeRows = <T>({
   enabled = true,
@@ -27,7 +26,7 @@ export const useElectricShapeRows = <T>({
   table,
 }: UseElectricShapeRowsOptions<T>) => {
   const [mode, setMode] = useState<ElectricMode>(
-    shapeServiceUrl ? "electric" : "polling"
+    shapeServiceUrl ? "electric" : "polling",
   );
   const [rows, setRows] = useState<T[]>(initialRows);
 
@@ -88,11 +87,13 @@ export const useElectricShapeRows = <T>({
           await startPolling();
         });
 
-      unsubscribe = shape.subscribe(({ rows: liveRows }: { rows: unknown[] }) => {
-        if (cancelled) return;
-        setMode("electric");
-        setRows(mapRows(liveRows));
-      });
+      unsubscribe = shape.subscribe(
+        ({ rows: liveRows }: { rows: unknown[] }) => {
+          if (cancelled) return;
+          setMode("electric");
+          setRows(mapRows(liveRows));
+        },
+      );
     } catch {
       void startPolling();
     }
@@ -102,14 +103,7 @@ export const useElectricShapeRows = <T>({
       if (interval) clearInterval(interval);
       unsubscribe?.();
     };
-  }, [
-    enabled,
-    fallbackFetch,
-    mapRows,
-    pollIntervalMs,
-    shapeParams,
-    table,
-  ]);
+  }, [enabled, fallbackFetch, mapRows, pollIntervalMs, shapeParams, table]);
 
   return {
     mode,

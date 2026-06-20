@@ -32,27 +32,24 @@ async function OurStoryPageContent() {
   const cards = [
     {
       title: textOrFallback(ourStoryPage?.cardOneTitle, "Sourcing"),
-      description:
-        textOrFallback(
-          ourStoryPage?.cardOneBody,
-          "We give new life to preloved sarees sourced directly from homes."
-        ),
+      description: textOrFallback(
+        ourStoryPage?.cardOneBody,
+        "We give new life to preloved sarees sourced directly from homes.",
+      ),
     },
     {
       title: textOrFallback(ourStoryPage?.cardTwoTitle, "Quality Control"),
-      description:
-        textOrFallback(
-          ourStoryPage?.cardTwoBody,
-          "A rigorous 360\u00B0 check for tears, spills, and material integrity."
-        ),
+      description: textOrFallback(
+        ourStoryPage?.cardTwoBody,
+        "A rigorous 360\u00B0 check for tears, spills, and material integrity.",
+      ),
     },
     {
       title: textOrFallback(ourStoryPage?.cardThreeTitle, "Eco-Restoration"),
-      description:
-        textOrFallback(
-          ourStoryPage?.cardThreeBody,
-          "Conscious cleaning and artisanal mending that respects the fabric."
-        ),
+      description: textOrFallback(
+        ourStoryPage?.cardThreeBody,
+        "Conscious cleaning and artisanal mending that respects the fabric.",
+      ),
     },
   ];
 
@@ -63,6 +60,8 @@ async function OurStoryPageContent() {
           src={heroImage}
           alt="Heirloom sarees folded inside a trunk"
           fill
+          sizes="100vw"
+          loading="eager"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-luxury-fade" />
@@ -73,7 +72,10 @@ async function OurStoryPageContent() {
               {textOrFallback(ourStoryPage?.heroEyebrow, "Our Story")}
             </p>
             <h1 className="font-serif text-4xl md:text-6xl">
-              {textOrFallback(ourStoryPage?.heroTitle, "Born in Bengaluru, rooted in heritage")}
+              {textOrFallback(
+                ourStoryPage?.heroTitle,
+                "Born in Bengaluru, rooted in heritage",
+              )}
             </h1>
           </ScrollReveal>
         </div>
@@ -87,7 +89,7 @@ async function OurStoryPageContent() {
           <p className="text-sm text-muted-foreground">
             {textOrFallback(
               ourStoryPage?.sectionBody,
-              "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems. By sourcing forgotten treasures and meticulously restoring them to their original glory, we bridge the gap between vintage charm and modern luxury. We believe in a world where quality isn't just bought, it's preserved."
+              "Born in Bengaluru from a single question: Why let beautiful sarees fade away in dark trunks? At FTT, we breathe new life into preloved gems. By sourcing forgotten treasures and meticulously restoring them to their original glory, we bridge the gap between vintage charm and modern luxury. We believe in a world where quality isn't just bought, it's preserved.",
             )}
           </p>
         </ScrollReveal>

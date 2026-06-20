@@ -2,14 +2,24 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { draftMode } from "next/headers";
 
-import { FeaturedCollection } from "@/components/sections/featured-collection";
+import { CampaignBannerSection } from "@/components/sections/campaign-banner-section";
+import { FabricCategorySection } from "@/components/sections/fabric-category-section";
+import { FloatingReviewTab } from "@/components/sections/floating-review-tab";
 import { HeroSection } from "@/components/sections/hero-section";
-import { HowItWorks } from "@/components/sections/how-it-works";
-import { Newsletter } from "@/components/sections/newsletter";
-import { StoryNarrative } from "@/components/sections/story-narrative";
-import { TrustSignals } from "@/components/sections/trust-signals";
+import { HomeIntroGate } from "@/components/sections/home-intro-gate";
+import {
+  LandingSections,
+  type LandingProductCard,
+} from "@/components/sections/landing-sections";
 import { isBlocksHomepage } from "@/lib/config/flags";
-import { getFeaturedProducts, getGlobals, getProducts } from "@/lib/data/products";
+import {
+  getFeaturedProducts,
+  getGlobals,
+  getProducts,
+} from "@/lib/data/products";
+import { formatCurrency } from "@/lib/formatters";
+import { resolveMediaURL } from "@/lib/media/resolve-media-url";
+import { getProductDisplayDetails } from "@/lib/products/display-details";
 import { selectStoryNarrativeImages } from "@/lib/story-narrative-images";
 import type { Product } from "@/types/domain";
 import type { HomePageContent } from "@/types/site-content";
@@ -35,9 +45,8 @@ export default async function Home() {
   if (isBlocksHomepage()) {
     // Lazy-load so the flag-off code path has zero cost from these imports.
     const { renderBlock } = await import("@/lib/content/blocks/registry");
-    const { HOMEPAGE_BLOCKS } = await import(
-      "@/lib/content/seed/homepage-blocks"
-    );
+    const { HOMEPAGE_BLOCKS } =
+      await import("@/lib/content/seed/homepage-blocks");
 
     const rendered: ReactNode[] = [];
     for (let i = 0; i < HOMEPAGE_BLOCKS.length; i++) {
@@ -76,19 +85,63 @@ export default async function Home() {
 
   const featuredDocs = (featuredProducts?.docs ?? []) as Product[];
   const allDocs = (allProducts?.docs ?? []) as Product[];
-  const productFallback = featuredDocs.length ? featuredDocs : allDocs;
 
-  const narrativePool = allDocs.length >= 5 ? allDocs : [...allDocs, ...featuredDocs];
+  const narrativePool =
+    allDocs.length >= 5 ? allDocs : [...allDocs, ...featuredDocs];
   const narrativeImages = selectStoryNarrativeImages(narrativePool);
+  const landingProductSource = [
+    ...featuredDocs,
+    ...allDocs.filter(
+      (product) => !featuredDocs.some((featured) => featured.id === product.id),
+    ),
+  ];
+  const landingProducts: LandingProductCard[] = landingProductSource
+    .map((product) => {
+      const image = resolveMediaURL(product.images?.[0]);
+      if (!image) return null;
+
+      const details = getProductDisplayDetails(product);
+      return {
+        name: product.name,
+        href: `/collection/${product.slug}`,
+        image,
+        detail: [product.storyEra, details.fabric].filter(Boolean).join(" • "),
+        condition:
+          product.storyProvenance?.trim() ||
+          details.condition ||
+          "Authenticated, restored, and ready for its next chapter",
+        price: formatCurrency(product.pricePaise / 100),
+      };
+    })
+    .filter((product): product is LandingProductCard => Boolean(product))
+    .slice(0, 6);
+
+  const storyImages = narrativeImages.map((src, index) => ({
+    src,
+    alt: `Curated From The Trunk saree ${index + 1}`,
+    title:
+      [
+        "Authenticated with provenance",
+        "Restored with care",
+        "Styled for modern wardrobes",
+        "Chosen one at a time",
+        "Ready for its next story",
+      ][index] ?? "Curated with care",
+  }));
 
   return (
-    <div className="flex flex-col gap-20 pb-24">
-      <HeroSection content={heroContent} />
-      <StoryNarrative images={narrativeImages} embedded />
-      <TrustSignals />
-      <FeaturedCollection products={featuredDocs} content={cms} />
-      <HowItWorks products={productFallback} />
-      <Newsletter />
-    </div>
+    <HomeIntroGate>
+      <div className="bg-[#F8F4EF]">
+        <HeroSection content={heroContent} />
+        <FloatingReviewTab />
+        <FabricCategorySection />
+        <CampaignBannerSection />
+        <LandingSections
+          featuredProducts={landingProducts}
+          showIntroSeparator={false}
+          storyImages={storyImages}
+        />
+      </div>
+    </HomeIntroGate>
   );
 }

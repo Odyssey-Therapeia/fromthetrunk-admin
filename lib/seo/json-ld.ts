@@ -17,8 +17,7 @@ export function productJsonLd(product: Product): Record<string, unknown> {
     "@type": "Product",
     name: product.name,
     description:
-      product.storyNarrative ??
-      `${product.name}: ${displayDetails.fabric}.`,
+      product.storyNarrative ?? `${product.name}: ${displayDetails.fabric}.`,
     ...(image ? { image } : {}),
     brand: {
       "@type": "Brand",
@@ -35,8 +34,8 @@ export function productJsonLd(product: Product): Record<string, unknown> {
         product.stockStatus === "sold"
           ? "https://schema.org/SoldOut"
           : product.stockStatus === "reserved"
-          ? "https://schema.org/LimitedAvailability"
-          : "https://schema.org/InStock",
+            ? "https://schema.org/LimitedAvailability"
+            : "https://schema.org/InStock",
       url: `${getSiteOrigin()}/collection/${product.slug}`,
       seller: {
         "@type": "Organization",
@@ -63,7 +62,7 @@ export function organizationJsonLd(): Record<string, unknown> {
       "Curated collection of authenticated, pre-loved luxury sarees with provenance.",
     contactPoint: {
       "@type": "ContactPoint",
-      email: "hello@fromthetrunk.com",
+      email: "hello@fromthetrunk.shop",
       contactType: "customer service",
     },
   };
@@ -85,7 +84,7 @@ export function safeJsonLd(data: unknown): string {
  * Generate breadcrumb JSON-LD.
  */
 export function breadcrumbJsonLd(
-  items: Array<{ name: string; url: string }>
+  items: Array<{ name: string; url: string }>,
 ): Record<string, unknown> {
   return {
     "@context": "https://schema.org",

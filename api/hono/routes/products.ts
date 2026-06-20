@@ -1,6 +1,10 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 
-import { errorSchema, idParamSchema, slugParamSchema } from "@/api/hono/schemas/common";
+import {
+  errorSchema,
+  idParamSchema,
+  slugParamSchema,
+} from "@/api/hono/schemas/common";
 import {
   bulkEditSchema,
   exportQuerySchema,
@@ -40,6 +44,27 @@ const escapeCsvCell = (value: unknown): string => {
   return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 
+function describeDbError(error: unknown) {
+  // Drizzle wraps the driver error; the NeonDbError (with the PG fields) is on `.cause`.
+  const pg =
+    error && typeof error === "object" && "code" in error
+      ? (error as Record<string, unknown>)
+      : ((error as { cause?: unknown })?.cause as
+          | Record<string, unknown>
+          | undefined);
+  if (pg && typeof pg === "object") {
+    return {
+      code: pg.code,
+      message: pg.message,
+      detail: pg.detail,
+      constraint: pg.constraint,
+      column: pg.column,
+      table: pg.table,
+    };
+  }
+  return { message: String(error) };
+}
+
 const parseDate = (value: null | string | undefined) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -47,7 +72,10 @@ const parseDate = (value: null | string | undefined) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
-const canIncludeDrafts = (c: Parameters<typeof requireAdmin>[0], requested: boolean) => {
+const canIncludeDrafts = (
+  c: Parameters<typeof requireAdmin>[0],
+  requested: boolean,
+) => {
   if (!requested) return false;
   return !(requireAdmin(c) instanceof Response);
 };
@@ -75,10 +103,18 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const { id } = c.req.valid("param");
       const product = await getProduct(id);
       if (!product) {
-        return c.json({ code: "NOT_FOUND", message: "Product not found." }, 404);
+        return c.json(
+          { code: "NOT_FOUND", message: "Product not found." },
+          404,
+        );
       }
       return c.json(
-        { id: product.id, name: product.name, slug: product.slug, status: product.status },
+        {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          status: product.status,
+        },
         200,
       );
     },
@@ -111,7 +147,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         thumbnailUrl: product.images[0]?.media.url ?? null,
       }));
       return c.json(enriched, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -141,9 +177,9 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
         {
           suggestions,
         },
-        200
+        200,
       );
-    }
+    },
   );
 
   app.openapi(
@@ -165,16 +201,16 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const recommendations = await recommendProducts(
         params.id,
-        Math.min(Math.max(query.limit ?? 6, 1), 12)
+        Math.min(Math.max(query.limit ?? 6, 1), 12),
       );
 
       return c.json(
         {
           recommendations,
         },
-        200
+        200,
       );
-    }
+    },
   );
 
   // ── P4-06: CSV export ─────────────────────────────────────────────────────
@@ -202,7 +238,9 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       // Resolve product rows — selection or full list
       let rows: Awaited<ReturnType<typeof listProducts>>["rows"];
       if (query.productIds && query.productIds.length > 0) {
-        rows = await getProductsByIds(query.productIds, { includeDrafts: true });
+        rows = await getProductsByIds(query.productIds, {
+          includeDrafts: true,
+        });
       } else {
         const result = await listProducts({ includeDrafts: true, limit: 5000 });
         rows = result.rows;
@@ -290,7 +328,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
           "Content-Disposition": `attachment; filename="ftt-products-export.csv"`,
         },
       });
-    }
+    },
   );
 
   app.openapi(
@@ -312,19 +350,21 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
     async (c) => {
       const params = c.req.valid("param");
 
-      const product = await getProductBySlug(params.slug, { includeDrafts: false });
+      const product = await getProductBySlug(params.slug, {
+        includeDrafts: false,
+      });
       if (!product) {
         return c.json(
           {
             code: "PRODUCT_NOT_FOUND",
             message: "Product not found.",
           },
-          404
+          404,
         );
       }
 
       return c.json(product, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -358,7 +398,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       });
       void refreshProductEmbedding(created.id).catch(() => undefined);
       return c.json(created, 201);
-    }
+    },
   );
 
   app.openapi(
@@ -389,14 +429,14 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
             code: "PRODUCT_NOT_FOUND",
             message: "Product not found.",
           },
-          404
+          404,
         );
       }
 
       void refreshProductEmbedding(duplicated.id).catch(() => undefined);
 
       return c.json(duplicated, 201);
-    }
+    },
   );
 
   app.openapi(
@@ -435,7 +475,7 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
             code: "PRODUCT_NOT_FOUND",
             message: "Product not found.",
           },
-          404
+          404,
         );
       }
 
@@ -446,17 +486,27 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
           ? { quantityAvailable: deriveQuantityAvailable(body.stockStatus) }
           : {};
 
-      const updated = await updateProduct(params.id, {
-        ...body,
-        ...quantityAvailableOverride,
-        reservedUntil: parseDate(body.reservedUntil),
-        soldAt: parseDate(body.soldAt),
-      });
+      let updated;
+      try {
+        updated = await updateProduct(params.id, {
+          ...body,
+          ...quantityAvailableOverride,
+          reservedUntil: parseDate(body.reservedUntil),
+          soldAt: parseDate(body.soldAt),
+        });
+      } catch (error) {
+        console.error(
+          "[PATCH /products/:id] updateProduct failed:",
+          describeDbError(error),
+        );
+        console.error("[PATCH /products/:id] payload:", JSON.stringify(body));
+        throw error;
+      }
       if (updated) {
         void refreshProductEmbedding(updated.id).catch(() => undefined);
       }
       return c.json(updated, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -487,12 +537,12 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
             code: "PRODUCT_NOT_FOUND",
             message: "Product not found.",
           },
-          404
+          404,
         );
       }
 
       return c.json({ success: true }, 200);
-    }
+    },
   );
 
   // ── P4-06: Bulk edit ──────────────────────────────────────────────────────
@@ -519,19 +569,30 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const body = c.req.valid("json");
-      const { productIds, status, addCollectionId, removeCollectionId, addTagIds, removeTagIds } = body;
+      const {
+        productIds,
+        status,
+        addCollectionId,
+        removeCollectionId,
+        addTagIds,
+        removeTagIds,
+      } = body;
 
       // At least one operation must be requested
-      const hasOp = status !== undefined
-        || addCollectionId !== undefined
-        || removeCollectionId !== undefined
-        || (addTagIds !== undefined && addTagIds.length > 0)
-        || (removeTagIds !== undefined && removeTagIds.length > 0);
+      const hasOp =
+        status !== undefined ||
+        addCollectionId !== undefined ||
+        removeCollectionId !== undefined ||
+        (addTagIds !== undefined && addTagIds.length > 0) ||
+        (removeTagIds !== undefined && removeTagIds.length > 0);
 
       if (!hasOp) {
         return c.json(
-          { code: "NO_OPERATION", message: "At least one bulk operation must be specified." },
-          400
+          {
+            code: "NO_OPERATION",
+            message: "At least one bulk operation must be specified.",
+          },
+          400,
         );
       }
 
@@ -549,7 +610,10 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       // Collection add
       if (addCollectionId !== undefined) {
-        const result = await bulkAddProductsToCollection(addCollectionId, productIds);
+        const result = await bulkAddProductsToCollection(
+          addCollectionId,
+          productIds,
+        );
         updated += result.updated;
         failed += result.failed;
         errors.push(...result.errors);
@@ -557,18 +621,24 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       // Collection remove
       if (removeCollectionId !== undefined) {
-        const result = await bulkRemoveProductsFromCollection(removeCollectionId, productIds);
+        const result = await bulkRemoveProductsFromCollection(
+          removeCollectionId,
+          productIds,
+        );
         updated += result.updated;
         failed += result.failed;
         errors.push(...result.errors);
       }
 
       // Tag add/remove
-      if ((addTagIds !== undefined && addTagIds.length > 0) || (removeTagIds !== undefined && removeTagIds.length > 0)) {
+      if (
+        (addTagIds !== undefined && addTagIds.length > 0) ||
+        (removeTagIds !== undefined && removeTagIds.length > 0)
+      ) {
         const result = await bulkSetProductTags(
           productIds,
           addTagIds ?? [],
-          removeTagIds ?? []
+          removeTagIds ?? [],
         );
         updated += result.updated;
         failed += result.failed;
@@ -576,6 +646,6 @@ export const registerProductRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }
 
       return c.json({ updated, failed, errors }, 200);
-    }
+    },
   );
 };

@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
 import { formatCurrency } from "@/lib/formatters";
-import { getRecentlyViewed, RecentlyViewedItem } from "@/lib/store/recently-viewed";
+import {
+  getRecentlyViewed,
+  RecentlyViewedItem,
+} from "@/lib/store/recently-viewed";
 
 interface RecentlyViewedProps {
   /** Exclude this product ID (e.g., the current product detail page) */
@@ -14,12 +17,54 @@ interface RecentlyViewedProps {
   limit?: number;
 }
 
-export function RecentlyViewed({ excludeId, limit = 6 }: RecentlyViewedProps) {
-  const [items, setItems] = useState<RecentlyViewedItem[]>([]);
+// Stable empty reference for the server render and hydration. useSyncExternalStore
+// uses getServerSnapshot on the server AND for the first client (hydration) render,
+// so both agree on "empty" and there is no hydration mismatch before the client
+// reads localStorage.
+const EMPTY_ITEMS: RecentlyViewedItem[] = [];
 
-  useEffect(() => {
-    setItems(getRecentlyViewed(excludeId).slice(0, limit));
-  }, [excludeId, limit]);
+// Recently-viewed lives in a client-only store (localStorage), and it is not
+// mutated while this widget is mounted -- it changes when the user views a
+// product on another page. A no-op subscribe therefore reproduces the previous
+// effect's behavior exactly: read once after the client takes over, no live
+// cross-tab sync. To add cross-tab updates, subscribe to the window "storage"
+// event here and return a matching removeEventListener cleanup.
+function subscribeToRecentlyViewed() {
+  return () => {};
+}
+
+// useSyncExternalStore calls getSnapshot on every render and requires a
+// referentially STABLE result whenever the underlying data is unchanged --
+// otherwise it re-renders forever ("getSnapshot should be cached"). Because
+// getRecentlyViewed().slice() allocates a fresh array on every call, we cache
+// per (excludeId, limit) keyed on a content signature and hand back the same
+// reference until the contents actually change.
+const snapshotCache = new Map<
+  string,
+  { signature: string; value: RecentlyViewedItem[] }
+>();
+
+function readRecentlyViewedSnapshot(
+  excludeId: string | undefined,
+  limit: number,
+): RecentlyViewedItem[] {
+  const key = `${limit}|${excludeId ?? ""}`;
+  const next = getRecentlyViewed(excludeId).slice(0, limit);
+  const signature = next.map((item) => item.id).join(",");
+  const cached = snapshotCache.get(key);
+  if (cached && cached.signature === signature) {
+    return cached.value;
+  }
+  snapshotCache.set(key, { signature, value: next });
+  return next;
+}
+
+export function RecentlyViewed({ excludeId, limit = 6 }: RecentlyViewedProps) {
+  const items = useSyncExternalStore(
+    subscribeToRecentlyViewed,
+    () => readRecentlyViewedSnapshot(excludeId, limit),
+    () => EMPTY_ITEMS,
+  );
 
   if (items.length === 0) return null;
 
@@ -40,7 +85,7 @@ export function RecentlyViewed({ excludeId, limit = 6 }: RecentlyViewedProps) {
             href={`/collection/${item.slug}`}
             className="group space-y-2"
           >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-muted">
+            <div className="relative aspect-4/5 overflow-hidden rounded-xl bg-muted">
               {item.image ? (
                 <Image
                   src={item.image}
