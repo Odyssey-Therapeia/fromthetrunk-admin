@@ -10,6 +10,9 @@ const SLIDE_DURATION_MS = 8500;
 const SLIDE_TRANSITION_MS = 1600;
 const HERO_GOLD = "#C18D39";
 
+// TEMP (debugging): flip back to true to restore auto-advance.
+const AUTOPLAY_ENABLED = false;
+
 type HeadlinePart = {
   text: string;
   accent?: boolean;
@@ -257,7 +260,7 @@ export function HeroSection(props: HeroSectionProps) {
   }, [activeImageIndex, changeSlide]);
 
   useEffect(() => {
-    if (!isIntroReady) {
+    if (!AUTOPLAY_ENABLED || !isIntroReady) {
       return;
     }
 
