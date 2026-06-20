@@ -11,7 +11,7 @@ const SLIDE_TRANSITION_MS = 1600;
 const HERO_GOLD = "#C18D39";
 
 // TEMP (debugging): flip back to true to restore auto-advance.
-const AUTOPLAY_ENABLED = false;
+const AUTOPLAY_ENABLED = true;
 
 type HeadlinePart = {
   text: string;
