@@ -1,8 +1,12 @@
+import type { NextConfig } from "next";
+
 const isStandaloneBuild = process.env.BUILD_STANDALONE === "true";
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  ...(isStandaloneBuild ? { output: "standalone" } : {}),
+const nextConfig: NextConfig = {
+  ...(isStandaloneBuild ? { output: "standalone" as const } : {}),
+  // Dev-only: allow the LAN "Network" URL host to reach dev resources (HMR, etc.).
+  // Ignored in production builds. Add more entries if you test from other devices.
+  allowedDevOrigins: ["192.168.1.3"],
   turbopack: {
     root: __dirname,
   },
@@ -72,4 +76,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
