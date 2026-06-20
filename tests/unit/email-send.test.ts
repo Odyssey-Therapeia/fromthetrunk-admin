@@ -4,7 +4,7 @@ const emailsSendMock = vi.hoisted(() => vi.fn());
 const getResendClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/email/resend", () => ({
-  FROM_EMAIL: "From the Trunk <hello@fromthetrunk.com>",
+  FROM_EMAIL: "From the Trunk <hello@fromthetrunk.shop>",
   getResendClient: getResendClientMock,
 }));
 
@@ -52,7 +52,7 @@ describe("sendEmail (Resend path)", () => {
     expect(result).toBe(false);
     expect(logErrorMock).toHaveBeenCalledWith(
       "Resend error",
-      expect.objectContaining({ message: "domain not verified" })
+      expect.objectContaining({ message: "domain not verified" }),
     );
   });
 
@@ -74,7 +74,7 @@ describe("sendEmail (Resend path)", () => {
       expect.objectContaining({
         to: ["customer@example.com"],
         subject: "Test",
-      })
+      }),
     );
   });
 });

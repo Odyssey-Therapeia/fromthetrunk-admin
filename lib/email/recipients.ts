@@ -1,11 +1,13 @@
 const DEFAULT_ORDER_NOTIFICATION_EMAILS = [
-  "hello@fromthetrunk.com",
+  "hello@fromthetrunk.shop",
   "abraham.boodala@fromthetrunk.shop",
 ];
 
 export function getOrderNotificationRecipients(): string[] {
   const raw =
-    process.env.ORDER_NOTIFICATION_EMAILS || process.env.FTT_ORDER_NOTIFICATION_EMAILS || "";
+    process.env.ORDER_NOTIFICATION_EMAILS ||
+    process.env.FTT_ORDER_NOTIFICATION_EMAILS ||
+    "";
 
   const configured = raw
     .split(",")

@@ -7,46 +7,70 @@ import { formatCurrency } from "@/lib/formatters";
 
 export const metadata: Metadata = {
   title: "Shipping Policy",
-  description: "Shipping rates, delivery timelines, and packaging details for From the Trunk orders.",
+  description:
+    "Shipping rates, delivery timelines, and packaging details for From the Trunk orders.",
 };
 
 export default function ShippingPolicyPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8 sm:space-y-10 sm:px-6 sm:py-12 lg:py-16">
       <ScrollReveal className="space-y-4">
-        <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Legal</p>
-        <h1 className="font-serif text-3xl text-foreground sm:text-4xl">Shipping Policy</h1>
-        <p className="text-sm text-muted-foreground">Last updated: April 2026</p>
+        <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
+          Legal
+        </p>
+        <h1 className="font-serif text-3xl text-foreground sm:text-4xl">
+          Shipping Policy
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Last updated: April 2026
+        </p>
       </ScrollReveal>
 
       <div className="prose prose-sm max-w-none space-y-6 text-muted-foreground">
         <section className="space-y-3">
-          <h2 className="font-serif text-xl text-foreground">Domestic Shipping (India)</h2>
+          <h2 className="font-serif text-xl text-foreground">
+            Domestic Shipping (India)
+          </h2>
           <div className="overflow-hidden rounded-xl border border-border/60">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-muted-foreground">Method</th>
-                  <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-muted-foreground">Delivery Time</th>
-                  <th className="px-4 py-3 text-right text-xs uppercase tracking-wider text-muted-foreground">Cost</th>
+                  <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    Method
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    Delivery Time
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs uppercase tracking-wider text-muted-foreground">
+                    Cost
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-t border-border/40">
-                  <td className="px-4 py-3 text-foreground font-medium">Standard</td>
+                  <td className="px-4 py-3 text-foreground font-medium">
+                    Standard
+                  </td>
                   <td className="px-4 py-3">5 to 7 business days</td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(SHIPPING_TIERS.standard)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {formatCurrency(SHIPPING_TIERS.standard)}
+                  </td>
                 </tr>
                 <tr className="border-t border-border/40">
-                  <td className="px-4 py-3 text-foreground font-medium">Express</td>
+                  <td className="px-4 py-3 text-foreground font-medium">
+                    Express
+                  </td>
                   <td className="px-4 py-3">2 to 3 business days</td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(SHIPPING_TIERS.express)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {formatCurrency(SHIPPING_TIERS.express)}
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="text-xs text-trunk-gold">
-            Free shipping on all orders above {formatCurrency(SHIPPING_TIERS.freeThreshold)}.
+            Free shipping on all orders above{" "}
+            {formatCurrency(SHIPPING_TIERS.freeThreshold)}.
           </p>
         </section>
 
@@ -70,16 +94,24 @@ export default function ShippingPolicyPage() {
 
         <section className="space-y-3">
           <h2 className="font-serif text-xl text-foreground">Tracking</h2>
-          <p>Once your order ships, you will receive a tracking number via email. You can also check your order status from your account dashboard.</p>
+          <p>
+            Once your order ships, you will receive a tracking number via email.
+            You can also check your order status from your account dashboard.
+          </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="font-serif text-xl text-foreground">International Shipping</h2>
+          <h2 className="font-serif text-xl text-foreground">
+            International Shipping
+          </h2>
           <p>
             We currently ship within India. International shipping will be
             available soon. Contact us at{" "}
-            <a href="mailto:hello@fromthetrunk.com" className="text-primary underline">
-              hello@fromthetrunk.com
+            <a
+              href="mailto:hello@fromthetrunk.shop"
+              className="text-primary underline"
+            >
+              hello@fromthetrunk.shop
             </a>{" "}
             for special requests.
           </p>

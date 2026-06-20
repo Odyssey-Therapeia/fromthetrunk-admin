@@ -18,9 +18,8 @@ import { buildInlineStyle } from "@/lib/content/theme-tokens";
 // Cached fetch — deduped across the render tree within a single request.
 const fetchThemeSettings = cache(async () => {
   try {
-    const { createDrizzleContentStore } = await import(
-      "@/lib/adapters/drizzle-content-store"
-    );
+    const { createDrizzleContentStore } =
+      await import("@/lib/adapters/drizzle-content-store");
     const store = createDrizzleContentStore();
     return await store.getThemeSettings();
   } catch {
@@ -43,6 +42,8 @@ export async function ThemeStyler() {
     <style
       dangerouslySetInnerHTML={{ __html: css }}
       data-theme-source="db"
+      href="ftt-theme-settings"
+      precedence="default"
     />
   );
 }

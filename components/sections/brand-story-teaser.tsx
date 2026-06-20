@@ -36,6 +36,7 @@ export function BrandStoryTeaser() {
               src={storyImage}
               alt="Vintage trunk with silk textiles"
               fill
+              sizes="(max-width: 1024px) 100vw, 45vw"
               className="object-cover"
             />
           </div>

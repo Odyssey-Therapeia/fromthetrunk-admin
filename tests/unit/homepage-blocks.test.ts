@@ -77,7 +77,9 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/lib/data/products", () => ({
   getFeaturedProducts: vi.fn().mockResolvedValue({ docs: [], totalDocs: 0 }),
-  getProductsByCollection: vi.fn().mockResolvedValue({ docs: [], totalDocs: 0 }),
+  getProductsByCollection: vi
+    .fn()
+    .mockResolvedValue({ docs: [], totalDocs: 0 }),
   getProducts: vi.fn().mockResolvedValue({ docs: [], totalDocs: 0 }),
   getProductsByIds: vi.fn().mockResolvedValue([]),
   getProductBySlug: vi.fn().mockResolvedValue(null),
@@ -114,12 +116,9 @@ vi.mock("@/lib/content/sanitize-html", () => ({
 
 // ── Import AFTER mocks ───────────────────────────────────────────────────────
 
-const { renderBlock, getBlock, BLOCK_REGISTRY } = await import(
-  "@/lib/content/blocks/registry"
-);
-const { HOMEPAGE_BLOCKS } = await import(
-  "@/lib/content/seed/homepage-blocks"
-);
+const { renderBlock, getBlock, BLOCK_REGISTRY } =
+  await import("@/lib/content/blocks/registry");
+const { HOMEPAGE_BLOCKS } = await import("@/lib/content/seed/homepage-blocks");
 const { isBlocksHomepage } = await import("@/lib/config/flags");
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -164,7 +163,7 @@ describe("HOMEPAGE_BLOCKS fixture integrity", () => {
       const entry = getBlock(block.type);
       expect(
         entry,
-        `Block type "${block.type}" is not registered in BLOCK_REGISTRY`
+        `Block type "${block.type}" is not registered in BLOCK_REGISTRY`,
       ).toBeDefined();
     }
   });
@@ -177,8 +176,10 @@ describe("HOMEPAGE_BLOCKS fixture integrity", () => {
       expect(
         result.success,
         `Block type "${block.type}" has invalid props: ${
-          result.success ? "" : JSON.stringify((result as { error: unknown }).error)
-        }`
+          result.success
+            ? ""
+            : JSON.stringify((result as { error: unknown }).error)
+        }`,
       ).toBe(true);
     }
   });
@@ -214,7 +215,8 @@ describe("HOMEPAGE_BLOCKS fixture integrity", () => {
   it("story-editorial block has at least one beat", () => {
     const seBlock = HOMEPAGE_BLOCKS.find((b) => b.type === "story-editorial");
     expect(seBlock).toBeDefined();
-    const beats = (seBlock!.props as Record<string, unknown>).beats as unknown[];
+    const beats = (seBlock!.props as Record<string, unknown>)
+      .beats as unknown[];
     expect(beats.length).toBeGreaterThan(0);
   });
 });
@@ -227,7 +229,7 @@ describe("FLAG ON: renderBlock dispatches for every homepage fixture block", () 
   it("renderBlock resolves (does not throw) for each block in HOMEPAGE_BLOCKS", async () => {
     for (const block of HOMEPAGE_BLOCKS) {
       await expect(
-        renderBlock({ type: block.type, props: block.props })
+        renderBlock({ type: block.type, props: block.props }),
       ).resolves.toBeDefined();
     }
   });
@@ -279,11 +281,9 @@ function extractText(html: string): string {
 }
 
 describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
-  it("hero block render and hardcoded HeroSection render contain the same text content", async () => {
+  it("hero block render and hardcoded HeroSection render document the current homepage delta", async () => {
     // Import the REAL HeroSection (uses mocked gsap + haptics — safe in Node)
-    const { HeroSection } = await import(
-      "@/components/sections/hero-section"
-    );
+    const { HeroSection } = await import("@/components/sections/hero-section");
     const heroFixture = HOMEPAGE_BLOCKS.find((b) => b.type === "hero")!;
 
     // HARDCODED PATH: HeroSection with no CMS override uses its default copy.
@@ -291,9 +291,11 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
     // are undefined so HeroSection falls back to its hardcoded defaults.
     const hardcodedHtml = renderToStaticMarkup(
       createElement(
-        HeroSection as React.ComponentType<{ content?: Record<string, unknown> }>,
-        { content: { heroImage: "/" } }
-      )
+        HeroSection as React.ComponentType<{
+          content?: Record<string, unknown>;
+        }>,
+        { content: { heroImage: "/" } },
+      ),
     );
     const hardcodedText = extractText(hardcodedHtml);
 
@@ -302,38 +304,33 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
       type: heroFixture.type,
       props: heroFixture.props,
     });
-    const blockHtml = renderToStaticMarkup(
-      blockNode as React.ReactElement
-    );
+    const blockHtml = renderToStaticMarkup(blockNode as React.ReactElement);
     const blockText = extractText(blockHtml);
 
-    // Both renders must contain the same headline (the source of truth for the
-    // hardcoded path is the HeroSection default; the block fixture must match).
-    expect(hardcodedText).toContain(
-      extractText(heroFixture.props.headline as string)
-    );
+    // The hardcoded landing hero is now a carousel; the block fixture remains
+    // the legacy CMS proof path behind FTT_FEATURE_BLOCKS_HOMEPAGE.
+    expect(hardcodedText).toContain("Crafted for the");
+    expect(hardcodedText).toContain("FEARLESS");
     expect(blockText).toContain(
-      extractText(heroFixture.props.headline as string)
+      extractText(heroFixture.props.headline as string),
     );
 
-    // The headline text derived from rendering the hardcoded path must appear
-    // in the block render — not a literal but the actual rendered value.
+    // The block render still preserves the fixture headline for flag-on proof.
     const heroSection = HOMEPAGE_BLOCKS.find((b) => b.type === "hero")!;
     const headline = heroSection.props.headline as string;
-    expect(hardcodedText).toContain(headline);
     expect(blockText).toContain(headline);
 
-    // Similarly for eyebrow and CTA labels from the fixture.
-    expect(hardcodedText).toContain(heroFixture.props.eyebrow as string);
+    // Similarly for eyebrow from the fixture.
     expect(blockText).toContain(heroFixture.props.eyebrow as string);
   });
 
   it("story-editorial block render and hardcoded StoryNarrative render share the same beat text", async () => {
     // Import the REAL StoryNarrative (uses mocked gsap — safe in Node)
-    const { StoryNarrative } = await import(
-      "@/components/sections/story-narrative"
-    );
-    const seFixture = HOMEPAGE_BLOCKS.find((b) => b.type === "story-editorial")!;
+    const { StoryNarrative } =
+      await import("@/components/sections/story-narrative");
+    const seFixture = HOMEPAGE_BLOCKS.find(
+      (b) => b.type === "story-editorial",
+    )!;
     const beats = seFixture.props.beats as Array<{
       paragraphs: string[];
       layout: string;
@@ -347,8 +344,8 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
           images: string[];
           embedded?: boolean;
         }>,
-        { images: [], embedded: true }
-      )
+        { images: [], embedded: true },
+      ),
     );
     const hardcodedText = extractText(hardcodedHtml);
 
@@ -390,7 +387,7 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
     >("@/components/sections/newsletter");
 
     const nlFixture = HOMEPAGE_BLOCKS.find(
-      (b) => b.type === "newsletter-signup"
+      (b) => b.type === "newsletter-signup",
     )!;
     const nlProps = nlFixture.props as {
       eyebrow: string;
@@ -421,13 +418,15 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
     const hardcodedHtml = renderToStaticMarkup(
       createElement(
         RealNewsletter as React.ComponentType<Record<string, unknown>>,
-        {}
-      )
+        {},
+      ),
     );
     const hardcodedText = extractText(hardcodedHtml);
 
     // Restore Newsletter mock to null so other tests are not affected.
-    (newsletterMod.Newsletter as unknown as MockFn).mockImplementation(() => null);
+    (newsletterMod.Newsletter as unknown as MockFn).mockImplementation(
+      () => null,
+    );
 
     // BLOCK PATH: the engine must have rendered the fixture's heading and eyebrow.
     // These values come from nlProps (the fixture), not typed literals.
@@ -458,9 +457,8 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
     //
     // This proves the fixture's eyebrow/heading/body survive through the REAL engine.
 
-    const { FeaturedCollection } = await import(
-      "@/components/sections/featured-collection"
-    );
+    const { FeaturedCollection } =
+      await import("@/components/sections/featured-collection");
     const pgFixture = HOMEPAGE_BLOCKS.find((b) => b.type === "product-grid")!;
     const pgProps = pgFixture.props as {
       eyebrow: string;
@@ -486,8 +484,8 @@ describe("EQUIVALENCE: blocks fixture reproduces homepage content", () => {
           products: unknown[];
           content?: null;
         }>,
-        { products: [], content: null }
-      )
+        { products: [], content: null },
+      ),
     );
     const hardcodedText = extractText(hardcodedHtml);
 
@@ -514,7 +512,7 @@ describe("ACCEPTABLE DELTAS: sections absent from blocks version", () => {
     // 2026-06-15: the trust-signals block was added to the registry; the fixture
     // now includes it, so the homepage is faithfully composable (delta resolved).
     const hasTrustBlock = HOMEPAGE_BLOCKS.some(
-      (b) => b.type === "trust-signals"
+      (b) => b.type === "trust-signals",
     );
     expect(hasTrustBlock).toBe(true);
   });
@@ -523,7 +521,7 @@ describe("ACCEPTABLE DELTAS: sections absent from blocks version", () => {
     // 2026-06-15: the how-it-works block was added to the registry; the fixture
     // now includes it (per-step product images remain a documented render delta).
     const hasHowItWorksBlock = HOMEPAGE_BLOCKS.some(
-      (b) => b.type === "how-it-works"
+      (b) => b.type === "how-it-works",
     );
     expect(hasHowItWorksBlock).toBe(true);
   });
@@ -573,7 +571,7 @@ describe("MUTATION PROOF: renderBlock is the real registry dispatch", () => {
     // (Uses a type that is definitively NOT registered; trust-signals/how-it-works
     // are now real registered blocks and would no longer throw.)
     await expect(
-      renderBlock({ type: "__not-a-registered-block__", props: {} })
+      renderBlock({ type: "__not-a-registered-block__", props: {} }),
     ).rejects.toThrow(/unknown block type/i);
   });
 
@@ -586,7 +584,7 @@ describe("MUTATION PROOF: renderBlock is the real registry dispatch", () => {
           // missing required 'headline'
           eyebrow: "From the Trunk",
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -639,11 +637,15 @@ describe("FAITHFULNESS: blocks fixture reproduces the formerly hardcoded-only se
   it("the blocks path still differs from the hardcoded TrustSignals component render (block reframes the same content)", async () => {
     // Sanity: the all-blocks render is a superset, not byte-identical to a lone
     // TrustSignals component — confirms the blocks path is the real dispatch.
-    const { TrustSignals } = await import("@/components/sections/trust-signals");
+    const { TrustSignals } =
+      await import("@/components/sections/trust-signals");
     const trustOnly = extractText(
       renderToStaticMarkup(
-        createElement(TrustSignals as React.ComponentType<Record<string, never>>, {})
-      )
+        createElement(
+          TrustSignals as React.ComponentType<Record<string, never>>,
+          {},
+        ),
+      ),
     );
     const combined = await renderAllBlocks();
     expect(combined).not.toBe(trustOnly);
@@ -671,7 +673,7 @@ describe("FAITHFULNESS: blocks fixture reproduces the formerly hardcoded-only se
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("FLAG-GUARD MUTATION PROOF: REAL Home() from app/(site)/page.tsx", () => {
-  it("flag OFF: Home() renders hardcoded path — output contains TrustSignals text ('Authenticated Sarees')", async () => {
+  it("flag OFF: Home() renders rebuilt landing path — output contains Connect With Us text", async () => {
     // Ensure flag is OFF.
     const prev = process.env.FTT_FEATURE_BLOCKS_HOMEPAGE;
     delete process.env.FTT_FEATURE_BLOCKS_HOMEPAGE;
@@ -692,10 +694,10 @@ describe("FLAG-GUARD MUTATION PROOF: REAL Home() from app/(site)/page.tsx", () =
       process.env.FTT_FEATURE_BLOCKS_HOMEPAGE = prev;
     }
 
-    // TrustSignals (hardcoded-only section) must appear in flag-OFF output.
-    // "Authenticated Sarees" is rendered by TrustSignals — ONLY in the hardcoded path.
-    // If the guard were removed (if (true)), blocks always run → TrustSignals absent → FAIL.
-    expect(text).toContain("Authenticated Sarees");
+    // The rebuilt hardcoded path now ends with the Connect With Us section.
+    // If the guard were removed (if (true)), blocks always run → this text is absent → FAIL.
+    expect(text).toContain("Connect With Us");
+    expect(text).toContain("Looking for a saree with a story?");
   });
 
   it("flag ON: Home() renders blocks path — FAITHFULLY reproduces TrustSignals + hero headline (blocks ran)", async () => {
@@ -704,7 +706,7 @@ describe("FLAG-GUARD MUTATION PROOF: REAL Home() from app/(site)/page.tsx", () =
 
     const { default: Home } = await import("@/app/(site)/page");
     const text = extractText(
-      renderToStaticMarkup(await (Home as () => Promise<React.ReactElement>)())
+      renderToStaticMarkup(await (Home as () => Promise<React.ReactElement>)()),
     );
 
     if (prev !== undefined) {
@@ -730,12 +732,12 @@ describe("FLAG-GUARD MUTATION PROOF: REAL Home() from app/(site)/page.tsx", () =
 
     delete process.env.FTT_FEATURE_BLOCKS_HOMEPAGE;
     const offHtml = renderToStaticMarkup(
-      await (Home as () => Promise<React.ReactElement>)()
+      await (Home as () => Promise<React.ReactElement>)(),
     );
 
     process.env.FTT_FEATURE_BLOCKS_HOMEPAGE = "true";
     const onHtml = renderToStaticMarkup(
-      await (Home as () => Promise<React.ReactElement>)()
+      await (Home as () => Promise<React.ReactElement>)(),
     );
 
     if (prev !== undefined) {

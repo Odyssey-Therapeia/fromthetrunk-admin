@@ -61,7 +61,7 @@ const defaultSettings: AdminSettingsContent = {
   operations: {
     maintenanceMessage: "The storefront is under scheduled maintenance.",
     maintenanceMode: false,
-    supportEmail: "hello@fromthetrunk.com",
+    supportEmail: "hello@fromthetrunk.shop",
     supportPhone: "",
   },
 };

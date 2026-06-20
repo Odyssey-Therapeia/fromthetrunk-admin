@@ -127,11 +127,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
-  // Readiness is NOT tracked as state: at submit time `window.Razorpay` is the
-  // live, authoritative signal that the SDK is usable, and `paymentScriptError`
-  // carries the load-failure case. A separate boolean would only be a staler
-  // mirror of those facts -- and writing it synchronously inside the script
-  // effect was the source of the cascading-render warning.
+  const [isPaymentScriptReady, setIsPaymentScriptReady] = useState(false);
   const [paymentScriptError, setPaymentScriptError] = useState<string | null>(
     null,
   );
@@ -173,24 +169,19 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
     country: "India",
   });
 
-  // The session resolves asynchronously, so `user.email` can arrive after
-  // mount. Seed it into the form when it appears or changes -- a render-phase
-  // state adjustment keyed on the resolved email (React's documented "adjust
-  // state when a prop changes" pattern), NOT an effect, so there's no
-  // synchronous setState inside an effect body to trigger a cascading render.
-  // Behaviour matches the prior effect, including overwriting the email field
-  // whenever the session email changes.
-  const sessionEmail = session?.user?.email ?? "";
-  const [seededSessionEmail, setSeededSessionEmail] = useState(sessionEmail);
-  if (sessionEmail && sessionEmail !== seededSessionEmail) {
-    setSeededSessionEmail(sessionEmail);
-    setForm((prev) => ({ ...prev, email: sessionEmail }));
-  }
+  useEffect(() => {
+    if (session?.user?.email) {
+      setForm((prev) => ({ ...prev, email: session.user.email ?? "" }));
+    }
+  }, [session?.user?.email]);
 
   useEffect(() => {
-    // Already on `window` (cached from a prior mount or another route) -- there
-    // is nothing to inject or subscribe to; submit reads `window.Razorpay` live.
-    if (window.Razorpay) return;
+    if (window.Razorpay) {
+      const readyTimer = window.setTimeout(() => {
+        setIsPaymentScriptReady(true);
+      }, 0);
+      return () => window.clearTimeout(readyTimer);
+    }
 
     const scriptSrc = "https://checkout.razorpay.com/v1/checkout.js";
     let script = document.querySelector<HTMLScriptElement>(
@@ -205,12 +196,12 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
       document.body.appendChild(script);
     }
 
-    // setState here is confined to the subscription callbacks -- the sanctioned
-    // effect pattern -- so it never fires synchronously in the effect body.
     const handleLoad = () => {
       setPaymentScriptError(null);
+      setIsPaymentScriptReady(true);
     };
     const handleError = () => {
+      setIsPaymentScriptReady(false);
       setPaymentScriptError(
         "Payment system could not load. Please refresh and try again.",
       );
@@ -401,7 +392,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
         throw new Error(paymentScriptError);
       }
 
-      if (!window.Razorpay) {
+      if (!isPaymentScriptReady || !window.Razorpay) {
         throw new Error(
           "Payment system is still loading. Please try again in a moment.",
         );
@@ -426,7 +417,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
           contact: form.phone,
         },
         theme: {
-          color: "#6B1D1D",
+          color: "#4B2626",
         },
         handler: async (response) => {
           try {
@@ -942,7 +933,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                     <button
                       onClick={handleSubmit}
                       disabled={!hasItems || isSubmitting}
-                      className="w-full bg-primary hover:bg-[#5a1818] text-primary-foreground font-bold py-5 rounded-full shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                      className="w-full bg-primary hover:bg-[#3c0c0f] text-primary-foreground font-bold py-5 rounded-full shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                     >
                       <span className="uppercase tracking-[0.15em] text-[10px]">
                         {isSubmitting ? "Processing..." : "Complete your order"}
@@ -988,7 +979,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
               </p>
               <Button
                 asChild
-                className="mt-8 rounded-full px-10 py-6 bg-primary hover:bg-[#5a1818] text-primary-foreground"
+                className="mt-8 rounded-full px-10 py-6 bg-primary hover:bg-[#3c0c0f] text-primary-foreground"
               >
                 <Link
                   href="/collection"
@@ -1009,7 +1000,7 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                 </h2>
               </div>
               <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
-                {featuredPicks.map((product) => {
+                {featuredPicks.map((product, index) => {
                   const imageSrc = resolveMediaURL(product.images?.[0]);
                   return (
                     <Link
@@ -1023,6 +1014,8 @@ export function CheckoutPageClient({ featuredPicks }: CheckoutPageClientProps) {
                             src={imageSrc}
                             alt={product.name}
                             fill
+                            sizes="(max-width: 768px) 100vw, 33vw"
+                            loading={index === 0 ? "eager" : "lazy"}
                             className="object-cover transition duration-700 group-hover:scale-105 mix-blend-multiply"
                           />
                         ) : (

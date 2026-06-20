@@ -432,7 +432,7 @@ export default async function CollectionPage({
                       )}
                     >
                       {fab}
-                      <span className="ml-1 opacity-60">({count})</span>
+                      <span className="ml-1">({count})</span>
                     </Link>
                   ))}
                 </div>
@@ -496,7 +496,7 @@ export default async function CollectionPage({
                 >
                   In stock
                   {availableCount > 0 ? (
-                    <span className="ml-1 opacity-60">({availableCount})</span>
+                    <span className="ml-1">({availableCount})</span>
                   ) : null}
                 </Link>
               </div>
@@ -526,7 +526,7 @@ export default async function CollectionPage({
                         )}
                       >
                         {tagSlug}
-                        <span className="ml-1 opacity-60">({count})</span>
+                        <span className="ml-1">({count})</span>
                       </Link>
                     );
                   })}

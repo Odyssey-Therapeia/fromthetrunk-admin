@@ -1,9 +1,11 @@
 import { create } from "zustand";
 
+export const INITIAL_AGENT_CONVERSATION_ID = "pending-agent-conversation";
+
 export type AgentPanelState = {
   isOpen: boolean;
-  /** Whether the chat-history panel is open */
-  isHistoryOpen: boolean;
+  /** Whether the chat-history drawer is open */
+  historyOpen: boolean;
   /** Always set -- stable key for conversation persistence */
   conversationId: string;
   /** Incrementing key to force runtime remount (new chat / switch conversation) */
@@ -24,7 +26,9 @@ export type AgentPanelState = {
   toggle: () => void;
   open: () => void;
   close: () => void;
+  /** Toggle the chat-history drawer */
   toggleHistory: () => void;
+  /** Explicitly set the chat-history drawer open state */
   setHistoryOpen: (open: boolean) => void;
   setConversationId: (id: string) => void;
   anchorProduct: (
@@ -44,8 +48,8 @@ export type AgentPanelState = {
 
 export const useAgentStore = create<AgentPanelState>((set) => ({
   isOpen: false,
-  isHistoryOpen: false,
-  conversationId: crypto.randomUUID(),
+  historyOpen: false,
+  conversationId: INITIAL_AGENT_CONVERSATION_ID,
   runtimeKey: 0,
   anchoredProductId: null,
   anchoredProductName: null,
@@ -57,8 +61,8 @@ export const useAgentStore = create<AgentPanelState>((set) => ({
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
-  toggleHistory: () => set((s) => ({ isHistoryOpen: !s.isHistoryOpen })),
-  setHistoryOpen: (open) => set({ isHistoryOpen: open }),
+  toggleHistory: () => set((s) => ({ historyOpen: !s.historyOpen })),
+  setHistoryOpen: (open) => set({ historyOpen: open }),
   setConversationId: (id) => set({ conversationId: id }),
   anchorProduct: (productId, productName) =>
     set({

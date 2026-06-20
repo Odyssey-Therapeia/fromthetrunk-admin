@@ -5,6 +5,7 @@ import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { shouldRenderGtm, buildGtmSrc } from "@/lib/analytics/gtm";
+
 import "../globals.css";
 import { SiteFooterServer } from "@/components/layout/site-footer-server";
 import { SiteHeaderServer } from "@/components/layout/site-header-server";
@@ -60,23 +61,26 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   other: {
-    "theme-color": "#6b1d1d",
+    "theme-color": "#4b2626",
   },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
-      <body className="bg-background font-sans text-foreground">
+    <html
+      lang="en"
+      className={`${serif.variable} ${sans.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
         {/* P3-07: Inject active theme tokens as :root CSS custom-property overrides.
-            MUST render inside <body> (not as a child of <html>): a <style> without
-            a `precedence` placed outside <head>/<body> triggers React 19's resource
-            hoisting, which errors without a precedence + href key. Inside <body> the
-            <style> is rendered in place, and its unlayered :root rule still overrides
-            globals.css (unlayered beats @layer base; and body comes after <head> at
-            equal specificity). When no theme is saved, ThemeStyler returns null and
-            globals.css defaults apply. */}
+            When no theme is saved, ThemeStyler returns null and globals.css defaults apply. */}
         <ThemeStyler />
+      </head>
+      <body
+        className="bg-background font-sans text-foreground"
+        suppressHydrationWarning
+      >
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
