@@ -1,7 +1,7 @@
 {
-  "name": "ftt-fromthetrunk",
+  "name": "fromthetrunk-admin",
   "version": "0.26.2",
-  "description": "Curated collection of pre-loved luxury sarees with provenance.",
+  "description": "Admin console for From the Trunk.",
   "main": "index.js",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
@@ -36,15 +36,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Odyssey-Therapeia/FTT-fromthetrunk.git"
+    "url": "git+https://github.com/Odyssey-Therapeia/fromthetrunk-admin.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Odyssey-Therapeia/FTT-fromthetrunk/issues"
+    "url": "https://github.com/Odyssey-Therapeia/fromthetrunk-admin/issues"
   },
-  "homepage": "https://github.com/Odyssey-Therapeia/FTT-fromthetrunk#readme",
+  "homepage": "https://github.com/Odyssey-Therapeia/fromthetrunk-admin#readme",
   "private": true,
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.67",
