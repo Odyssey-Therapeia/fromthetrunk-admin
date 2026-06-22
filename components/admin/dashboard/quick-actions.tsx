@@ -6,9 +6,9 @@ import { Package, ShoppingCart, Sparkles, Upload } from "lucide-react";
 import { useAgentStore } from "@/lib/store/agent-store";
 
 const actions = [
-  { href: "/admin/products/new", label: "New Product", icon: Package },
-  { href: "/admin/orders", label: "View Orders", icon: ShoppingCart },
-  { href: "/admin/products/import", label: "Import Products", icon: Upload },
+  { href: "/products/new", label: "New Product", icon: Package },
+  { href: "/orders", label: "View Orders", icon: ShoppingCart },
+  { href: "/products/import", label: "Import Products", icon: Upload },
 ] as const;
 
 export function QuickActions() {

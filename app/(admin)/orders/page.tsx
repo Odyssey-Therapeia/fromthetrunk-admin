@@ -330,7 +330,7 @@ export default function AdminOrdersPage() {
           {order.status}
         </Badge>
         <Button asChild size="sm" variant="outline">
-          <Link href={`/admin/orders/${order.id}`}>View</Link>
+          <Link href={`/orders/${order.id}`}>View</Link>
         </Button>
       </div>
     </div>
@@ -511,7 +511,7 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell>
                       <Button asChild size="sm" variant="ghost">
-                        <Link href={`/admin/orders/${order.id}`}>View</Link>
+                        <Link href={`/orders/${order.id}`}>View</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

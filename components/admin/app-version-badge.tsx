@@ -16,7 +16,7 @@ export function AppVersionBadge({
   className,
   release = currentAdminRelease,
   showLabel = false,
-  href = "/admin/changelog",
+  href = "/changelog",
   tone = "cream",
 }: AppVersionBadgeProps) {
   const badgeClassName = cn(

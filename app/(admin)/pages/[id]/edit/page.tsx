@@ -529,7 +529,7 @@ export default function PageEditorPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button
-            onClick={() => router.push("/admin/pages")}
+            onClick={() => router.push("/pages")}
             size="sm"
             type="button"
             variant="ghost"
@@ -651,7 +651,7 @@ export default function PageEditorPage() {
           </p>
           <Button
             className="mt-4 rounded-full"
-            onClick={() => router.push("/admin/pages")}
+            onClick={() => router.push("/pages")}
             size="sm"
             variant="outline"
             type="button"

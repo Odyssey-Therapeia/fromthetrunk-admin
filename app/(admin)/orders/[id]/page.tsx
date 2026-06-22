@@ -79,7 +79,7 @@ export default async function AdminOrderDetailPage({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <Button asChild size="sm" variant="ghost">
-            <Link href="/admin/orders">
+            <Link href="/orders">
               <ArrowLeft />
               Back to orders
             </Link>
@@ -102,7 +102,7 @@ export default async function AdminOrderDetailPage({
           </Badge>
           {/* P6-05: Packing slip link */}
           <Button asChild size="sm" variant="outline">
-            <Link href={`/admin/orders/${order.id}/packing-slip`} target="_blank">
+            <Link href={`/orders/${order.id}/packing-slip`} target="_blank">
               <Printer className="mr-1 h-3.5 w-3.5" />
               Packing slip
             </Link>

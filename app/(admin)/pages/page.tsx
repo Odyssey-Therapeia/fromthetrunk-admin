@@ -635,7 +635,7 @@ export default function AdminPagesPage() {
                             </Button>
                             <Button
                               onClick={() =>
-                                router.push(`/admin/pages/${page.id}/edit`)
+                                router.push(`/pages/${page.id}/edit`)
                               }
                               size="sm"
                               title="Edit page"
@@ -699,7 +699,7 @@ export default function AdminPagesPage() {
                         </Button>
                         <Button
                           onClick={() =>
-                            router.push(`/admin/pages/${page.id}/edit`)
+                            router.push(`/pages/${page.id}/edit`)
                           }
                           size="sm"
                           title="Edit page"

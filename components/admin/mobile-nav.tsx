@@ -29,7 +29,7 @@ export function AdminMobileNav() {
   const renderLink = (item: (typeof adminNavItems)[number]) => {
     const isActive =
       pathname === item.href ||
-      (item.href !== "/admin" && pathname.startsWith(item.href));
+      (item.href !== "/" && pathname.startsWith(item.href));
     const Icon = item.icon;
 
     return (

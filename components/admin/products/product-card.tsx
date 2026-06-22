@@ -107,7 +107,7 @@ function ProductActions({
         className="h-8 w-8 rounded-lg bg-background/80"
         title="Edit product"
       >
-        <Link href={`/admin/products/${product.id}`}>
+        <Link href={`/products/${product.id}`}>
           <Edit className="h-3.5 w-3.5" />
         </Link>
       </Button>
@@ -162,7 +162,7 @@ function ProductImageFrame({
       : "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw";
 
   return (
-    <Link href={`/admin/products/${product.id}`} className="block">
+    <Link href={`/products/${product.id}`} className="block">
       <div
         className={cn(
           "relative overflow-hidden bg-muted/30",
@@ -254,7 +254,7 @@ export function ProductCard({
 
       <div className={cn("space-y-3", isCompact ? "p-2.5" : "p-3")}>
         <div className="space-y-1">
-          <Link href={`/admin/products/${product.id}`}>
+          <Link href={`/products/${product.id}`}>
             <h3
               className={cn(
                 "font-medium leading-5 transition-colors hover:text-primary",
@@ -341,7 +341,7 @@ export function ProductListRow({
       </div>
 
       <Link
-        href={`/admin/products/${product.id}`}
+        href={`/products/${product.id}`}
         className="relative h-24 w-22 overflow-hidden rounded-lg bg-muted/30 @[760px]:h-22 @[760px]:w-18"
       >
         {product.thumbnailUrl ? (
@@ -360,7 +360,7 @@ export function ProductListRow({
       </Link>
 
       <div className="min-w-0 space-y-1">
-        <Link href={`/admin/products/${product.id}`}>
+        <Link href={`/products/${product.id}`}>
           <h3 className="line-clamp-1 text-sm font-semibold transition-colors hover:text-primary">
             {product.name}
           </h3>

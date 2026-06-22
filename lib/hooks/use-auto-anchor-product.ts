@@ -9,7 +9,7 @@ const PRODUCT_PAGE_RE =
   /^\/admin\/products\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 /**
- * Watches the URL. When on `/admin/products/[id]`, auto-anchors
+ * Watches the URL. When on `/products/[id]`, auto-anchors
  * the AI agent panel to that product. Clears when navigating away.
  */
 export function useAutoAnchorProduct() {
@@ -44,7 +44,7 @@ export function useAutoAnchorProduct() {
         .catch(() => {
           anchorProduct(productId, "Product");
         });
-    } else if (anchoredProductId && !pathname.startsWith("/admin/products/")) {
+    } else if (anchoredProductId && !pathname.startsWith("/products/")) {
       anchorProduct(null, null);
     }
   }, [pathname, anchoredProductId, anchorProduct]);

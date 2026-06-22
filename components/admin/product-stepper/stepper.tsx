@@ -177,7 +177,7 @@ export function ProductStepper({
         const data = await response.json();
         if (!activeProductId && data.id) {
           setActiveProductId(data.id);
-          router.replace(`/admin/products/${data.id}`);
+          router.replace(`/products/${data.id}`);
         }
 
         lastPersistedSnapshotRef.current = currentSnapshot;

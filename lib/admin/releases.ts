@@ -88,7 +88,7 @@ export const adminReleases: AdminReleaseNote[] = [
     name: "The Showroom Release",
     releaseDate: "2026-04-24",
     showAnnouncement: true,
-    demoHref: "/admin/products",
+    demoHref: "/products",
     demoLabel: "Open products",
     summary:
       "A sharper catalog workspace for product operations, cleaner image management, and a more premium storefront presentation.",

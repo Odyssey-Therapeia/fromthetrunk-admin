@@ -25,7 +25,7 @@ export function PrintControls({ orderId }: PrintControlsProps) {
       </button>
       <a
         className="rounded-full border border-border px-6 py-2 text-sm text-foreground"
-        href={`/admin/orders/${orderId}`}
+        href={`/orders/${orderId}`}
       >
         Back to Order
       </a>

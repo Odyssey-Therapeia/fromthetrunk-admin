@@ -8,7 +8,7 @@ export default function AdminProductsImportPage() {
       <div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link
-            href="/admin/products"
+            href="/products"
             className="hover:text-primary hover:underline"
           >
             Products

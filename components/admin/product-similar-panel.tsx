@@ -89,7 +89,7 @@ export function ProductSimilarPanel({
                   </span>
                   <Link
                     className="text-primary underline underline-offset-4"
-                    href={`/admin/products/${entry.product.id}`}
+                    href={`/products/${entry.product.id}`}
                   >
                     Open
                   </Link>

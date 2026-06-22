@@ -163,7 +163,7 @@ export function ProductsToolbar({
             size="sm"
             className="h-10 gap-1.5 rounded-xl"
           >
-            <Link href="/admin/products/import">
+            <Link href="/products/import">
               <Upload className="h-3.5 w-3.5" />
               Import
             </Link>
@@ -178,7 +178,7 @@ export function ProductsToolbar({
             Export
           </Button>
           <Button asChild size="sm" className="h-10 gap-1.5 rounded-xl">
-            <Link href="/admin/products/new">
+            <Link href="/products/new">
               <Plus className="h-3.5 w-3.5" />
               New Product
             </Link>

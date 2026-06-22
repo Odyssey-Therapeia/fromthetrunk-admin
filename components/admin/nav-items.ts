@@ -22,21 +22,21 @@ export type AdminNavItem = {
 };
 
 export const adminNavItems: AdminNavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/control-centre", label: "Control Centre", icon: Activity },
-  { href: "/admin/products", label: "Products", icon: Package },
-  { href: "/admin/collections", label: "Collections", icon: FolderOpen },
-  { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
-  { href: "/admin/discounts", label: "Discounts", icon: Tag },
-  { href: "/admin/customers", label: "Users", icon: Users },
-  { href: "/admin/media", label: "Media", icon: Image },
-  { href: "/admin/pages", label: "Pages", icon: FileText },
-  { href: "/admin/theme", label: "Theme", icon: Palette },
-  { href: "/admin/navigation", label: "Navigation", icon: Menu },
-  { href: "/admin/redirects", label: "Redirects", icon: Link2 },
-  { href: "/admin/globals", label: "Globals", icon: Globe },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/control-centre", label: "Control Centre", icon: Activity },
+  { href: "/products", label: "Products", icon: Package },
+  { href: "/collections", label: "Collections", icon: FolderOpen },
+  { href: "/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/discounts", label: "Discounts", icon: Tag },
+  { href: "/customers", label: "Users", icon: Users },
+  { href: "/media", label: "Media", icon: Image },
+  { href: "/pages", label: "Pages", icon: FileText },
+  { href: "/theme", label: "Theme", icon: Palette },
+  { href: "/navigation", label: "Navigation", icon: Menu },
+  { href: "/redirects", label: "Redirects", icon: Link2 },
+  { href: "/globals", label: "Globals", icon: Globe },
 ];
 
 export const adminBottomNavItems: AdminNavItem[] = [
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
