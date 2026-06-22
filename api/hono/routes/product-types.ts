@@ -1,31 +1,50 @@
 /**
  * api/hono/routes/product-types.ts
  *
- * P4-01: read routes for the product_types taxonomy.
+ * Admin CRUD routes for the product_types taxonomy.
  *
- * Mounted at /product-types (see @/api/hono/app), so the paths below resolve to:
- *   GET /api/v2/product-types        → { types: [{ id, name, slug }] }
- *   GET /api/v2/product-types/{id}   → { id, name, slug, attributeDefs }
- *
- * These are the exact shapes the admin stepper's hooks consume
- * (useProductTypes / useProductTypeAttributeDefs in
- * components/admin/product-stepper/use-product-type.ts).
- *
- * Admin-only: the taxonomy is an admin concern (it drives the product form),
- * mirroring the requireAdmin gate used on the admin lookups in products.ts.
+ * Mounted at /product-types, so these resolve to:
+ *   GET    /api/v2/product-types
+ *   GET    /api/v2/product-types/{id}
+ *   POST   /api/v2/product-types
+ *   PATCH  /api/v2/product-types/{id}
+ *   DELETE /api/v2/product-types/{id}
  */
+
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 
-import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
 import { requireAdmin } from "@/api/hono/middleware/auth";
+import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
+import {
+  productTypeBodySchema,
+  productTypePatchBodySchema,
+} from "@/api/hono/schemas/product-types";
 import type { HonoBindings } from "@/api/hono/types";
 import {
+  createProductType,
+  deleteProductType,
   getProductTypeById,
+  getProductTypeBySlug,
   listProductTypes,
+  updateProductType,
 } from "@/db/queries/product-types";
 
+const toProductTypeResponse = (row: Awaited<ReturnType<typeof getProductTypeById>>) => {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    attributeDefs: row.attributeDefs ?? [],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
 export const registerProductTypeRoutes = (app: OpenAPIHono<HonoBindings>) => {
-  // ── List all product types ────────────────────────────────────────────────
   app.openapi(
     createRoute({
       method: "get",
@@ -40,12 +59,16 @@ export const registerProductTypeRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const rows = await listProductTypes();
+
       return c.json(
         {
           types: rows.map((row) => ({
             id: row.id,
             name: row.name,
             slug: row.slug,
+            attributeDefs: row.attributeDefs ?? [],
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
           })),
         },
         200,
@@ -53,9 +76,6 @@ export const registerProductTypeRoutes = (app: OpenAPIHono<HonoBindings>) => {
     },
   );
 
-  // ── A single product type + its attribute_defs ─────────────────────────────
-  // attribute_defs drive the Attributes step's dynamic schema (buildTypeZodSchema
-  // + SchemaForm), which is why the detail route returns them and the list does not.
   app.openapi(
     createRoute({
       method: "get",
@@ -76,6 +96,7 @@ export const registerProductTypeRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const { id } = c.req.valid("param");
       const row = await getProductTypeById(id);
+
       if (!row) {
         return c.json(
           {
@@ -86,16 +107,176 @@ export const registerProductTypeRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
       }
 
-      return c.json(
-        {
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-          // jsonb column holding AttributeDef[] — see note if your schema names it differently.
-          attributeDefs: row.attributeDefs ?? [],
+      return c.json(toProductTypeResponse(row), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: productTypeBodySchema,
+            },
+          },
         },
-        200,
-      );
+      },
+      responses: {
+        201: { description: "Product type created" },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Slug already exists",
+        },
+      },
+      tags: ["ProductTypes"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const body = c.req.valid("json");
+      const existing = await getProductTypeBySlug(body.slug);
+
+      if (existing) {
+        return c.json(
+          {
+            code: "PRODUCT_TYPE_SLUG_EXISTS",
+            message: "A product type with this slug already exists.",
+          },
+          409,
+        );
+      }
+
+      const row = await createProductType({
+        name: body.name.trim(),
+        slug: body.slug.trim(),
+        attributeDefs: body.attributeDefs ?? [],
+      });
+
+      return c.json(toProductTypeResponse(row), 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/{id}",
+      request: {
+        params: idParamSchema,
+        body: {
+          content: {
+            "application/json": {
+              schema: productTypePatchBodySchema,
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Product type updated" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Not found",
+        },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Slug already exists",
+        },
+      },
+      tags: ["ProductTypes"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+      const body = c.req.valid("json");
+
+      if (body.slug) {
+        const existing = await getProductTypeBySlug(body.slug);
+        if (existing && existing.id !== id) {
+          return c.json(
+            {
+              code: "PRODUCT_TYPE_SLUG_EXISTS",
+              message: "A product type with this slug already exists.",
+            },
+            409,
+          );
+        }
+      }
+
+      const row = await updateProductType(id, {
+        ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+        ...(body.slug !== undefined ? { slug: body.slug.trim() } : {}),
+        ...(body.attributeDefs !== undefined
+          ? { attributeDefs: body.attributeDefs }
+          : {}),
+      });
+
+      if (!row) {
+        return c.json(
+          {
+            code: "PRODUCT_TYPE_NOT_FOUND",
+            message: "Product type not found.",
+          },
+          404,
+        );
+      }
+
+      return c.json(toProductTypeResponse(row), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/{id}",
+      request: { params: idParamSchema },
+      responses: {
+        200: { description: "Product type deleted" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Not found",
+        },
+        409: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Product type is in use",
+        },
+      },
+      tags: ["ProductTypes"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+
+      try {
+        const deleted = await deleteProductType(id);
+
+        if (!deleted) {
+          return c.json(
+            {
+              code: "PRODUCT_TYPE_NOT_FOUND",
+              message: "Product type not found.",
+            },
+            404,
+          );
+        }
+
+        return c.json({ ok: true }, 200);
+      } catch {
+        return c.json(
+          {
+            code: "PRODUCT_TYPE_IN_USE",
+            message:
+              "This product type cannot be deleted because one or more products are using it.",
+          },
+          409,
+        );
+      }
     },
   );
 };
