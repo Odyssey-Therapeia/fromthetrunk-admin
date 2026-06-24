@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   images: {
+    qualities: [75, 90],
     remotePatterns: [
       {
         protocol: "https",
@@ -27,6 +28,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "njufw8f4mlcjsl7g.public.blob.vercel-storage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "ll1rv51y3jxrt1nr.public.blob.vercel-storage.com",
       },
     ],
   },

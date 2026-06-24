@@ -1,31 +1,28 @@
 "use client";
 
-import { useState } from "react";
-
 import type {
   FormAsyncValidateOrFn,
   FormValidateOrFn,
   ReactFormExtendedApi,
 } from "@tanstack/react-form";
-
-import { Button } from "@/components/ui/button";
-import {
-  productDetailsSchema,
-  detailsFullWidthKeys,
-} from "@/components/admin/schema-form/product-details.schema";
-import { SchemaForm } from "@/components/admin/schema-form/schema-form";
-import { SchemaFormField } from "@/components/admin/schema-form/schema-form-field";
-import { useRenderLog, logEvent } from "./_render-log";
-
-import type { FormSchema } from "@/lib/forms/types";
-import type { ProductStepperValues } from "./types";
-
 import { useStore } from "@tanstack/react-form";
-import { TagPicker } from "./tag-picker";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// Typed form handle (mirrors step-pricing.tsx pattern)
-// ---------------------------------------------------------------------------
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { slugify } from "@/lib/utils";
+
+import { logEvent, useRenderLog } from "./_render-log";
+import { TagPicker } from "./tag-picker";
+import type { ProductStepperValues } from "./types";
 
 type ProductStepperSyncValidator =
   | FormValidateOrFn<ProductStepperValues>
@@ -53,130 +50,273 @@ type StepDetailsProps = {
   form: ProductStepperForm;
 };
 
-// ---------------------------------------------------------------------------
-// Standard field keys rendered via SchemaForm (all except tagsCsv which has
-// a custom Suggest Tags button alongside it).
-// ---------------------------------------------------------------------------
-
-const standardFieldKeys = [
-  "name",
-  "slug",
-  "collectionId",
-  "detailsFabric",
-  "detailsDesigner",
-  "detailsLength",
-  "detailsWidth",
-  "detailsCondition",
-] as const satisfies ReadonlyArray<keyof ProductStepperValues>;
-
-// Sub-schema for the 8 standard fields — derived from productDetailsSchema.
-// productDetailsSchema is the single source of truth; this is a projection.
-const standardSchema: FormSchema = {
-  fields: Object.fromEntries(
-    standardFieldKeys.map((key) => [key, productDetailsSchema.fields[key]]),
-  ),
+type CollectionOption = {
+  id: string;
+  name?: null | string;
+  slug?: null | string;
+  title?: null | string;
 };
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+type CollectionsResponse = CollectionOption[];
+
+const fabricOptions = [
+  "Georgette",
+  "Cotton",
+  "Kanjeevaram",
+  "Silk",
+  "Kota Cotton",
+  "Chiffon",
+  "Kanjeevaram Mix",
+  "Organza",
+  "Cotton Silk",
+] as const;
+
+const conditionOptions = [
+  "Pristine",
+  "Excellent",
+  "Very Good",
+  "Good",
+  "Fair",
+  "Needs Restoration",
+] as const;
+
+const noCollectionValue = "__no_collection__";
+const noFabricValue = "__no_fabric__";
+const noConditionValue = "__no_condition__";
+
+const parseTagIds = (csv: string): number[] =>
+  csv
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+
+const getCollectionLabel = (collection: CollectionOption) =>
+  collection.title ||
+  collection.name ||
+  collection.slug ||
+  `Collection ${collection.id.slice(0, 8)}`;
+
+async function fetchCollections() {
+  const response = await fetch("/api/v2/collections", {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not load collections.");
+  }
+
+  return (await response.json()) as CollectionsResponse;
+}
 
 export function StepDetails({ form }: StepDetailsProps) {
   useRenderLog("StepDetails");
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestedTags, setSuggestedTags] = useState<
-    Array<{ category: string; id: number; name: string }>
-  >([]);
 
-  const handleSuggestTags = async () => {
-    setIsSuggesting(true);
-    try {
-      const values = form.state.values;
-      const response = await fetch("/api/v2/products/tag-suggestions", {
-        body: JSON.stringify({
-          detailsDesigner: values.detailsDesigner,
-          detailsFabric: values.detailsFabric,
-          storyEra: values.storyEra,
-          storyNarrative: values.storyNarrative,
-          storyProvenance: values.storyProvenance,
-          storyTitle: values.storyTitle,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        setSuggestedTags([]);
-        return;
-      }
-
-      const data = (await response.json()) as {
-        suggestions?: Array<{ category: string; id: number; name: string }>;
-      };
-      setSuggestedTags(data.suggestions ?? []);
-    } finally {
-      setIsSuggesting(false);
-    }
-  };
-
-  // -------------------------------------------------------------------------
-  // Build values and errors maps from the TanStack form state.
-  // All field metadata is sourced from productDetailsSchema (single source of
-  // truth) — no hand-assembled meta objects here.
-  // -------------------------------------------------------------------------
-
-  // const formValues = form.state.values as Record<string, unknown>;
   const formValues = useStore(form.store, (state) => state.values);
 
-  const standardValues: Record<string, unknown> = Object.fromEntries(
-    standardFieldKeys.map((key) => [key, formValues[key] ?? ""]),
-  );
+  const collectionsQuery = useQuery({
+    queryKey: ["admin-product-stepper-collections"],
+    queryFn: fetchCollections,
+  });
 
-  const standardErrors: Record<string, string> = {};
-  for (const key of standardFieldKeys) {
-    const firstError = form.state.fieldMeta[key]?.errors[0];
-    if (firstError !== undefined) {
-      standardErrors[key] = String(firstError);
-    }
-  }
+  const collections = collectionsQuery.data ?? [];
 
-  const parseTagIds = (csv: string): number[] =>
-    csv
-      .split(",")
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isInteger(n) && n > 0);
+  type DetailsTextFieldKey =
+    | "collectionId"
+    | "detailsCondition"
+    | "detailsDesigner"
+    | "detailsFabric"
+    | "detailsLength"
+    | "detailsWidth"
+    | "name"
+    | "slug";
+
+  const setValue = (key: DetailsTextFieldKey, value: string) => {
+    logEvent(`details change: ${key}`, value);
+    form.setFieldValue(key, value);
+  };
+
+  const handleBlur = (key: keyof ProductStepperValues) => {
+    const { instance } = form.getFieldInfo(key);
+    (instance as { handleBlur?: () => void } | null)?.handleBlur?.();
+  };
+
+  const selectedCollectionValue = formValues.collectionId || noCollectionValue;
+  const selectedFabricValue = formValues.detailsFabric || noFabricValue;
+  const selectedConditionValue =
+    formValues.detailsCondition || noConditionValue;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {/* Standard fields — schema-driven via SchemaForm + productDetailsSchema.
-          Field layout (full-width) is specified via getFieldClassName. */}
-      <SchemaForm
-        schema={standardSchema}
-        values={standardValues}
-        errors={standardErrors}
-        className="contents"
-        getFieldClassName={(key) =>
-          detailsFullWidthKeys.has(key) ? "md:col-span-2" : undefined
-        }
-        onChange={(key, value) => {
-          logEvent(`keystroke: ${key}`, value); // inside SchemaForm's onChange
-          form.setFieldValue(
-            key as keyof ProductStepperValues,
-            value as ProductStepperValues[keyof ProductStepperValues],
-          );
-        }}
-        onBlur={(key) => {
-          const { instance } = form.getFieldInfo(
-            key as keyof ProductStepperValues,
-          );
-          (instance as { handleBlur?: () => void } | null)?.handleBlur?.();
-        }}
-      />
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor="product-internal-name">Internal Name</Label>
+          <Input
+            id="product-internal-name"
+            value={formValues.name}
+            placeholder="Red Kanjeevaram Saree"
+            onBlur={() => handleBlur("name")}
+            onChange={(event) => {
+              const name = event.target.value;
+              setValue("name", name);
+              setValue("slug", slugify(name));
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            This is the internal product name. The public slug is generated from
+            this name.
+          </p>
+        </div>
 
-      {/* tagsCsv — metadata from productDetailsSchema (no inline meta);
-          has a custom "Suggest Tags" button as additional UI. */}
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor="product-generated-slug">Generated Slug</Label>
+          <Input
+            id="product-generated-slug"
+            value={formValues.slug}
+            placeholder="red-kanjeevaram-saree"
+            readOnly
+            className="bg-muted/40 text-muted-foreground"
+          />
+          <p className="text-xs text-muted-foreground">
+            Slugs are generated automatically from the internal name.
+          </p>
+        </div>
+
+        <div className="space-y-1.5 md:col-span-2">
+          <Label>Collection</Label>
+          <Select
+            value={selectedCollectionValue}
+            disabled={collectionsQuery.isLoading}
+            onValueChange={(value) => {
+              setValue(
+                "collectionId",
+                value === noCollectionValue ? "" : value,
+              );
+              handleBlur("collectionId");
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  collectionsQuery.isLoading
+                    ? "Loading collections..."
+                    : "Select collection"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={noCollectionValue}>No collection</SelectItem>
+
+              {collections.map((collection) => (
+                <SelectItem key={collection.id} value={collection.id}>
+                  {getCollectionLabel(collection)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The saved value is the collection ID, but you select it by name
+            here.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Fabric</Label>
+          <Select
+            value={selectedFabricValue}
+            onValueChange={(value) => {
+              setValue("detailsFabric", value === noFabricValue ? "" : value);
+              handleBlur("detailsFabric");
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select fabric" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={noFabricValue}>Select fabric</SelectItem>
+
+              {fabricOptions.map((fabric) => (
+                <SelectItem key={fabric} value={fabric}>
+                  {fabric}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Condition</Label>
+          <Select
+            value={selectedConditionValue}
+            onValueChange={(value) => {
+              setValue(
+                "detailsCondition",
+                value === noConditionValue ? "" : value,
+              );
+              handleBlur("detailsCondition");
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select condition" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={noConditionValue}>Select condition</SelectItem>
+
+              {conditionOptions.map((condition) => (
+                <SelectItem key={condition} value={condition}>
+                  {condition}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <details className="rounded-lg border bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium">
+          Additional measurements and attribution
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </summary>
+
+        <div className="grid gap-4 border-t px-4 py-4 md:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="product-designer">Designer</Label>
+            <Input
+              id="product-designer"
+              value={formValues.detailsDesigner}
+              placeholder="Designer / maker / source"
+              onBlur={() => handleBlur("detailsDesigner")}
+              onChange={(event) =>
+                setValue("detailsDesigner", event.target.value)
+              }
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="product-length">Length</Label>
+            <Input
+              id="product-length"
+              value={formValues.detailsLength}
+              placeholder="e.g. 6.2 m"
+              onBlur={() => handleBlur("detailsLength")}
+              onChange={(event) =>
+                setValue("detailsLength", event.target.value)
+              }
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="product-width">Width</Label>
+            <Input
+              id="product-width"
+              value={formValues.detailsWidth}
+              placeholder="e.g. 44 in"
+              onBlur={() => handleBlur("detailsWidth")}
+              onChange={(event) => setValue("detailsWidth", event.target.value)}
+            />
+          </div>
+        </div>
+      </details>
+
       <form.Field name="tagsCsv">
         {(field) => (
           <div className="space-y-1.5">
