@@ -48,6 +48,9 @@ test-results/
 /weavex-review-companion-*.png
 /ftt-live-collection-*.json
 
+# Local development media uploads
+/public/dev-uploads/
+
 # Sensitive internal docs
 /docs/finance/
 

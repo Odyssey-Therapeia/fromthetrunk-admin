@@ -1,16 +1,11 @@
-"use client";
-
 /**
  * components/admin/product-stepper/step-type-selection.tsx
  *
  * P4-02: Type Selection step — first step of the product stepper.
  *
- * Renders a card-based chooser for product types (preloved-saree, blouse,
- * accessory, etc.) loaded from the API. Selecting a type sets
- * ProductStepperValues.typeId and clears attributeValues (to avoid stale
- * attributes from a previously selected type).
- *
- * Design: shadcn + Tailwind tokens only; no hex/px.
+ * Renders a card-based chooser for product types loaded from the API.
+ * Selecting a type sets ProductStepperValues.typeId, clears attributeValues
+ * when switching type, and can optionally auto-advance to the next step.
  */
 
 import type {
@@ -22,12 +17,8 @@ import { CheckCircle2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { useProductTypes } from "./use-product-type";
 import type { ProductStepperValues } from "./types";
-
-// ---------------------------------------------------------------------------
-// Typed form handle (same pattern as step-details, step-pricing)
-// ---------------------------------------------------------------------------
+import { useProductTypes } from "./use-product-type";
 
 type ProductStepperSyncValidator =
   | FormValidateOrFn<ProductStepperValues>
@@ -52,23 +43,29 @@ type ProductStepperForm = ReactFormExtendedApi<
 >;
 
 type StepTypeSelectionProps = {
+  autoAdvanceOnSelect?: boolean;
   form: ProductStepperForm;
+  onTypeSelected?: () => void;
 };
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-export function StepTypeSelection({ form }: StepTypeSelectionProps) {
+export function StepTypeSelection({
+  autoAdvanceOnSelect = false,
+  form,
+  onTypeSelected,
+}: StepTypeSelectionProps) {
   const { loading, types } = useProductTypes();
   const selectedTypeId = form.state.values.typeId;
 
   const handleSelect = (typeId: string) => {
-    // If switching type, clear attribute values to avoid stale data
     if (typeId !== selectedTypeId) {
       form.setFieldValue("attributeValues", {});
     }
+
     form.setFieldValue("typeId", typeId);
+
+    if (autoAdvanceOnSelect) {
+      onTypeSelected?.();
+    }
   };
 
   if (loading) {
@@ -92,14 +89,15 @@ export function StepTypeSelection({ form }: StepTypeSelectionProps) {
       <div>
         <h3 className="text-sm font-medium">Select Product Type</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Choose the type that best describes this product. The attributes step
-          will adapt to the type you select.
+          Choose the type that best describes this product. The next steps will
+          adapt to the type you select.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         {types.map((type) => {
           const isSelected = selectedTypeId === type.id;
+
           return (
             <button
               key={type.id}
@@ -111,12 +109,13 @@ export function StepTypeSelection({ form }: StepTypeSelectionProps) {
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
                   ? "border-primary bg-primary/5"
-                  : "border-border bg-card"
+                  : "border-border bg-card",
               )}
             >
               {isSelected ? (
                 <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-primary" />
               ) : null}
+
               <span className="text-sm font-medium">{type.name}</span>
               <span className="text-xs text-muted-foreground">{type.slug}</span>
             </button>
@@ -126,11 +125,11 @@ export function StepTypeSelection({ form }: StepTypeSelectionProps) {
 
       {selectedTypeId ? (
         <p className="text-xs text-muted-foreground">
-          Type selected. Proceed to the next step to fill in attributes.
+          Type selected. You can continue editing or choose another type.
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          No type selected — attributes step will be skipped.
+          Select a type to continue.
         </p>
       )}
     </div>

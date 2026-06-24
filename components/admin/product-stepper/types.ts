@@ -81,14 +81,15 @@ export const mapProductToStepperValues = (product: {
   detailsLength: product.detailsLength ?? "",
   detailsWidth: product.detailsWidth ?? "",
   featured: Boolean(product.featured),
-  imageMediaIds:
-    product.images
-      ? [...product.images]
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-          .map((image) => image.media.id)
-      : [],
+  imageMediaIds: product.images
+    ? [...product.images]
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map((image) => image.media.id)
+    : [],
   name: product.name ?? "",
-  originalPriceRupees: product.originalPricePaise ? toRupees(product.originalPricePaise) : 0,
+  originalPriceRupees: product.originalPricePaise
+    ? toRupees(product.originalPricePaise)
+    : 0,
   priceRupees: product.pricePaise ? toRupees(product.pricePaise) : 0,
   reservedUntil: toNullableIsoString(product.reservedUntil),
   slug: product.slug ?? "",
@@ -98,7 +99,8 @@ export const mapProductToStepperValues = (product: {
   storyEra: product.storyEra ?? "",
   storyNarrative: product.storyNarrative ?? "",
   storyProvenance: product.storyProvenance ?? "",
-  storyTitle: product.storyTitle ?? "",
+  storyTitle:
+    product.storyTitle === "Untitled Product" ? "" : (product.storyTitle ?? ""),
   tagsCsv: product.tags?.map((tag) => tag.id).join(", ") ?? "",
   typeId: product.typeId ?? null,
 });

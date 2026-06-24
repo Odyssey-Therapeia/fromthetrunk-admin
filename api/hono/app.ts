@@ -31,6 +31,8 @@ import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
 import { registerFeedsRoutes } from "@/api/hono/routes/feeds";
 import { registerHealthRoutes } from "@/api/hono/routes/health";
 import { registerTagRoutes } from "@/api/hono/routes/tags";
+import { registerProductStoryRoutes } from "@/api/hono/routes/product-story";
+import { registerImageToolsRoutes } from "@/api/hono/routes/image-tools";
 import type { HonoBindings } from "@/api/hono/types";
 import { onUncaughtError } from "@/lib/http/on-uncaught-error";
 
@@ -52,6 +54,10 @@ app.get("/docs", swaggerUI({ url: "/api/v2/openapi.json" }));
 const productsApp = new OpenAPIHono<HonoBindings>();
 registerProductRoutes(productsApp);
 app.route("/products", productsApp);
+
+const productStoryApp = new OpenAPIHono<HonoBindings>();
+registerProductStoryRoutes(productStoryApp);
+app.route("/product-story", productStoryApp);
 
 const productTypesApp = new OpenAPIHono<HonoBindings>();
 registerProductTypeRoutes(productTypesApp);
@@ -84,6 +90,10 @@ app.route("/wishlist", wishlistApp);
 const mediaApp = new OpenAPIHono<HonoBindings>();
 registerMediaRoutes(mediaApp);
 app.route("/media", mediaApp);
+
+const imageToolsApp = new OpenAPIHono<HonoBindings>();
+registerImageToolsRoutes(imageToolsApp);
+app.route("/image-tools", imageToolsApp);
 
 const newsletterApp = new OpenAPIHono<HonoBindings>();
 registerNewsletterRoutes(newsletterApp);
