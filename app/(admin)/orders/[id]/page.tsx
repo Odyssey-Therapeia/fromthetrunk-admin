@@ -148,7 +148,7 @@ function DetailBlock({
         {label}
       </p>
       <div
-        className={`mt-1 break-words text-sm ${valueClassName} ${
+        className={`mt-1 wrap-break-worc text-sm ${valueClassName} ${
           mono ? "font-mono text-xs" : ""
         }`}
       >
