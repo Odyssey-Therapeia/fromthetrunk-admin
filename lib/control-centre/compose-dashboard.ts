@@ -1,20 +1,3 @@
-/**
- * P5-05: Control Centre — data-composition pure function.
- *
- * composeDashboard() accepts raw channel_metrics + event-count inputs and
- * returns a single structured object suitable for rendering the operations
- * dashboard. It is deliberately pure (no I/O, no side-effects) so it can be
- * unit-tested with mutation proofs.
- *
- * Section map:
- *   funnel        — revenue funnel: sessions → ordersCreated → paid
- *   feedHealth    — Meta catalog item count + disapprovals
- *   parity        — Meta Pixel vs CAPI event-count delta
- *   indexation    — GSC indexed-page count, avgCtr, top queries
- *   cwv           — Vercel CWV p75 (LCP/INP/CLS) + recent deploy count
- *   reservationExpiry — count of reservation_expired events (30-day window)
- */
-
 import type {
   GA4DataMetrics,
   SearchConsoleMetrics,
@@ -23,19 +6,22 @@ import type {
   TopQuery,
 } from "@/lib/ports/channel-metrics";
 
-// ---------------------------------------------------------------------------
-// Input type
-// ---------------------------------------------------------------------------
-
 export type EventCounts = {
-  /** order_created events in the past 30 days */
   orderCreated: number;
-  /** payment_completed events in the past 30 days */
   paymentCompleted: number;
-  /** reservation_expired events in the past 30 days */
   reservationExpired: number;
-  /** reservations rows created in the past 30 days (from reservations.createdAt) */
   reservationsCreated: number;
+
+  wishlistAdded: number;
+
+  productCardClick: number;
+  productView: number;
+  addToCart: number;
+
+  // Keep these for later. They can stay 0 until website emits them.
+  collectionView: number;
+  cartViewed: number;
+  checkoutStarted: number;
 };
 
 export type ControlCentreInputs = {
@@ -44,34 +30,96 @@ export type ControlCentreInputs = {
   vercelInsights: VercelInsightsMetrics;
   metaMarketing: MetaMarketingMetrics;
   eventCounts: EventCounts;
+  commerce: CommerceInputs;
+  topMovers: TopMoversInputs;
+  discoveryMovers: DiscoveryMoversInputs;
 };
 
-// ---------------------------------------------------------------------------
-// Output type
-// ---------------------------------------------------------------------------
-
 export type FunnelMetrics = {
-  /** GA4 sessions over past 30 days */
   sessions: number;
-  /** Internal order_created events over past 30 days */
+  realtimeActiveUsers: number;
   ordersCreated: number;
-  /** Internal payment_completed events over past 30 days */
   paid: number;
 };
 
+export type BrowsingMetrics = {
+  productCardClick: number;
+  productView: number;
+  addToCart: number;
+  collectionView: number;
+  cartViewed: number;
+  checkoutStarted: number;
+};
+
+export type DiagnosticRateMetrics = {
+  productCtr: number;
+  pdpAddToBagRate: number;
+  paymentSuccessRate: number;
+};
+
+export type CommerceInputs = {
+  grossSalesPaise: number;
+  paidOrderCount: number;
+  pendingPaymentLinks: number;
+  abandonedPendingOrders: number;
+  soldPieces: number;
+  reservedPieces: number;
+  availablePieces: number;
+};
+
+export type CommerceMetrics = CommerceInputs & {
+  averageOrderValuePaise: number;
+};
+
+export type TopProductMover = {
+  productId: string | null;
+  slug: string | null;
+  name: string;
+  count: number;
+  revenuePaise?: number;
+};
+
+export type TopMoversInputs = {
+  viewedProducts: TopProductMover[];
+  addedToBagProducts: TopProductMover[];
+  wishlistedProducts: TopProductMover[];
+  paidProducts: TopProductMover[];
+};
+
+export type TopMoversMetrics = TopMoversInputs;
+
+export type TopSearchTermMover = {
+  query: string;
+  count: number;
+  avgResultCount: number;
+};
+
+export type TopFilterMover = {
+  filterType: string;
+  filterValue: string;
+  filterLabel: string;
+  count: number;
+};
+
+export type DiscoveryMoversInputs = {
+  topSearchTerms: TopSearchTermMover[];
+  topFilters: TopFilterMover[];
+};
+
+export type DiscoveryMoversMetrics = DiscoveryMoversInputs;
+
+export type EngagementMetrics = {
+  wishlistAdded: number;
+};
+
 export type FeedHealthMetrics = {
-  /** Meta catalog item count */
   catalogItemCount: number;
-  /** Meta catalog disapprovals */
   catalogDisapprovals: number;
 };
 
 export type ParityMetrics = {
-  /** Meta Pixel event count */
   pixelEventCount: number;
-  /** Internal CAPI (payment_completed) event count */
   capiEventCount: number;
-  /** pixel - capi: positive = pixel over-counts, negative = under-counts */
   parityDelta: number;
 };
 
@@ -90,17 +138,18 @@ export type CwvComposed = {
 
 export type ReservationExpiryMetrics = {
   expiredCount: number;
-  /** reservationsCreated count in the same window (denominator for expiryRate) */
   reservationsCreated: number;
-  /**
-   * Fraction of reservations that expired: expiredCount / reservationsCreated.
-   * 0 when reservationsCreated === 0 (guards divide-by-zero — never NaN).
-   */
   expiryRate: number;
 };
 
 export type ControlCentreDashboard = {
   funnel: FunnelMetrics;
+  browsing: BrowsingMetrics;
+  rates: DiagnosticRateMetrics;
+  commerce: CommerceMetrics;
+  topMovers: TopMoversMetrics;
+  discoveryMovers: DiscoveryMoversMetrics;
+  engagement: EngagementMetrics;
   feedHealth: FeedHealthMetrics;
   parity: ParityMetrics;
   indexation: IndexationMetrics;
@@ -108,23 +157,62 @@ export type ControlCentreDashboard = {
   reservationExpiry: ReservationExpiryMetrics;
 };
 
-// ---------------------------------------------------------------------------
-// Pure composition function
-// ---------------------------------------------------------------------------
+function safeRate(numerator: number, denominator: number): number {
+  return denominator > 0 ? numerator / denominator : 0;
+}
 
-/**
- * Compose a ControlCentreDashboard from raw channel-metric + event-count inputs.
- *
- * Pure function — no I/O. Every output value is strictly derived from the
- * input arguments. Mutation of any input field must change the relevant output.
- */
-export function composeDashboard(inputs: ControlCentreInputs): ControlCentreDashboard {
-  const { ga4, searchConsole, vercelInsights, metaMarketing, eventCounts } = inputs;
+export function composeDashboard(
+  inputs: ControlCentreInputs,
+): ControlCentreDashboard {
+  const {
+    ga4,
+    searchConsole,
+    vercelInsights,
+    metaMarketing,
+    eventCounts,
+    commerce: commerceInputs,
+    topMovers,
+    discoveryMovers,
+  } = inputs;
 
   const funnel: FunnelMetrics = {
     sessions: ga4.sessions,
+    realtimeActiveUsers: ga4.realtimeActiveUsers,
     ordersCreated: eventCounts.orderCreated,
     paid: eventCounts.paymentCompleted,
+  };
+
+  const browsing: BrowsingMetrics = {
+    productCardClick: eventCounts.productCardClick,
+    productView: eventCounts.productView,
+    addToCart: eventCounts.addToCart,
+    collectionView: eventCounts.collectionView,
+    cartViewed: eventCounts.cartViewed,
+    checkoutStarted: eventCounts.checkoutStarted,
+  };
+
+  const rates: DiagnosticRateMetrics = {
+    productCtr: safeRate(
+      eventCounts.productCardClick,
+      eventCounts.collectionView,
+    ),
+    pdpAddToBagRate: safeRate(eventCounts.addToCart, eventCounts.productView),
+    paymentSuccessRate: safeRate(
+      eventCounts.paymentCompleted,
+      eventCounts.orderCreated,
+    ),
+  };
+
+  const commerce: CommerceMetrics = {
+    ...commerceInputs,
+    averageOrderValuePaise:
+      commerceInputs.paidOrderCount > 0
+        ? commerceInputs.grossSalesPaise / commerceInputs.paidOrderCount
+        : 0,
+  };
+
+  const engagement: EngagementMetrics = {
+    wishlistAdded: eventCounts.wishlistAdded,
   };
 
   const feedHealth: FeedHealthMetrics = {
@@ -135,8 +223,6 @@ export function composeDashboard(inputs: ControlCentreInputs): ControlCentreDash
   const parity: ParityMetrics = {
     pixelEventCount: metaMarketing.pixelEventCount,
     capiEventCount: metaMarketing.capiEventCount,
-    // Re-compute rather than trust the stored parityDelta so the test can
-    // verify this is derived (mutation-proof: change pixel/capi → delta changes).
     parityDelta: metaMarketing.pixelEventCount - metaMarketing.capiEventCount,
   };
 
@@ -157,9 +243,22 @@ export function composeDashboard(inputs: ControlCentreInputs): ControlCentreDash
   const reservationExpiry: ReservationExpiryMetrics = {
     expiredCount: reservationExpired,
     reservationsCreated,
-    // Guard divide-by-zero: 0 when denominator is 0, never NaN.
-    expiryRate: reservationsCreated > 0 ? reservationExpired / reservationsCreated : 0,
+    expiryRate:
+      reservationsCreated > 0 ? reservationExpired / reservationsCreated : 0,
   };
 
-  return { funnel, feedHealth, parity, indexation, cwv, reservationExpiry };
+  return {
+    funnel,
+    browsing,
+    rates,
+    commerce,
+    topMovers,
+    discoveryMovers,
+    engagement,
+    feedHealth,
+    parity,
+    indexation,
+    cwv,
+    reservationExpiry,
+  };
 }
