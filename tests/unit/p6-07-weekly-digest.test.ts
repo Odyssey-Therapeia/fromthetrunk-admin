@@ -53,9 +53,11 @@ vi.mock("@/lib/email/recipients", () => ({
 
 // We must still mock verifyBearerSecret for the secret check tests to be clean
 vi.mock("@/lib/http/verify-secret", () => ({
-  verifyBearerSecret: vi.fn().mockImplementation((header: string | null, secret: string) => {
-    return header === `Bearer ${secret}`;
-  }),
+  verifyBearerSecret: vi
+    .fn()
+    .mockImplementation((header: string | null, secret: string) => {
+      return header === `Bearer ${secret}`;
+    }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -77,9 +79,17 @@ function makeCronApp() {
 const VALID_SECRET = "test-cron-secret";
 
 const DEFAULT_CHANNEL_METRICS = {
-  ga4: { sessions: 42, conversions: 5, totalRevenuePaise: 1000000, conversionRate: 0.12 },
+  ga4: {
+    sessions: 42,
+    conversions: 5,
+    totalRevenuePaise: 1000000,
+    conversionRate: 0.12,
+  },
   searchConsole: { indexedPageCount: 10, topQueries: [], avgCtr: 0.05 },
-  vercelInsights: { cwv: { lcp: 2.1, inp: 100, cls: 0.05 }, recentDeployCount: 3 },
+  vercelInsights: {
+    cwv: { lcp: 2.1, inp: 100, cls: 0.05 },
+    recentDeployCount: 3,
+  },
   metaMarketing: {
     catalogItemCount: 20,
     catalogDisapprovals: 1,
@@ -94,6 +104,7 @@ const DEFAULT_EVENT_COUNTS = {
   paymentCompleted: 5,
   reservationExpired: 2,
   reservationsCreated: 8,
+  wishlistAdded: 1,
 };
 
 // ---------------------------------------------------------------------------
@@ -108,7 +119,9 @@ describe("GET /weekly-ops-digest cron", () => {
     getChannelMetricsMock.mockResolvedValue(DEFAULT_CHANNEL_METRICS);
     getEventCountsMock.mockResolvedValue(DEFAULT_EVENT_COUNTS);
     sendEmailMock.mockResolvedValue(true);
-    getOrderNotificationRecipientsMock.mockReturnValue(["ops@fromthetrunk.com"]);
+    getOrderNotificationRecipientsMock.mockReturnValue([
+      "ops@fromthetrunk.com",
+    ]);
   });
 
   // (1) CRON_SECRET gate: no secret set → 500
@@ -122,14 +135,16 @@ describe("GET /weekly-ops-digest cron", () => {
     });
     const res = await app.request(req);
     expect(res.status).toBe(500);
-    const body = await res.json() as { code: string };
+    const body = (await res.json()) as { code: string };
     expect(body.code).toBe("CRON_SECRET_MISSING");
   });
 
   // (1b) 401 without auth header
   it("returns 401 when authorization header is missing", async () => {
     const app = makeCronApp();
-    const req = new Request("http://localhost/weekly-ops-digest", { method: "GET" });
+    const req = new Request("http://localhost/weekly-ops-digest", {
+      method: "GET",
+    });
     const res = await app.request(req);
     expect(res.status).toBe(401);
   });
@@ -161,9 +176,13 @@ describe("GET /weekly-ops-digest cron", () => {
 
     // Email must have been sent to the ops recipient
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    const emailArgsCall = sendEmailMock.mock.calls[0] as [{ to: string | string[]; subject: string; html: string }];
+    const emailArgsCall = sendEmailMock.mock.calls[0] as [
+      { to: string | string[]; subject: string; html: string },
+    ];
     const emailArgs = emailArgsCall[0];
-    const toRecipients = Array.isArray(emailArgs?.to) ? emailArgs.to : [emailArgs?.to];
+    const toRecipients = Array.isArray(emailArgs?.to)
+      ? emailArgs.to
+      : [emailArgs?.to];
     expect(toRecipients).toContain("ops@fromthetrunk.com");
     expect(emailArgs?.subject).toContain("Weekly");
     expect(emailArgs?.html).toBeTruthy();
@@ -173,7 +192,12 @@ describe("GET /weekly-ops-digest cron", () => {
   it("email html contains composed data derived from getChannelMetrics (real compose)", async () => {
     getChannelMetricsMock.mockResolvedValue({
       ...DEFAULT_CHANNEL_METRICS,
-      ga4: { sessions: 9999, conversions: 5, totalRevenuePaise: 1000000, conversionRate: 0.12 },
+      ga4: {
+        sessions: 9999,
+        conversions: 5,
+        totalRevenuePaise: 1000000,
+        conversionRate: 0.12,
+      },
     });
 
     const app = makeCronApp();

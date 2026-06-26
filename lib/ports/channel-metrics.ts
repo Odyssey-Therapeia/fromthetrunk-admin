@@ -14,8 +14,9 @@
  *   meta-marketing  → catalog item count + disapprovals + pixel/CAPI parity (Meta Graph API).
  *
  * Env vars required (see docs/spikes/channel-audit.md §1):
- *   GSC_SERVICE_ACCOUNT_JSON, GSC_PROPERTY
- *   GA4_PROPERTY_ID, GA4_DATA_SA_JSON
+ *   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+ *   GSC_PROPERTY
+ *   GA4_PROPERTY_ID
  *   VERCEL_API_TOKEN, VERCEL_PROJECT_ID
  *   META_CATALOG_ID, META_SYSTEM_USER_TOKEN
  */
@@ -24,6 +25,10 @@ import { and, count, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { createLogger } from "@/lib/log";
+import {
+  getGoogleAccessToken,
+  hasGoogleOAuthCredentials,
+} from "@/lib/google/oauth-access-token";
 
 const log = createLogger("channel-metrics");
 
@@ -53,6 +58,8 @@ export type GA4DataMetrics = {
   totalRevenuePaise: number;
   /** Conversion rate as a fraction (conversions / sessions). 0 when no sessions. */
   conversionRate: number;
+  /** Current active users from GA4 Realtime API. */
+  realtimeActiveUsers: number;
 };
 
 export type CwvMetrics = {
@@ -114,6 +121,7 @@ const EMPTY_GA4_DATA: GA4DataMetrics = {
   conversions: 0,
   totalRevenuePaise: 0,
   conversionRate: 0,
+  realtimeActiveUsers: 0,
 };
 
 const EMPTY_VERCEL_INSIGHTS: VercelInsightsMetrics = {
@@ -157,10 +165,9 @@ type GscSearchAnalyticsResponse = {
  * The fixture test mocks fetch() directly so no live call ever happens in CI.
  */
 export function buildSearchConsoleAdapter(): ChannelMetricsAdapter<SearchConsoleMetrics> {
-  const saJson = process.env.GSC_SERVICE_ACCOUNT_JSON;
   const property = process.env.GSC_PROPERTY;
 
-  const credsMissing = !saJson || !property;
+  const credsMissing = !property || !hasGoogleOAuthCredentials();
 
   return {
     source: "search-console",
@@ -169,8 +176,9 @@ export function buildSearchConsoleAdapter(): ChannelMetricsAdapter<SearchConsole
       if (credsMissing) return EMPTY_SEARCH_CONSOLE;
 
       try {
-        const endpoint =
-          `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(property!)}/searchAnalytics/query`;
+        const accessToken = await getGoogleAccessToken();
+
+        const endpoint = `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(property!)}/searchAnalytics/query`;
 
         const body = JSON.stringify({
           startDate: thirtyDaysAgo(),
@@ -182,17 +190,17 @@ export function buildSearchConsoleAdapter(): ChannelMetricsAdapter<SearchConsole
         const response = await fetch(endpoint, {
           method: "POST",
           headers: {
+            Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
-            // Service-account auth header: in production this would be a real
-            // Bearer token obtained by exchanging the SA JSON with Google's
-            // token endpoint. The fixture tests mock fetch() so no live exchange occurs.
-            Authorization: `Bearer ${saJson!}`,
           },
           body,
         });
 
         if (!response.ok) {
-          log.error("[search-console] GSC API returned non-ok", { status: response.status });
+          log.error("[search-console] GSC API returned non-ok", {
+            status: response.status,
+            body: await response.text(),
+          });
           return EMPTY_SEARCH_CONSOLE;
         }
 
@@ -208,16 +216,24 @@ export function buildSearchConsoleAdapter(): ChannelMetricsAdapter<SearchConsole
         }));
 
         const totalClicks = topQueries.reduce((s, q) => s + q.clicks, 0);
-        const totalImpressions = topQueries.reduce((s, q) => s + q.impressions, 0);
-        const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+        const totalImpressions = topQueries.reduce(
+          (s, q) => s + q.impressions,
+          0,
+        );
+        const avgCtr =
+          totalImpressions > 0 ? totalClicks / totalImpressions : 0;
 
         return {
+          // For now this is "query rows returned", not true indexed-page count.
+          // We'll later replace this with a proper indexing source.
           indexedPageCount: topQueries.length,
           topQueries,
           avgCtr,
         };
       } catch (err) {
-        log.error("[search-console] adapter error", { err: err as Record<string, unknown> });
+        log.error("[search-console] adapter error", {
+          err: err as Record<string, unknown>,
+        });
         return EMPTY_SEARCH_CONSOLE;
       }
     },
@@ -247,9 +263,8 @@ type Ga4RunReportResponse = {
  */
 export function buildGa4DataAdapter(): ChannelMetricsAdapter<GA4DataMetrics> {
   const propertyId = process.env.GA4_PROPERTY_ID;
-  const saJson = process.env.GA4_DATA_SA_JSON;
 
-  const credsMissing = !propertyId || !saJson;
+  const credsMissing = !propertyId || !hasGoogleOAuthCredentials();
 
   return {
     source: "ga4-data",
@@ -258,52 +273,94 @@ export function buildGa4DataAdapter(): ChannelMetricsAdapter<GA4DataMetrics> {
       if (credsMissing) return EMPTY_GA4_DATA;
 
       try {
-        const endpoint =
-          `https://analyticsdata.googleapis.com/v1beta/${encodeURIComponent(propertyId!)}:runReport`;
+        const accessToken = await getGoogleAccessToken();
 
-        const body = JSON.stringify({
-          dateRanges: [{ startDate: thirtyDaysAgo(), endDate: today() }],
-          dimensions: [{ name: "sessionDefaultChannelGroup" }],
-          metrics: [
-            { name: "sessions" },
-            { name: "conversions" },
-            { name: "totalRevenue" },
-          ],
-        });
+        const propertyName = propertyId!.startsWith("properties/")
+          ? propertyId!
+          : `properties/${propertyId!}`;
 
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            // Service-account Bearer token: fixture tests mock fetch() directly.
-            Authorization: `Bearer ${saJson!}`,
-          },
-          body,
-        });
+        const reportEndpoint = `https://analyticsdata.googleapis.com/v1beta/${propertyName}:runReport`;
 
-        if (!response.ok) {
-          log.error("[ga4-data] GA4 Data API returned non-ok", { status: response.status });
-          return EMPTY_GA4_DATA;
-        }
+        const realtimeEndpoint = `https://analyticsdata.googleapis.com/v1beta/${propertyName}:runRealtimeReport`;
 
-        const data = (await response.json()) as Ga4RunReportResponse;
-        const rows = data.rows ?? [];
+        const headers = {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        };
+
+        const [reportResponse, realtimeResponse] = await Promise.all([
+          fetch(reportEndpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              dateRanges: [{ startDate: thirtyDaysAgo(), endDate: today() }],
+              metrics: [
+                { name: "sessions" },
+                { name: "conversions" },
+                { name: "totalRevenue" },
+              ],
+            }),
+          }),
+          fetch(realtimeEndpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              metrics: [{ name: "activeUsers" }],
+            }),
+          }),
+        ]);
 
         let sessions = 0;
         let conversions = 0;
         let totalRevenuePaise = 0;
+        let realtimeActiveUsers = 0;
 
-        for (const row of rows) {
-          sessions += parseInt(row.metricValues[0]?.value ?? "0", 10);
-          conversions += parseInt(row.metricValues[1]?.value ?? "0", 10);
-          totalRevenuePaise += parseInt(row.metricValues[2]?.value ?? "0", 10);
+        if (reportResponse.ok) {
+          const data = (await reportResponse.json()) as Ga4RunReportResponse;
+          const row = data.rows?.[0];
+
+          sessions = parseInt(row?.metricValues[0]?.value ?? "0", 10);
+          conversions = parseInt(row?.metricValues[1]?.value ?? "0", 10);
+
+          // GA4 totalRevenue is returned in currency units. Convert INR rupees → paise.
+          const totalRevenueRupees = Number(row?.metricValues[2]?.value ?? "0");
+          totalRevenuePaise = Math.round(totalRevenueRupees * 100);
+        } else {
+          log.error("[ga4-data] GA4 Data API returned non-ok", {
+            status: reportResponse.status,
+            body: await reportResponse.text(),
+          });
+        }
+
+        if (realtimeResponse.ok) {
+          const realtimeData =
+            (await realtimeResponse.json()) as Ga4RunReportResponse;
+          const realtimeRow = realtimeData.rows?.[0];
+
+          realtimeActiveUsers = parseInt(
+            realtimeRow?.metricValues[0]?.value ?? "0",
+            10,
+          );
+        } else {
+          log.error("[ga4-data] GA4 Realtime API returned non-ok", {
+            status: realtimeResponse.status,
+            body: await realtimeResponse.text(),
+          });
         }
 
         const conversionRate = sessions > 0 ? conversions / sessions : 0;
 
-        return { sessions, conversions, totalRevenuePaise, conversionRate };
+        return {
+          sessions,
+          conversions,
+          totalRevenuePaise,
+          conversionRate,
+          realtimeActiveUsers,
+        };
       } catch (err) {
-        log.error("[ga4-data] adapter error", { err: err as Record<string, unknown> });
+        log.error("[ga4-data] adapter error", {
+          err: err as Record<string, unknown>,
+        });
         return EMPTY_GA4_DATA;
       }
     },
@@ -344,6 +401,7 @@ type VercelDeploymentsResponse = {
 export function buildVercelInsightsAdapter(): ChannelMetricsAdapter<VercelInsightsMetrics> {
   const token = process.env.VERCEL_API_TOKEN;
   const projectId = process.env.VERCEL_PROJECT_ID;
+  const teamId = process.env.VERCEL_TEAM_ID;
 
   const credsMissing = !token || !projectId;
 
@@ -359,45 +417,40 @@ export function buildVercelInsightsAdapter(): ChannelMetricsAdapter<VercelInsigh
           "Content-Type": "application/json",
         };
 
-        // Parallel: CWV data + recent deployments
-        const [cwvResponse, deployResponse] = await Promise.all([
-          fetch(
-            `https://vercel.com/api/web-analytics/vitals?projectId=${encodeURIComponent(projectId!)}`,
-            { headers }
-          ),
-          fetch(
-            `https://vercel.com/api/v6/deployments?projectId=${encodeURIComponent(projectId!)}&limit=10`,
-            { headers }
-          ),
-        ]);
+        const params = new URLSearchParams({
+          projectId: projectId!,
+          limit: "10",
+        });
 
-        let cwv: CwvMetrics = { lcp: 0, inp: 0, cls: 0 };
+        if (teamId) {
+          params.set("teamId", teamId);
+        }
+
+        const deployResponse = await fetch(
+          `https://api.vercel.com/v6/deployments?${params.toString()}`,
+          { headers },
+        );
+
         let recentDeployCount = 0;
 
-        if (cwvResponse.ok) {
-          const cwvData = (await cwvResponse.json()) as VercelWebAnalyticsResponse;
-          const entries = cwvData.data ?? [];
-          for (const entry of entries) {
-            if (entry.key === "lcp") cwv.lcp = entry.p75;
-            if (entry.key === "inp") cwv.inp = entry.p75;
-            if (entry.key === "cls") cwv.cls = entry.p75;
-          }
-        } else {
-          log.error("[vercel-insights] CWV API returned non-ok", { status: cwvResponse.status });
-          return EMPTY_VERCEL_INSIGHTS;
-        }
-
         if (deployResponse.ok) {
-          const deployData = (await deployResponse.json()) as VercelDeploymentsResponse;
+          const deployData =
+            (await deployResponse.json()) as VercelDeploymentsResponse;
           recentDeployCount = deployData.deployments?.length ?? 0;
         } else {
-          log.error("[vercel-insights] Deployments API returned non-ok", { status: deployResponse.status });
-          return EMPTY_VERCEL_INSIGHTS;
+          log.error("[vercel-insights] Deployments API returned non-ok", {
+            status: deployResponse.status,
+          });
         }
 
-        return { cwv, recentDeployCount };
+        return {
+          cwv: { lcp: 0, inp: 0, cls: 0 },
+          recentDeployCount,
+        };
       } catch (err) {
-        log.error("[vercel-insights] adapter error", { err: err as Record<string, unknown> });
+        log.error("[vercel-insights] adapter error", {
+          err: err as Record<string, unknown>,
+        });
         return EMPTY_VERCEL_INSIGHTS;
       }
     },
@@ -477,23 +530,25 @@ export function buildMetaMarketingAdapter(): ChannelMetricsAdapter<MetaMarketing
 
         // Fetch catalog info, diagnostics, and pixel stats in parallel.
         // The P2-07 CAPI count comes from the events table (separate db call).
-        const [catalogResponse, diagnosticsResponse, pixelStatsResponse] = await Promise.all([
-          fetch(`${baseUrl}?fields=id,name,product_count&${tokenParam}`),
-          fetch(`${baseUrl}/check_batch_request_status?${tokenParam}`),
-          // Meta pixel stats endpoint — requires pixel_id which is the META_CATALOG_ID's
-          // associated pixel. We use the system user token for auth.
-          fetch(
-            `https://graph.facebook.com/v18.0/${encodeURIComponent(catalogId!)}/pixel_stats?` +
-              `start_time=${windowStartEpoch}&${tokenParam}`
-          ),
-        ]);
+        const [catalogResponse, diagnosticsResponse, pixelStatsResponse] =
+          await Promise.all([
+            fetch(`${baseUrl}?fields=id,name,product_count&${tokenParam}`),
+            fetch(`${baseUrl}/check_batch_request_status?${tokenParam}`),
+            // Meta pixel stats endpoint — requires pixel_id which is the META_CATALOG_ID's
+            // associated pixel. We use the system user token for auth.
+            fetch(
+              `https://graph.facebook.com/v18.0/${encodeURIComponent(catalogId!)}/pixel_stats?` +
+                `start_time=${windowStartEpoch}&${tokenParam}`,
+            ),
+          ]);
 
         let catalogItemCount = 0;
         let catalogDisapprovals = 0;
         let pixelEventCount = 0;
 
         if (catalogResponse.ok) {
-          const catalogData = (await catalogResponse.json()) as MetaCatalogResponse;
+          const catalogData =
+            (await catalogResponse.json()) as MetaCatalogResponse;
           catalogItemCount = catalogData.product_count ?? 0;
         } else {
           log.error("[meta-marketing] Catalog API returned non-ok", {
@@ -519,7 +574,8 @@ export function buildMetaMarketingAdapter(): ChannelMetricsAdapter<MetaMarketing
         }
 
         if (pixelStatsResponse.ok) {
-          const pixelData = (await pixelStatsResponse.json()) as MetaPixelStatsResponse;
+          const pixelData =
+            (await pixelStatsResponse.json()) as MetaPixelStatsResponse;
           const entries = pixelData.data ?? [];
           for (const entry of entries) {
             pixelEventCount += entry.count;
@@ -541,8 +597,8 @@ export function buildMetaMarketingAdapter(): ChannelMetricsAdapter<MetaMarketing
             .where(
               and(
                 eq(events.type, "payment_completed"),
-                gte(events.occurredAt, windowStart)
-              )
+                gte(events.occurredAt, windowStart),
+              ),
             );
           capiEventCount = capiRow?.total ?? 0;
         } catch (dbErr) {
@@ -592,32 +648,41 @@ export async function pullAllMetrics(overrides?: {
   vercelInsights?: ChannelMetricsAdapter<VercelInsightsMetrics>;
   metaMarketing?: ChannelMetricsAdapter<MetaMarketingMetrics>;
 }): Promise<AllChannelMetrics> {
-  const [searchConsole, ga4Data, vercelInsights, metaMarketing] = await Promise.all([
-    (overrides?.searchConsole ?? buildSearchConsoleAdapter())
-      .pull()
-      .catch((err: unknown) => {
-        log.error("[channel-metrics] search-console adapter threw", { err: err as Record<string, unknown> });
-        return EMPTY_SEARCH_CONSOLE;
-      }),
-    (overrides?.ga4Data ?? buildGa4DataAdapter())
-      .pull()
-      .catch((err: unknown) => {
-        log.error("[channel-metrics] ga4-data adapter threw", { err: err as Record<string, unknown> });
-        return EMPTY_GA4_DATA;
-      }),
-    (overrides?.vercelInsights ?? buildVercelInsightsAdapter())
-      .pull()
-      .catch((err: unknown) => {
-        log.error("[channel-metrics] vercel-insights adapter threw", { err: err as Record<string, unknown> });
-        return EMPTY_VERCEL_INSIGHTS;
-      }),
-    (overrides?.metaMarketing ?? buildMetaMarketingAdapter())
-      .pull()
-      .catch((err: unknown) => {
-        log.error("[channel-metrics] meta-marketing adapter threw", { err: err as Record<string, unknown> });
-        return EMPTY_META_MARKETING;
-      }),
-  ]);
+  const [searchConsole, ga4Data, vercelInsights, metaMarketing] =
+    await Promise.all([
+      (overrides?.searchConsole ?? buildSearchConsoleAdapter())
+        .pull()
+        .catch((err: unknown) => {
+          log.error("[channel-metrics] search-console adapter threw", {
+            err: err as Record<string, unknown>,
+          });
+          return EMPTY_SEARCH_CONSOLE;
+        }),
+      (overrides?.ga4Data ?? buildGa4DataAdapter())
+        .pull()
+        .catch((err: unknown) => {
+          log.error("[channel-metrics] ga4-data adapter threw", {
+            err: err as Record<string, unknown>,
+          });
+          return EMPTY_GA4_DATA;
+        }),
+      (overrides?.vercelInsights ?? buildVercelInsightsAdapter())
+        .pull()
+        .catch((err: unknown) => {
+          log.error("[channel-metrics] vercel-insights adapter threw", {
+            err: err as Record<string, unknown>,
+          });
+          return EMPTY_VERCEL_INSIGHTS;
+        }),
+      (overrides?.metaMarketing ?? buildMetaMarketingAdapter())
+        .pull()
+        .catch((err: unknown) => {
+          log.error("[channel-metrics] meta-marketing adapter threw", {
+            err: err as Record<string, unknown>,
+          });
+          return EMPTY_META_MARKETING;
+        }),
+    ]);
 
   return { searchConsole, ga4Data, vercelInsights, metaMarketing };
 }
