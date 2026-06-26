@@ -7,7 +7,6 @@ import { AlertCircle, RefreshCw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -40,20 +39,70 @@ type OrderRow = {
   totalPaise: number;
 };
 
-const statusFilters = [
-  "all",
-  "pending",
-  "confirmed",
-  "shipped",
-  "delivered",
-] as const;
-const paymentFilters = [
-  "all",
-  "pending",
-  "paid",
-  "failed",
-  "refunded",
-] as const;
+type StatusFilter = "all" | "pending" | "confirmed" | "shipped" | "delivered";
+type PaymentFilter = "all" | "pending" | "paid" | "failed" | "refunded";
+
+type FilterOption<T extends string> = {
+  description: string;
+  label: string;
+  value: T;
+};
+
+const statusFilterOptions: readonly FilterOption<StatusFilter>[] = [
+  {
+    value: "all",
+    label: "All order stages",
+    description: "Show every order",
+  },
+  {
+    value: "pending",
+    label: "Pending confirmation",
+    description: "Order is not confirmed yet",
+  },
+  {
+    value: "confirmed",
+    label: "Confirmed",
+    description: "Paid or accepted orders",
+  },
+  {
+    value: "shipped",
+    label: "Shipped",
+    description: "Dispatched to customer",
+  },
+  {
+    value: "delivered",
+    label: "Delivered",
+    description: "Completed delivery",
+  },
+];
+
+const paymentFilterOptions: readonly FilterOption<PaymentFilter>[] = [
+  {
+    value: "all",
+    label: "All payment states",
+    description: "Show every payment result",
+  },
+  {
+    value: "pending",
+    label: "Payment pending",
+    description: "Payment not completed yet",
+  },
+  {
+    value: "paid",
+    label: "Paid",
+    description: "Successful payments",
+  },
+  {
+    value: "failed",
+    label: "Failed",
+    description: "Failed payment attempts",
+  },
+  {
+    value: "refunded",
+    label: "Refunded",
+    description: "Returned payments",
+  },
+];
 
 const statusClassName = (status: string) => {
   switch (status) {
@@ -96,6 +145,64 @@ const itemSummary = (items: OrderItem[]) =>
   items.length > 0
     ? items.map((item) => `${item.name} x${item.quantity}`).join(", ")
     : "No items recorded";
+
+function OrderFilterGroup<T extends string>({
+  description,
+  onChange,
+  options,
+  title,
+  value,
+}: {
+  description: string;
+  onChange: (value: T) => void;
+  options: readonly FilterOption<T>[];
+  title: string;
+  value: T;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          {title}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+        {options.map((option) => {
+          const isActive = value === option.value;
+
+          return (
+            <button
+              aria-pressed={isActive}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                isActive
+                  ? "border-primary/60 bg-primary text-primary-foreground shadow-sm"
+                  : "border-border/70 bg-card text-foreground hover:border-primary/30 hover:bg-muted/60"
+              }`}
+              key={option.value}
+              onClick={() => onChange(option.value)}
+              type="button"
+            >
+              <span className="block font-medium leading-none">
+                {option.label}
+              </span>
+              <span
+                className={`mt-1 block text-xs ${
+                  isActive
+                    ? "text-primary-foreground/75"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const normalizeOrder = (entry: unknown): OrderRow | null => {
   if (!entry || typeof entry !== "object") return null;
@@ -164,9 +271,8 @@ const normalizeOrder = (entry: unknown): OrderRow | null => {
 };
 
 export default function AdminOrdersPage() {
-  const [status, setStatus] = useState<(typeof statusFilters)[number]>("all");
-  const [paymentStatus, setPaymentStatus] =
-    useState<(typeof paymentFilters)[number]>("all");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentFilter>("all");
   const [query, setQuery] = useState("");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [error, setError] = useState<null | string>(null);
@@ -235,8 +341,10 @@ export default function AdminOrdersPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return orders.filter((order) => {
-      if (paymentStatus !== "all" && order.paymentStatus !== paymentStatus)
+      if (paymentStatus !== "all" && order.paymentStatus !== paymentStatus) {
         return false;
+      }
+
       if (!normalizedQuery) return true;
 
       const haystack = [
@@ -255,6 +363,15 @@ export default function AdminOrdersPage() {
       return haystack.includes(normalizedQuery);
     });
   }, [orders, paymentStatus, query]);
+
+  const hasActiveFilters =
+    status !== "all" || paymentStatus !== "all" || query.trim().length > 0;
+
+  const clearFilters = () => {
+    setStatus("all");
+    setPaymentStatus("all");
+    setQuery("");
+  };
 
   const metrics = useMemo(
     () => ({
@@ -390,44 +507,67 @@ export default function AdminOrdersPage() {
       )}
 
       <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search customer, item, phone, payment ID"
-              value={query}
-            />
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(18rem,26rem)_1fr]">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Search orders
+              </p>
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Search orders"
+                  className="pl-9"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Customer, saree, phone, payment ID"
+                  value={query}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Searches customer details, items, order IDs, and payment
+                references.
+              </p>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              <OrderFilterGroup
+                description="Where the order is in the fulfilment flow."
+                onChange={setStatus}
+                options={statusFilterOptions}
+                title="Order stage"
+                value={status}
+              />
+
+              <OrderFilterGroup
+                description="Whether the customer payment succeeded, failed, or is still pending."
+                onChange={setPaymentStatus}
+                options={paymentFilterOptions}
+                title="Payment status"
+                value={paymentStatus}
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Tabs
-              onValueChange={(value) => setStatus(value as typeof status)}
-              value={status}
-            >
-              <TabsList className="w-full overflow-x-auto sm:w-auto">
-                {statusFilters.map((filter) => (
-                  <TabsTrigger key={filter} value={filter}>
-                    {filter}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <Tabs
-              onValueChange={(value) =>
-                setPaymentStatus(value as typeof paymentStatus)
-              }
-              value={paymentStatus}
-            >
-              <TabsList className="w-full overflow-x-auto sm:w-auto">
-                {paymentFilters.map((filter) => (
-                  <TabsTrigger key={filter} value={filter}>
-                    {filter}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
+
+          {hasActiveFilters ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Showing{" "}
+                <span className="font-medium text-foreground">
+                  {filteredOrders.length}
+                </span>{" "}
+                matching order{filteredOrders.length === 1 ? "" : "s"}.
+              </span>
+              <Button
+                className="w-full sm:w-auto"
+                onClick={clearFilters}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Clear filters
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-3 md:hidden">
