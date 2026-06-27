@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ShieldPlus } from "lucide-react";
+import {
+  CheckCircle2,
+  Copy,
+  KeyRound,
+  Loader2,
+  RefreshCw,
+  ShieldPlus,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,7 +28,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,12 +41,10 @@ import {
 } from "@/components/ui/table";
 
 type PasswordDraft = {
-  confirmPassword: string;
   newPassword: string;
 };
 
 type UserDraft = {
-  confirmPassword: string;
   email: string;
   name: string;
   password: string;
@@ -54,17 +58,22 @@ type UserRow = {
   role: "admin" | "customer";
 };
 
+type AdminCredential = {
+  email: string;
+  name: string;
+  password: string | null;
+  passwordWasGenerated: boolean;
+};
+
 const USERS_QUERY_KEY = ["admin-users"] as const;
 
 const EMPTY_USERS: UserRow[] = [];
 
 const defaultPasswordDraft: PasswordDraft = {
-  confirmPassword: "",
   newPassword: "",
 };
 
 const defaultUserDraft: UserDraft = {
-  confirmPassword: "",
   email: "",
   name: "",
   password: "",
@@ -78,6 +87,55 @@ const meetsPasswordRequirements = (value: string) =>
   /[A-Z]/.test(value) &&
   /[a-z]/.test(value) &&
   /[0-9]/.test(value);
+
+const passwordUppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const passwordLowercase = "abcdefghijkmnopqrstuvwxyz";
+const passwordNumbers = "23456789";
+const passwordSymbols = "!@#$%&*?";
+const passwordCharacters = `${passwordUppercase}${passwordLowercase}${passwordNumbers}${passwordSymbols}`;
+
+const randomIndex = (length: number) => {
+  if (
+    typeof window !== "undefined" &&
+    window.crypto &&
+    window.crypto.getRandomValues
+  ) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0] % length;
+  }
+
+  return Math.floor(Math.random() * length);
+};
+
+const pickCharacter = (characters: string) =>
+  characters.charAt(randomIndex(characters.length));
+
+const shuffleCharacters = (characters: string[]) => {
+  const copy = [...characters];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomIndex(index + 1);
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+
+  return copy.join("");
+};
+
+const generateTemporaryPassword = () => {
+  const requiredCharacters = [
+    pickCharacter(passwordUppercase),
+    pickCharacter(passwordLowercase),
+    pickCharacter(passwordNumbers),
+    pickCharacter(passwordSymbols),
+  ];
+
+  const remainingCharacters = Array.from({ length: 10 }, () =>
+    pickCharacter(passwordCharacters),
+  );
+
+  return shuffleCharacters([...requiredCharacters, ...remainingCharacters]);
+};
 
 const readErrorMessage = async (response: Response) => {
   try {
@@ -101,17 +159,119 @@ const fetchUsers = async (): Promise<UserRow[]> => {
   return (await response.json()) as UserRow[];
 };
 
+function GeneratedPasswordBox({
+  description,
+  onChange,
+  onCopy,
+  onRegenerate,
+  password,
+  title,
+}: {
+  description: string;
+  onChange?: (value: string) => void;
+  onCopy: () => void;
+  onRegenerate?: () => void;
+  password: string;
+  title: string;
+}) {
+  const inputId = `${title.toLowerCase().replace(/\s+/g, "-")}-input`;
+
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/60 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            {title}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {onRegenerate ? (
+            <Button
+              className="gap-2"
+              onClick={onRegenerate}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Regenerate
+            </Button>
+          ) : null}
+
+          <Button
+            className="gap-2"
+            onClick={onCopy}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Copy className="h-4 w-4" />
+            Copy
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <Label htmlFor={inputId}>Password</Label>
+        <Input
+          className="font-mono"
+          id={inputId}
+          onChange={(event) => onChange?.(event.target.value)}
+          placeholder="Use generated password or type your own"
+          readOnly={!onChange}
+          type="text"
+          value={password}
+        />
+        {onChange ? (
+          <p className="text-xs text-muted-foreground">
+            You can edit this field directly, paste your own password, or
+            regenerate a secure one.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CustomPasswordSetNotice({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/60 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        {title}
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 export default function AdminCustomersPage() {
   const queryClient = useQueryClient();
 
   const [createAdminDraft, setCreateAdminDraft] =
     useState<UserDraft>(defaultUserDraft);
   const [createAdminError, setCreateAdminError] = useState<string | null>(null);
+  const [createdAdminCredential, setCreatedAdminCredential] =
+    useState<AdminCredential | null>(null);
   const [isCreateAdminOpen, setIsCreateAdminOpen] = useState(false);
+  const [createPasswordWasGenerated, setCreatePasswordWasGenerated] =
+    useState(true);
+
   const [passwordDraft, setPasswordDraft] =
     useState<PasswordDraft>(defaultPasswordDraft);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<null | UserRow>(null);
+  const [resetAdminCredential, setResetAdminCredential] =
+    useState<AdminCredential | null>(null);
+  const [resetPasswordWasGenerated, setResetPasswordWasGenerated] =
+    useState(true);
 
   const usersQuery = useQuery({
     queryFn: fetchUsers,
@@ -124,16 +284,68 @@ export default function AdminCustomersPage() {
     () => users.filter((user) => user.role === "admin").length,
     [users],
   );
+
   const customerCount = users.length - adminCount;
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied.`);
+    } catch {
+      toast.error("Unable to copy. Please copy it manually.");
+    }
+  };
+
+  const resetCreateAdminDialog = () => {
+    setCreateAdminDraft(defaultUserDraft);
+    setCreateAdminError(null);
+    setCreatedAdminCredential(null);
+    setCreatePasswordWasGenerated(true);
+  };
+
+  const openCreateAdminDialog = () => {
+    setCreateAdminDraft({
+      email: "",
+      name: "",
+      password: generateTemporaryPassword(),
+    });
+    setCreatePasswordWasGenerated(true);
+    setCreateAdminError(null);
+    setCreatedAdminCredential(null);
+    setIsCreateAdminOpen(true);
+  };
+
+  const closeResetPasswordDialog = () => {
+    setPasswordDraft(defaultPasswordDraft);
+    setPasswordError(null);
+    setPasswordTarget(null);
+    setResetAdminCredential(null);
+    setResetPasswordWasGenerated(true);
+  };
+
+  const openResetPasswordDialog = (user: UserRow) => {
+    setPasswordDraft({
+      newPassword: generateTemporaryPassword(),
+    });
+    setResetPasswordWasGenerated(true);
+    setPasswordError(null);
+    setPasswordTarget(user);
+    setResetAdminCredential(null);
+  };
 
   const createAdminMutation = useMutation({
     mutationFn: async (input: {
       email: string;
       name: string;
       password: string;
+      passwordWasGenerated: boolean;
     }) => {
       const response = await fetch("/api/v2/users/admins", {
-        body: JSON.stringify(input),
+        body: JSON.stringify({
+          email: input.email,
+          name: input.name,
+          password: input.password,
+        }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -143,16 +355,22 @@ export default function AdminCustomersPage() {
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
       }
+
+      return (await response.json()) as UserRow;
     },
     onError: (error) => {
       setCreateAdminError(
         error instanceof Error ? error.message : "Unable to create admin user.",
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (_createdUser, variables) => {
       toast.success("Admin user created.");
-      setCreateAdminDraft(defaultUserDraft);
-      setIsCreateAdminOpen(false);
+      setCreatedAdminCredential({
+        email: variables.email,
+        name: variables.name,
+        password: variables.passwordWasGenerated ? variables.password : null,
+        passwordWasGenerated: variables.passwordWasGenerated,
+      });
       await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
   });
@@ -160,7 +378,9 @@ export default function AdminCustomersPage() {
   const resetPasswordMutation = useMutation({
     mutationFn: async (input: {
       email: string;
+      name: string;
       newPassword: string;
+      passwordWasGenerated: boolean;
       userId: string;
     }) => {
       const response = await fetch(`/api/v2/users/${input.userId}/password`, {
@@ -181,13 +401,18 @@ export default function AdminCustomersPage() {
       setPasswordError(
         error instanceof Error
           ? error.message
-          : "Unable to update admin password.",
+          : "Unable to reset admin password.",
       );
     },
-    onSuccess: (_data, variables) => {
-      toast.success(`Password updated for ${variables.email}.`);
-      setPasswordDraft(defaultPasswordDraft);
-      setPasswordTarget(null);
+    onSuccess: async (_data, variables) => {
+      toast.success(`Password reset for ${variables.email}.`);
+      setResetAdminCredential({
+        email: variables.email,
+        name: variables.name,
+        password: variables.passwordWasGenerated ? variables.newPassword : null,
+        passwordWasGenerated: variables.passwordWasGenerated,
+      });
+      await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
     },
   });
 
@@ -204,15 +429,11 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    if (createAdminDraft.password !== createAdminDraft.confirmPassword) {
-      setCreateAdminError("Password and confirmation must match.");
-      return;
-    }
-
     createAdminMutation.mutate({
       email: createAdminDraft.email.trim(),
       name: createAdminDraft.name.trim(),
       password: createAdminDraft.password,
+      passwordWasGenerated: createPasswordWasGenerated,
     });
   };
 
@@ -226,17 +447,22 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    if (passwordDraft.newPassword !== passwordDraft.confirmPassword) {
-      setPasswordError("Password and confirmation must match.");
-      return;
-    }
-
     resetPasswordMutation.mutate({
       email: passwordTarget.email,
+      name: passwordTarget.name ?? passwordTarget.email,
       newPassword: passwordDraft.newPassword,
+      passwordWasGenerated: resetPasswordWasGenerated,
       userId: passwordTarget.id,
     });
   };
+
+  const createPasswordLabel = createdAdminCredential
+    ? `Temporary password for ${createdAdminCredential.email}`
+    : "Generated temporary password";
+
+  const resetPasswordLabel = resetAdminCredential
+    ? `New password for ${resetAdminCredential.email}`
+    : "Generated new password";
 
   return (
     <div className="space-y-6">
@@ -248,107 +474,10 @@ export default function AdminCustomersPage() {
           </p>
         </div>
 
-        <Dialog
-          open={isCreateAdminOpen}
-          onOpenChange={(open) => {
-            setIsCreateAdminOpen(open);
-            if (!open) {
-              setCreateAdminDraft(defaultUserDraft);
-              setCreateAdminError(null);
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="gap-2" type="button">
-              <ShieldPlus className="h-4 w-4" />
-              Add Admin User
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Admin User</DialogTitle>
-              <DialogDescription>
-                Add another admin account with a starting password they can
-                change later.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="admin-name">Name</Label>
-                <Input
-                  id="admin-name"
-                  onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({
-                      ...prev,
-                      name: event.target.value,
-                    }))
-                  }
-                  value={createAdminDraft.name}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-email">Email</Label>
-                <Input
-                  id="admin-email"
-                  onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({
-                      ...prev,
-                      email: event.target.value,
-                    }))
-                  }
-                  type="email"
-                  value={createAdminDraft.email}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-password">Temporary Password</Label>
-                <Input
-                  id="admin-password"
-                  onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({
-                      ...prev,
-                      password: event.target.value,
-                    }))
-                  }
-                  type="password"
-                  value={createAdminDraft.password}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-password-confirm">Confirm Password</Label>
-                <Input
-                  id="admin-password-confirm"
-                  onChange={(event) =>
-                    setCreateAdminDraft((prev) => ({
-                      ...prev,
-                      confirmPassword: event.target.value,
-                    }))
-                  }
-                  type="password"
-                  value={createAdminDraft.confirmPassword}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {passwordRequirements}
-              </p>
-              {createAdminError ? (
-                <p className="text-sm text-destructive">{createAdminError}</p>
-              ) : null}
-            </div>
-            <DialogFooter>
-              <Button
-                disabled={createAdminMutation.isPending}
-                onClick={handleCreateAdmin}
-                type="button"
-              >
-                {createAdminMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                Create Admin
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button className="gap-2" onClick={openCreateAdminDialog} type="button">
+          <ShieldPlus className="h-4 w-4" />
+          Add Admin User
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -363,6 +492,7 @@ export default function AdminCustomersPage() {
             <p className="text-3xl font-semibold">{adminCount}</p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Customers</CardTitle>
@@ -380,10 +510,11 @@ export default function AdminCustomersPage() {
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
           <CardDescription>
-            Admin accounts can have their passwords reset directly from this
-            table.
+            Admin passwords can be reset here. Existing admins already have
+            passwords unless they were created without one.
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <Table>
             <TableHeader>
@@ -395,6 +526,7 @@ export default function AdminCustomersPage() {
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {usersQuery.isError ? (
                 <TableRow>
@@ -425,16 +557,14 @@ export default function AdminCustomersPage() {
                     <TableCell className="text-right">
                       {user.role === "admin" ? (
                         <Button
-                          onClick={() => {
-                            setPasswordDraft(defaultPasswordDraft);
-                            setPasswordError(null);
-                            setPasswordTarget(user);
-                          }}
+                          className="gap-2"
+                          onClick={() => openResetPasswordDialog(user)}
                           size="sm"
                           type="button"
                           variant="outline"
                         >
-                          Set Password
+                          <KeyRound className="h-4 w-4" />
+                          Reset Password
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">
@@ -459,71 +589,272 @@ export default function AdminCustomersPage() {
       </Card>
 
       <Dialog
-        open={Boolean(passwordTarget)}
+        open={isCreateAdminOpen}
         onOpenChange={(open) => {
+          setIsCreateAdminOpen(open);
           if (!open) {
-            setPasswordDraft(defaultPasswordDraft);
-            setPasswordError(null);
-            setPasswordTarget(null);
+            resetCreateAdminDialog();
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="border-border/70 bg-card sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Set Admin Password</DialogTitle>
+            <DialogTitle>
+              {createdAdminCredential
+                ? "Admin User Created"
+                : "Create Admin User"}
+            </DialogTitle>
             <DialogDescription>
-              {passwordTarget
-                ? `Update the password for ${passwordTarget.name ?? passwordTarget.email}.`
-                : "Update an admin password."}
+              {createdAdminCredential
+                ? createdAdminCredential.password
+                  ? "Copy the generated temporary password now and share it securely with the admin."
+                  : "The admin account was created with the custom password you entered."
+                : "Add another admin account. A secure temporary password is generated automatically, but you can type your own."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="reset-password">New Password</Label>
-              <Input
-                id="reset-password"
-                onChange={(event) =>
-                  setPasswordDraft((prev) => ({
-                    ...prev,
-                    newPassword: event.target.value,
-                  }))
-                }
-                type="password"
-                value={passwordDraft.newPassword}
-              />
+
+          {createdAdminCredential ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Admin account created.</p>
+                  <p className="mt-1 text-sm">
+                    {createdAdminCredential.name} can sign in with{" "}
+                    {createdAdminCredential.email}.
+                  </p>
+                </div>
+              </div>
+
+              {createdAdminCredential.password ? (
+                <GeneratedPasswordBox
+                  description="This generated password is shown here so you can copy it once and send it securely."
+                  onCopy={() =>
+                    void copyToClipboard(
+                      createdAdminCredential.password ?? "",
+                      createPasswordLabel,
+                    )
+                  }
+                  password={createdAdminCredential.password}
+                  title="Generated temporary password"
+                />
+              ) : (
+                <CustomPasswordSetNotice
+                  description="You typed the admin password manually, so it will not be shown again here. Share the password using your own secure channel."
+                  title="Custom password set"
+                />
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="reset-password-confirm">Confirm Password</Label>
-              <Input
-                id="reset-password-confirm"
-                onChange={(event) =>
-                  setPasswordDraft((prev) => ({
+          ) : (
+            <div className="space-y-5">
+              <div className="space-y-3 rounded-xl border border-border/70 bg-background/60 p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-name">Name</Label>
+                  <Input
+                    id="admin-name"
+                    onChange={(event) =>
+                      setCreateAdminDraft((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder="e.g. Priya Shah"
+                    value={createAdminDraft.name}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="admin-email">Email</Label>
+                  <Input
+                    id="admin-email"
+                    onChange={(event) =>
+                      setCreateAdminDraft((prev) => ({
+                        ...prev,
+                        email: event.target.value,
+                      }))
+                    }
+                    placeholder="admin@example.com"
+                    type="email"
+                    value={createAdminDraft.email}
+                  />
+                </div>
+              </div>
+
+              <GeneratedPasswordBox
+                description="A secure password is generated by default, but you can type your own below."
+                onChange={(value) => {
+                  setCreatePasswordWasGenerated(false);
+                  setCreateAdminDraft((prev) => ({
                     ...prev,
-                    confirmPassword: event.target.value,
-                  }))
+                    password: value,
+                  }));
+                }}
+                onCopy={() =>
+                  void copyToClipboard(
+                    createAdminDraft.password,
+                    "Temporary password",
+                  )
                 }
-                type="password"
-                value={passwordDraft.confirmPassword}
+                onRegenerate={() => {
+                  setCreatePasswordWasGenerated(true);
+                  setCreateAdminDraft((prev) => ({
+                    ...prev,
+                    password: generateTemporaryPassword(),
+                  }));
+                }}
+                password={createAdminDraft.password}
+                title="Password"
               />
+
+              <p className="text-xs text-muted-foreground">
+                {passwordRequirements}
+              </p>
+
+              {createAdminError ? (
+                <p className="text-sm text-destructive">{createAdminError}</p>
+              ) : null}
             </div>
+          )}
+
+          <DialogFooter>
+            {createdAdminCredential ? (
+              <Button
+                onClick={() => {
+                  resetCreateAdminDialog();
+                  setIsCreateAdminOpen(false);
+                }}
+                type="button"
+              >
+                Done
+              </Button>
+            ) : (
+              <Button
+                disabled={createAdminMutation.isPending}
+                onClick={handleCreateAdmin}
+                type="button"
+              >
+                {createAdminMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Create Admin
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(passwordTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeResetPasswordDialog();
+          }
+        }}
+      >
+        <DialogContent className="border-border/70 bg-card sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {resetAdminCredential
+                ? "Admin Password Reset"
+                : "Reset Admin Password"}
+            </DialogTitle>
+            <DialogDescription>
+              {passwordTarget
+                ? `Generate and apply a new password for ${
+                    passwordTarget.name ?? passwordTarget.email
+                  }.`
+                : "Generate and apply a new admin password."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {resetAdminCredential ? (
+              <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Password reset.</p>
+                  <p className="mt-1 text-sm">
+                    Share the new password securely with{" "}
+                    {resetAdminCredential.email}.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                This does not mean the admin has no password. It creates a new
+                password and replaces the old one.
+              </div>
+            )}
+
+            {resetAdminCredential?.password ? (
+              <GeneratedPasswordBox
+                description="Copy this generated password now. It will not be emailed automatically from this screen."
+                onCopy={() =>
+                  void copyToClipboard(
+                    resetAdminCredential.password ?? "",
+                    resetPasswordLabel,
+                  )
+                }
+                password={resetAdminCredential.password}
+                title="Generated new password"
+              />
+            ) : resetAdminCredential ? (
+              <CustomPasswordSetNotice
+                description="You typed the new password manually, so it will not be shown again here. Share the password using your own secure channel."
+                title="Custom password set"
+              />
+            ) : (
+              <GeneratedPasswordBox
+                description="Review, type your own, or regenerate the password before applying it."
+                onChange={(value) => {
+                  setResetPasswordWasGenerated(false);
+                  setPasswordDraft({
+                    newPassword: value,
+                  });
+                }}
+                onCopy={() =>
+                  void copyToClipboard(
+                    passwordDraft.newPassword,
+                    resetPasswordLabel,
+                  )
+                }
+                onRegenerate={() => {
+                  setResetPasswordWasGenerated(true);
+                  setPasswordDraft({
+                    newPassword: generateTemporaryPassword(),
+                  });
+                }}
+                password={passwordDraft.newPassword}
+                title="New password"
+              />
+            )}
+
             <p className="text-xs text-muted-foreground">
               {passwordRequirements}
             </p>
+
             {passwordError ? (
               <p className="text-sm text-destructive">{passwordError}</p>
             ) : null}
           </div>
+
           <DialogFooter>
-            <Button
-              disabled={resetPasswordMutation.isPending}
-              onClick={handleResetAdminPassword}
-              type="button"
-            >
-              {resetPasswordMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
-              Update Password
-            </Button>
+            {resetAdminCredential ? (
+              <Button onClick={closeResetPasswordDialog} type="button">
+                Done
+              </Button>
+            ) : (
+              <Button
+                disabled={resetPasswordMutation.isPending}
+                onClick={handleResetAdminPassword}
+                type="button"
+              >
+                {resetPasswordMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Reset Password
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
