@@ -3,19 +3,19 @@
 /**
  * P3-07: Admin theme editor.
  *
- * - SchemaForm over themeSettingsSchema - zero bespoke per-token UI.
- *   Adding a field to themeSettingsSchema renders it here automatically (D-style).
+ * - Custom UX for theme token editing:
+ *   - Color tokens get color pickers, hex inputs, and preset swatches.
+ *   - Border radius gets a live slider + value input.
  * - Same-page live preview: a preview region scoped with the draft CSS vars as
  *   an inline style on a wrapper div, so edits are visible before saving.
  * - Version history sheet: lists prior theme versions with a Restore button.
  * - Persists via POST /api/v2/admin/theme (requireAdmin gated).
  *
- * SCHEMA_FORM_THEME_ADMIN -- SchemaForm is rendered below using themeSettingsSchema
- * THEME_SETTINGS_SCHEMA_DRIVEN -- all token fields come from themeSettingsSchema
+ * THEME_TOKEN_EDITOR_ADMIN -- custom token editor for color/radius UX
  * LIVE_PREVIEW_THEME_ADMIN -- preview region scoped with draft CSS vars
  */
 
-import { useCallback, useState } from "react";
+import { type CSSProperties, useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, Palette, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +29,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -37,7 +39,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SchemaForm } from "@/components/admin/schema-form/schema-form";
 import { themeSettingsSchema } from "@/lib/content/theme-settings.schema";
 
 // -- Domain types -------------------------------------------------------------
@@ -55,7 +56,49 @@ type ThemeVersion = {
   createdAt: string;
 };
 
+type ThemeField = {
+  meta: {
+    description?: string;
+    label?: string;
+    placeholder?: string;
+    type?: string;
+  };
+};
+
 // -- Helpers ------------------------------------------------------------------
+
+const COLOR_TOKEN_FALLBACKS: Record<string, string> = {
+  "--background": "#fdf7f1",
+  "--foreground": "#2b1b16",
+  "--primary": "#601d1c",
+  "--primary-foreground": "#fdf7f1",
+  "--accent": "#c89400",
+  "--accent-foreground": "#fff8d6",
+  "--border": "#dfcdb8",
+  "--card": "#fffaf4",
+  "--card-foreground": "#2b1b16",
+  "--muted": "#f4eadf",
+  "--muted-foreground": "#765f53",
+  "--secondary": "#f5eadf",
+  "--secondary-foreground": "#2b1b16",
+};
+
+const COLOR_PRESETS = [
+  "#fdf7f1",
+  "#fffaf4",
+  "#f4eadf",
+  "#dfcdb8",
+  "#601d1c",
+  "#141d46",
+  "#c89400",
+  "#2b1b16",
+  "#0e0d0e",
+];
+
+const RADIUS_MIN = 0;
+const RADIUS_MAX = 2;
+const RADIUS_STEP = 0.05;
+const DEFAULT_RADIUS_REM = 0.75;
 
 const readErrorMessage = async (response: Response) => {
   try {
@@ -68,6 +111,96 @@ const readErrorMessage = async (response: Response) => {
   }
   return `Request failed with ${response.status}`;
 };
+
+const stringifyTokenValue = (value: unknown) =>
+  typeof value === "string" ? value : "";
+
+const getFieldLabel = (key: string, field: ThemeField) =>
+  field.meta.label ??
+  key
+    .replace(/^--/, "")
+    .replace(/-/g, " ")
+    .replace(/^./, (char) => char.toUpperCase());
+
+const getFieldDescription = (field: ThemeField) => field.meta.description ?? "";
+
+const normalizeHexColor = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+
+  if (/^#[0-9a-f]{6}$/i.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+    const [, r, g, b] = trimmed.toLowerCase();
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+
+  return null;
+};
+
+const getColorPickerValue = (key: string, value: unknown) =>
+  normalizeHexColor(value) ??
+  normalizeHexColor(COLOR_TOKEN_FALLBACKS[key]) ??
+  "#000000";
+
+const isRadiusField = (key: string, field: ThemeField) => {
+  const normalizedKey = key.toLowerCase();
+  const normalizedLabel = field.meta.label?.toLowerCase() ?? "";
+
+  return normalizedKey.includes("radius") || normalizedLabel.includes("radius");
+};
+
+const isColorField = (key: string, field: ThemeField) => {
+  if (isRadiusField(key, field)) return false;
+
+  const normalizedDescription = field.meta.description?.toLowerCase() ?? "";
+  const normalizedLabel = field.meta.label?.toLowerCase() ?? "";
+
+  return (
+    key.startsWith("--") ||
+    normalizedDescription.includes("hex") ||
+    normalizedLabel.includes("color") ||
+    normalizedLabel.includes("colour")
+  );
+};
+
+const parseRadiusRem = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+
+  if (/^-?\d+(\.\d+)?rem$/i.test(trimmed)) {
+    return Number.parseFloat(trimmed);
+  }
+
+  if (/^-?\d+(\.\d+)?px$/i.test(trimmed)) {
+    return Number.parseFloat(trimmed) / 16;
+  }
+
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return Number.parseFloat(trimmed);
+  }
+
+  return null;
+};
+
+const clampRadius = (value: number) =>
+  Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, value));
+
+const formatRadiusValue = (value: number) => {
+  const fixed = value.toFixed(2).replace(/\.?0+$/, "");
+  return `${fixed}rem`;
+};
+
+const getThemeFieldEntries = () =>
+  Object.entries(themeSettingsSchema.fields) as Array<[string, ThemeField]>;
 
 // -- Version history sheet ----------------------------------------------------
 
@@ -202,6 +335,266 @@ function ThemeVersionSheet({
   );
 }
 
+// -- Token editor -------------------------------------------------------------
+
+function ColorTokenField({
+  error,
+  field,
+  fieldKey,
+  onChange,
+  value,
+}: {
+  error?: string;
+  field: ThemeField;
+  fieldKey: string;
+  onChange: (key: string, value: unknown) => void;
+  value: unknown;
+}) {
+  const stringValue = stringifyTokenValue(value);
+  const pickerValue = getColorPickerValue(fieldKey, value);
+  const isInvalidColor =
+    stringValue.trim().length > 0 && normalizeHexColor(stringValue) === null;
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Label className="text-sm font-semibold">
+            {getFieldLabel(fieldKey, field)}
+          </Label>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {getFieldDescription(field) || "Choose a 3 or 6 digit hex colour."}
+          </p>
+        </div>
+
+        <div
+          className="h-11 w-11 shrink-0 rounded-full border border-border/70 shadow-sm"
+          style={{ background: pickerValue }}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[4rem_minmax(0,1fr)]">
+        <label className="relative flex h-11 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+          <input
+            aria-label={`${getFieldLabel(fieldKey, field)} colour picker`}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={(event) => onChange(fieldKey, event.target.value)}
+            type="color"
+            value={pickerValue}
+          />
+          <span
+            className="h-8 w-8 rounded-lg border border-border/60"
+            style={{ background: pickerValue }}
+          />
+        </label>
+
+        <Input
+          className="font-mono"
+          onChange={(event) => onChange(fieldKey, event.target.value)}
+          placeholder={COLOR_TOKEN_FALLBACKS[fieldKey] ?? "#000000"}
+          value={stringValue}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {COLOR_PRESETS.map((preset) => (
+          <button
+            aria-label={`Use ${preset}`}
+            className="h-6 w-6 rounded-full border border-border/70 shadow-sm transition hover:scale-110"
+            key={`${fieldKey}-${preset}`}
+            onClick={() => onChange(fieldKey, preset)}
+            style={{ background: preset }}
+            title={preset}
+            type="button"
+          />
+        ))}
+      </div>
+
+      {isInvalidColor ? (
+        <p className="mt-2 text-xs text-destructive">
+          Use a valid hex colour like #601d1c or #fff.
+        </p>
+      ) : error ? (
+        <p className="mt-2 text-xs text-destructive">{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function RadiusTokenField({
+  error,
+  field,
+  fieldKey,
+  onChange,
+  value,
+}: {
+  error?: string;
+  field: ThemeField;
+  fieldKey: string;
+  onChange: (key: string, value: unknown) => void;
+  value: unknown;
+}) {
+  const parsedRadius = parseRadiusRem(value);
+  const radiusRem = clampRadius(parsedRadius ?? DEFAULT_RADIUS_REM);
+  const radiusValue =
+    stringifyTokenValue(value) || formatRadiusValue(radiusRem);
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Label className="text-sm font-semibold">
+            {getFieldLabel(fieldKey, field)}
+          </Label>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {getFieldDescription(field) ||
+              "Controls rounded corners across the site."}
+          </p>
+        </div>
+        <Badge className="w-fit" variant="secondary">
+          {formatRadiusValue(radiusRem)}
+        </Badge>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <input
+          aria-label={`${getFieldLabel(fieldKey, field)} slider`}
+          className="w-full accent-primary"
+          max={RADIUS_MAX}
+          min={RADIUS_MIN}
+          onChange={(event) =>
+            onChange(fieldKey, formatRadiusValue(Number(event.target.value)))
+          }
+          step={RADIUS_STEP}
+          type="range"
+          value={radiusRem}
+        />
+
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+          <div className="grid grid-cols-4 gap-2">
+            {[0, 0.25, 0.75, 1.5].map((sample) => (
+              <button
+                className="rounded-xl border border-border/70 bg-card px-2 py-2 text-xs text-muted-foreground transition hover:bg-muted"
+                key={sample}
+                onClick={() => onChange(fieldKey, formatRadiusValue(sample))}
+                type="button"
+              >
+                {formatRadiusValue(sample)}
+              </button>
+            ))}
+          </div>
+
+          <Input
+            className="font-mono"
+            onChange={(event) => onChange(fieldKey, event.target.value)}
+            placeholder="0.75rem"
+            value={radiusValue}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {[0.15, 0.4, 0.8, 1.3].map((size, index) => (
+          <div
+            className="h-12 border border-border/70 bg-card"
+            key={`radius-preview-${index}`}
+            style={{ borderRadius: formatRadiusValue(size * radiusRem) }}
+          />
+        ))}
+      </div>
+
+      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+function SimpleTokenField({
+  error,
+  field,
+  fieldKey,
+  onChange,
+  value,
+}: {
+  error?: string;
+  field: ThemeField;
+  fieldKey: string;
+  onChange: (key: string, value: unknown) => void;
+  value: unknown;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{getFieldLabel(fieldKey, field)}</Label>
+      <p className="text-xs leading-5 text-muted-foreground">
+        {getFieldDescription(field)}
+      </p>
+      <Input
+        onChange={(event) => onChange(fieldKey, event.target.value)}
+        placeholder={field.meta.placeholder}
+        value={stringifyTokenValue(value)}
+      />
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+function TokenEditor({
+  draft,
+  errors,
+  onChange,
+}: {
+  draft: Record<string, unknown>;
+  errors: Record<string, string>;
+  onChange: (key: string, value: unknown) => void;
+}) {
+  const entries = getThemeFieldEntries();
+
+  return (
+    <div className="space-y-4">
+      {entries.map(([fieldKey, field]) => {
+        const value = draft[fieldKey];
+        const error = errors[fieldKey];
+
+        if (isRadiusField(fieldKey, field)) {
+          return (
+            <RadiusTokenField
+              error={error}
+              field={field}
+              fieldKey={fieldKey}
+              key={fieldKey}
+              onChange={onChange}
+              value={value}
+            />
+          );
+        }
+
+        if (isColorField(fieldKey, field)) {
+          return (
+            <ColorTokenField
+              error={error}
+              field={field}
+              fieldKey={fieldKey}
+              key={fieldKey}
+              onChange={onChange}
+              value={value}
+            />
+          );
+        }
+
+        return (
+          <SimpleTokenField
+            error={error}
+            field={field}
+            fieldKey={fieldKey}
+            key={fieldKey}
+            onChange={onChange}
+            value={value}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 // -- Live preview region ------------------------------------------------------
 
 // LIVE_PREVIEW_THEME_ADMIN
@@ -213,8 +606,8 @@ function LivePreview({
 }: {
   draftTokens: Record<string, unknown>;
 }) {
-  // Build an inline style object from the draft tokens (CSS vars only).
   const styleRecord: Record<string, string> = {};
+
   for (const [key, value] of Object.entries(draftTokens)) {
     if (key.startsWith("--") && value !== null && value !== undefined) {
       styleRecord[key] = String(value);
@@ -223,47 +616,34 @@ function LivePreview({
 
   return (
     <div
-      className="rounded-xl border border-border/60 p-6 space-y-4"
-      style={styleRecord as React.CSSProperties}
+      className="space-y-5 rounded-xl border border-border/60 p-6"
+      style={styleRecord as CSSProperties}
     >
       <p className="text-xs uppercase tracking-widest text-muted-foreground">
         Live preview
       </p>
-      {/* Primary swatch */}
+
       <div className="flex flex-wrap gap-3">
-        <div className="flex flex-col items-center gap-1.5">
-          <div
-            className="h-10 w-10 rounded-full border border-border/40"
-            style={{ background: "var(--primary)" }}
-          />
-          <span className="text-xs text-foreground opacity-70">primary</span>
-        </div>
-        <div className="flex flex-col items-center gap-1.5">
-          <div
-            className="h-10 w-10 rounded-full border border-border/40"
-            style={{ background: "var(--accent)" }}
-          />
-          <span className="text-xs text-foreground opacity-70">accent</span>
-        </div>
-        <div className="flex flex-col items-center gap-1.5">
-          <div
-            className="h-10 w-10 rounded-full border border-border/40"
-            style={{ background: "var(--background)" }}
-          />
-          <span className="text-xs text-foreground opacity-70">bg</span>
-        </div>
-        <div className="flex flex-col items-center gap-1.5">
-          <div
-            className="h-10 w-10 rounded-full border border-border/40"
-            style={{ background: "var(--border)" }}
-          />
-          <span className="text-xs text-foreground opacity-70">border</span>
-        </div>
+        {[
+          ["primary", "--primary"],
+          ["accent", "--accent"],
+          ["bg", "--background"],
+          ["text", "--foreground"],
+          ["border", "--border"],
+        ].map(([label, token]) => (
+          <div className="flex flex-col items-center gap-1.5" key={token}>
+            <div
+              className="h-11 w-11 rounded-full border border-border/40 shadow-sm"
+              style={{ background: `var(${token})` }}
+            />
+            <span className="text-xs text-foreground opacity-70">{label}</span>
+          </div>
+        ))}
       </div>
-      {/* Button samples */}
+
       <div className="flex flex-wrap gap-2">
         <button
-          className="rounded-full px-4 py-2 text-sm font-medium"
+          className="px-4 py-2 text-sm font-medium shadow-sm"
           style={{
             background: "var(--primary)",
             color: "var(--primary-foreground)",
@@ -274,7 +654,7 @@ function LivePreview({
           Primary button
         </button>
         <button
-          className="rounded-full px-4 py-2 text-sm font-medium"
+          className="px-4 py-2 text-sm font-medium shadow-sm"
           style={{
             background: "var(--accent)",
             color: "var(--accent-foreground)",
@@ -285,9 +665,9 @@ function LivePreview({
           Accent button
         </button>
       </div>
-      {/* Sample card */}
+
       <div
-        className="rounded-xl border p-4"
+        className="border p-4"
         style={{
           background: "var(--card, var(--background))",
           borderColor: "var(--border)",
@@ -307,6 +687,19 @@ function LivePreview({
           This is how your card components will look with the current palette.
         </p>
       </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[1, 1.5, 2].map((scale) => (
+          <div
+            className="h-20 border bg-card"
+            key={scale}
+            style={{
+              borderColor: "var(--border)",
+              borderRadius: `calc(var(--radius) * ${scale})`,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -319,7 +712,6 @@ export default function AdminThemePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Load current theme on mount
   const {
     data: currentTheme,
     isLoading,
@@ -334,16 +726,6 @@ export default function AdminThemePage() {
     },
   });
 
-  // Seed the editable draft from the saved theme. `draft` is a working copy the
-  // admin edits in place, so it's forked from server state rather than derived
-  // from the query.
-  //
-  // Seeding happens *during render* (guarded), not in an effect, which keeps the
-  // setState out of an effect body. The guard keys on `updatedAt`, so the draft
-  // re-seeds only when the saved snapshot actually changes (initial load, save,
-  // restore). Critically, a no-op background refetch — React Query refetches on
-  // window focus by default — no longer overwrites in-progress edits, which the
-  // previous effect-based version did whenever the refetched data differed.
   const [seededFrom, setSeededFrom] = useState<string | null>(null);
   if (currentTheme && currentTheme.updatedAt !== seededFrom) {
     setSeededFrom(currentTheme.updatedAt);
@@ -363,16 +745,19 @@ export default function AdminThemePage() {
   const handleSave = async () => {
     setIsSaving(true);
     setErrors({});
+
     try {
       const res = await fetch("/api/v2/admin/theme", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tokens: draft }),
       });
+
       if (!res.ok) {
         const errData = (await res.json()) as { message?: string };
         throw new Error(errData.message ?? `Request failed (${res.status})`);
       }
+
       toast.success("Theme saved.");
       await refetch();
     } catch (err) {
@@ -389,7 +774,6 @@ export default function AdminThemePage() {
 
   return (
     <div className="space-y-6">
-      {/* -- Header -- */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -397,7 +781,7 @@ export default function AdminThemePage() {
           </p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight">Theme</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Adjust site colors and border radius - no code required.
+            Adjust site colors and border radius — no code required.
           </p>
         </div>
 
@@ -434,8 +818,7 @@ export default function AdminThemePage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* -- Token editor -- */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <Card className="border-border/70 bg-card/85 shadow-sm">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -443,8 +826,8 @@ export default function AdminThemePage() {
                 <CardTitle>Token editor</CardTitle>
               </div>
               <CardDescription>
-                Edit the design tokens. Changes are previewed live on the right.
-                Save to apply site-wide.
+                Pick colors visually, fine-tune hex values, and adjust rounded
+                corners with a live slider.
               </CardDescription>
               {currentTheme ? (
                 <Badge className="w-fit" variant="secondary">
@@ -456,30 +839,20 @@ export default function AdminThemePage() {
                 </Badge>
               ) : (
                 <Badge className="w-fit" variant="outline">
-                  No theme saved - defaults from globals.css
+                  No theme saved — defaults from globals.css
                 </Badge>
               )}
             </CardHeader>
             <CardContent>
-              {/*
-               * SCHEMA_FORM_THEME_ADMIN
-               * THEME_SETTINGS_SCHEMA_DRIVEN
-               * SchemaForm renders all token fields from themeSettingsSchema.
-               * Adding a field to themeSettingsSchema renders it here with zero
-               * editor changes (D-style proof).
-               */}
-              <SchemaForm
-                className="grid gap-4"
+              <TokenEditor
+                draft={draft}
                 errors={errors}
                 onChange={handleChange}
-                schema={themeSettingsSchema}
-                values={draft}
               />
             </CardContent>
           </Card>
 
-          {/* -- Live preview -- */}
-          <Card className="border-border/70 bg-card/85 shadow-sm">
+          <Card className="h-fit border-border/70 bg-card/85 shadow-sm lg:sticky lg:top-6">
             <CardHeader>
               <CardTitle>Live preview</CardTitle>
               <CardDescription>
@@ -494,7 +867,6 @@ export default function AdminThemePage() {
         </div>
       )}
 
-      {/* -- Version history sheet -- */}
       <ThemeVersionSheet
         open={isHistoryOpen}
         onOpenChange={setIsHistoryOpen}
