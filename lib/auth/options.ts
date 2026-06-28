@@ -8,6 +8,66 @@ import TwitterProvider from "next-auth/providers/twitter";
 import { getUserByEmail } from "@/db/queries/users";
 import { DrizzleAdapter } from "@/lib/auth/drizzle-adapter";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const adminAuthCookies: NonNullable<NextAuthOptions["cookies"]> = {
+  sessionToken: {
+    name: `${isProduction ? "__Secure-" : ""}ftt-admin.session-token`,
+    options: {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+    },
+  },
+  callbackUrl: {
+    name: `${isProduction ? "__Secure-" : ""}ftt-admin.callback-url`,
+    options: {
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+    },
+  },
+  csrfToken: {
+    name: `${isProduction ? "__Host-" : ""}ftt-admin.csrf-token`,
+    options: {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+    },
+  },
+  pkceCodeVerifier: {
+    name: `${isProduction ? "__Secure-" : ""}ftt-admin.pkce.code_verifier`,
+    options: {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+      maxAge: 900,
+    },
+  },
+  state: {
+    name: `${isProduction ? "__Secure-" : ""}ftt-admin.state`,
+    options: {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+      maxAge: 900,
+    },
+  },
+  nonce: {
+    name: `${isProduction ? "__Secure-" : ""}ftt-admin.nonce`,
+    options: {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: isProduction,
+    },
+  },
+};
+
 const providers: NonNullable<NextAuthOptions["providers"]> = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -15,7 +75,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    })
+    }),
   );
 }
 
@@ -25,7 +85,7 @@ if (process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_CLIENT_SECRET) {
       clientId: process.env.AZURE_AD_CLIENT_ID,
       clientSecret: process.env.AZURE_AD_CLIENT_SECRET,
       tenantId: process.env.AZURE_AD_TENANT_ID || "common",
-    })
+    }),
   );
 }
 
@@ -34,7 +94,7 @@ if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
     TwitterProvider({
       clientId: process.env.TWITTER_CLIENT_ID,
       clientSecret: process.env.TWITTER_CLIENT_SECRET,
-    })
+    }),
   );
 }
 
@@ -66,7 +126,10 @@ providers.push(
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        const isPasswordValid = await bcrypt.compare(
+          password,
+          user.passwordHash,
+        );
         if (!isPasswordValid) {
           return null;
         }
@@ -82,7 +145,7 @@ providers.push(
         return null;
       }
     },
-  })
+  }),
 );
 
 export const authOptions: NextAuthOptions = {
@@ -91,6 +154,8 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   providers,
+  cookies: adminAuthCookies,
+
   callbacks: {
     async jwt({ token, user }) {
       if (user?.id) {
