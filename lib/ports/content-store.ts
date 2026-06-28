@@ -91,6 +91,8 @@ export interface ContentStore {
   createPage(input: CreatePageInput): Promise<Page>;
   /** Updates mutable page fields (title, seo). Does not change slug or status. */
   updatePage(pageId: string, input: UpdatePageInput): Promise<Page | null>;
+  /** Deletes a page and its versions. Returns false when the page does not exist. */
+  deletePage(pageId: string): Promise<boolean>;
 
   // Page versions (immutable — only inserted, never updated)
   createPageVersion(input: CreatePageVersionInput): Promise<PageVersion>;
@@ -107,14 +109,16 @@ export interface ContentStore {
   unpublishPage(pageId: string): Promise<Page>;
 
   /** Returns the published page + its active version, or null if draft/not found. */
-  getPublishedPage(slug: string): Promise<{ page: Page; version: PageVersion } | null>;
+  getPublishedPage(
+    slug: string,
+  ): Promise<{ page: Page; version: PageVersion } | null>;
 
   // Theme settings (singleton)
   getThemeSettings(): Promise<ThemeSettings | null>;
   /** Persists tokens to the singleton row AND appends an immutable version row. */
   saveThemeSettings(
     tokens: Record<string, unknown>,
-    createdBy?: string
+    createdBy?: string,
   ): Promise<ThemeSettings>;
   /** Returns all theme versions, newest first. */
   listThemeVersions(): Promise<ThemeVersion[]>;

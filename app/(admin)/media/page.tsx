@@ -764,7 +764,7 @@ export default function AdminMediaPage() {
               <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
                 {selectedAsset ? (
                   <div className="space-y-4">
-                    <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-muted/20">
+                    <div className="relative aspect-4/3 overflow-hidden rounded-xl bg-muted/20">
                       <AssetImage
                         asset={selectedAsset}
                         sizes="(min-width: 1280px) 60vw, 100vw"
@@ -797,7 +797,7 @@ export default function AdminMediaPage() {
                   Library
                 </p>
 
-                <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+                <div className="max-h-136 space-y-2 overflow-y-auto pr-1">
                   {filteredMedia.map((asset) => {
                     const isSelected = selectedAsset?.id === asset.id;
 

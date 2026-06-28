@@ -6,11 +6,37 @@ import { Button } from "@/components/ui/button";
 import { resolveMediaURL } from "@/lib/media/resolve-media-url";
 import type { BlockRegistryEntry } from "@/lib/content/blocks/registry";
 
+const emptyToUndefined = (value: unknown) =>
+  value === "" || value === null ? undefined : value;
+
+const getSafeImageSrc = (value: unknown) => {
+  if (typeof value !== "string") return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const resolved = resolveMediaURL({ media: { url: trimmed } });
+  if (!resolved) return undefined;
+
+  if (
+    resolved.startsWith("/") ||
+    resolved.startsWith("http://") ||
+    resolved.startsWith("https://")
+  ) {
+    return resolved;
+  }
+
+  return undefined;
+};
+
 export const heroPropsSchema = z.object({
   eyebrow: z.string().max(80).optional(),
   headline: z.string().max(200),
   subtitle: z.string().max(400).optional(),
-  backgroundImage: z.string().uuid().optional(),
+  backgroundImage: z.preprocess(
+    emptyToUndefined,
+    z.string().max(2000).optional(),
+  ),
   primaryCtaLabel: z.string().max(60).optional(),
   primaryCtaHref: z.string().max(300).optional(),
   secondaryCtaLabel: z.string().max(60).optional(),
@@ -25,9 +51,7 @@ export type HeroBlockProps = z.infer<typeof heroPropsSchema>;
 
 function HeroRenderer(props: Record<string, unknown>) {
   const p = props as HeroBlockProps;
-  const bgImageUrl = p.backgroundImage
-    ? resolveMediaURL({ media: { url: p.backgroundImage } })
-    : null;
+  const bgImageUrl = getSafeImageSrc(p.backgroundImage);
 
   const minHeightClass: Record<string, string> = {
     "60vh": "min-h-[60vh]",

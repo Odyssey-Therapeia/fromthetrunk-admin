@@ -32,6 +32,12 @@ import { createPreviewToken } from "@/lib/content/preview-token";
 import { getSiteOrigin } from "@/lib/config/site";
 
 const log = createLogger("admin:pages");
+function getStorefrontOrigin(): string {
+  const explicitOrigin =
+    process.env.STOREFRONT_ORIGIN ?? process.env.NEXT_PUBLIC_STOREFRONT_ORIGIN;
+
+  return (explicitOrigin?.trim() || getSiteOrigin()).replace(/\/+$/, "");
+}
 
 // ── Local schemas ─────────────────────────────────────────────────────────────
 
@@ -76,10 +82,13 @@ function safeRevalidateTag(tag: string): void {
   try {
     revalidateTag(tag, "max");
   } catch (err) {
-    log.error("revalidateTag failed (non-fatal, likely outside Next.js runtime)", {
-      err: err as Record<string, unknown>,
-      tag,
-    });
+    log.error(
+      "revalidateTag failed (non-fatal, likely outside Next.js runtime)",
+      {
+        err: err as Record<string, unknown>,
+        tag,
+      },
+    );
   }
 }
 
@@ -88,7 +97,7 @@ function safeRevalidateTag(tag: string): void {
 async function emitContentPublished(
   pageId: string,
   slug: string,
-  versionId: string
+  versionId: string,
 ): Promise<void> {
   try {
     // Dynamic import keeps the analytics adapter out of the cold-start
@@ -116,19 +125,23 @@ async function emitContentPublished(
 export type EmitFn = (
   pageId: string,
   slug: string,
-  versionId: string
+  versionId: string,
 ) => Promise<void>;
 
 export const registerPagesRoutes = (
   app: OpenAPIHono<HonoBindings>,
   store?: ContentStore,
   /** Optional emit override — injected in tests to avoid the dynamic import chain. */
-  emitOverride?: EmitFn
+  emitOverride?: EmitFn,
 ) => {
   // Resolve emit: use injection if provided, else use the dynamic-import default.
   // Always wrapped in a catch so a throwing emit never propagates to the caller.
   const _rawEmit: EmitFn = emitOverride ?? emitContentPublished;
-  const doEmit = (pageId: string, slug: string, versionId: string): Promise<void> =>
+  const doEmit = (
+    pageId: string,
+    slug: string,
+    versionId: string,
+  ): Promise<void> =>
     _rawEmit(pageId, slug, versionId).catch((err: unknown) => {
       log.error("content_published emit failed (non-fatal)", {
         err: err as Record<string, unknown>,
@@ -145,9 +158,8 @@ export const registerPagesRoutes = (
   async function resolveStore(): Promise<ContentStore> {
     if (store) return store;
     if (_prodStore) return _prodStore;
-    const { createDrizzleContentStore } = await import(
-      "@/lib/adapters/drizzle-content-store"
-    );
+    const { createDrizzleContentStore } =
+      await import("@/lib/adapters/drizzle-content-store");
     _prodStore = createDrizzleContentStore();
     return _prodStore;
   }
@@ -172,10 +184,15 @@ export const registerPagesRoutes = (
         const pages = await cs.listPages();
         return c.json(pages, 200);
       } catch (err) {
-        log.error("Failed to list pages", { err: err as Record<string, unknown> });
-        return c.json({ code: "LIST_FAILED", message: "Failed to list pages." }, 500);
+        log.error("Failed to list pages", {
+          err: err as Record<string, unknown>,
+        });
+        return c.json(
+          { code: "LIST_FAILED", message: "Failed to list pages." },
+          500,
+        );
       }
-    }
+    },
   );
 
   // ── POST / — create page ───────────────────────────────────────────────────
@@ -216,7 +233,8 @@ export const registerPagesRoutes = (
         });
         return c.json(page, 201);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to create page.";
+        const message =
+          err instanceof Error ? err.message : "Failed to create page.";
         // Reserved-slug errors come from the store with "reserved" in the message.
         if (/reserved/i.test(message)) {
           return c.json(
@@ -224,13 +242,15 @@ export const registerPagesRoutes = (
               code: "SLUG_RESERVED",
               message,
             },
-            409
+            409,
           );
         }
-        log.error("Failed to create page", { err: err as Record<string, unknown> });
+        log.error("Failed to create page", {
+          err: err as Record<string, unknown>,
+        });
         return c.json({ code: "CREATE_FAILED", message }, 500);
       }
-    }
+    },
   );
 
   // ── GET /:id — get page by id ──────────────────────────────────────────────
@@ -257,10 +277,13 @@ export const registerPagesRoutes = (
       const cs = await resolveStore();
       const page = await cs.getPageById(id);
       if (!page) {
-        return c.json({ code: "PAGE_NOT_FOUND", message: "Page not found." }, 404);
+        return c.json(
+          { code: "PAGE_NOT_FOUND", message: "Page not found." },
+          404,
+        );
       }
       return c.json(page, 200);
-    }
+    },
   );
 
   // ── PATCH /:id — update page ───────────────────────────────────────────────
@@ -301,14 +324,80 @@ export const registerPagesRoutes = (
           seo: body.seo ?? undefined,
         });
         if (!updated) {
-          return c.json({ code: "PAGE_NOT_FOUND", message: "Page not found." }, 404);
+          return c.json(
+            { code: "PAGE_NOT_FOUND", message: "Page not found." },
+            404,
+          );
         }
         return c.json(updated, 200);
       } catch (err) {
-        log.error("Failed to update page", { err: err as Record<string, unknown> });
-        return c.json({ code: "UPDATE_FAILED", message: "Failed to update page." }, 500);
+        log.error("Failed to update page", {
+          err: err as Record<string, unknown>,
+        });
+        return c.json(
+          { code: "UPDATE_FAILED", message: "Failed to update page." },
+          500,
+        );
       }
-    }
+    },
+  );
+
+  // ── DELETE /:id — delete page ──────────────────────────────────────────────
+
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/:id",
+      request: { params: idParamSchema },
+      responses: {
+        200: { description: "Page deleted" },
+        404: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Page not found",
+        },
+      },
+      tags: ["Admin Pages"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const { id } = c.req.valid("param");
+
+      try {
+        const cs = await resolveStore();
+
+        const existing = await cs.getPageById(id);
+        if (!existing) {
+          return c.json(
+            { code: "PAGE_NOT_FOUND", message: "Page not found." },
+            404,
+          );
+        }
+
+        const deleted = await cs.deletePage(id);
+        if (!deleted) {
+          return c.json(
+            { code: "PAGE_NOT_FOUND", message: "Page not found." },
+            404,
+          );
+        }
+
+        safeRevalidateTag(`page:${existing.slug}`);
+
+        return c.json({ success: true, id }, 200);
+      } catch (err) {
+        log.error("Failed to delete page", {
+          err: err as Record<string, unknown>,
+          id,
+        });
+
+        return c.json(
+          { code: "DELETE_FAILED", message: "Failed to delete page." },
+          500,
+        );
+      }
+    },
   );
 
   // ── GET /:id/versions — list versions ─────────────────────────────────────
@@ -334,13 +423,15 @@ export const registerPagesRoutes = (
         const versions = await cs.listPageVersions(id);
         return c.json(versions, 200);
       } catch (err) {
-        log.error("Failed to list versions", { err: err as Record<string, unknown> });
+        log.error("Failed to list versions", {
+          err: err as Record<string, unknown>,
+        });
         return c.json(
           { code: "LIST_VERSIONS_FAILED", message: "Failed to list versions." },
-          500
+          500,
         );
       }
-    }
+    },
   );
 
   // ── POST /:id/versions — create version ────────────────────────────────────
@@ -380,7 +471,10 @@ export const registerPagesRoutes = (
       // Verify page exists
       const page = await cs.getPageById(id);
       if (!page) {
-        return c.json({ code: "PAGE_NOT_FOUND", message: "Page not found." }, 404);
+        return c.json(
+          { code: "PAGE_NOT_FOUND", message: "Page not found." },
+          404,
+        );
       }
 
       try {
@@ -391,13 +485,18 @@ export const registerPagesRoutes = (
         });
         return c.json(version, 201);
       } catch (err) {
-        log.error("Failed to create version", { err: err as Record<string, unknown> });
+        log.error("Failed to create version", {
+          err: err as Record<string, unknown>,
+        });
         return c.json(
-          { code: "CREATE_VERSION_FAILED", message: "Failed to create version." },
-          500
+          {
+            code: "CREATE_VERSION_FAILED",
+            message: "Failed to create version.",
+          },
+          500,
         );
       }
-    }
+    },
   );
 
   // ── POST /:id/versions/:versionId/restore — restore/publish ───────────────
@@ -436,14 +535,17 @@ export const registerPagesRoutes = (
 
         return c.json(updated, 200);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to restore version.";
+        const message =
+          err instanceof Error ? err.message : "Failed to restore version.";
         if (/not found/i.test(message)) {
           return c.json({ code: "PAGE_NOT_FOUND", message }, 404);
         }
-        log.error("Failed to restore version", { err: err as Record<string, unknown> });
+        log.error("Failed to restore version", {
+          err: err as Record<string, unknown>,
+        });
         return c.json({ code: "RESTORE_FAILED", message }, 500);
       }
-    }
+    },
   );
 
   // ── POST /:id/publish — publish latest draft version ──────────────────────
@@ -480,7 +582,10 @@ export const registerPagesRoutes = (
         // Verify page exists
         const page = await cs.getPageById(id);
         if (!page) {
-          return c.json({ code: "PAGE_NOT_FOUND", message: "Page not found." }, 404);
+          return c.json(
+            { code: "PAGE_NOT_FOUND", message: "Page not found." },
+            404,
+          );
         }
 
         // Get the latest version (listPageVersions returns newest first)
@@ -491,7 +596,7 @@ export const registerPagesRoutes = (
               code: "NO_VERSIONS",
               message: "Page has no versions to publish. Save a draft first.",
             },
-            422
+            422,
           );
         }
 
@@ -506,11 +611,14 @@ export const registerPagesRoutes = (
 
         return c.json(updated, 200);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to publish page.";
-        log.error("Failed to publish page", { err: err as Record<string, unknown> });
+        const message =
+          err instanceof Error ? err.message : "Failed to publish page.";
+        log.error("Failed to publish page", {
+          err: err as Record<string, unknown>,
+        });
         return c.json({ code: "PUBLISH_FAILED", message }, 500);
       }
-    }
+    },
   );
 
   // ── POST /:id/unpublish — clear published_version_id ──────────────────────
@@ -545,14 +653,17 @@ export const registerPagesRoutes = (
 
         return c.json(updated, 200);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to unpublish page.";
+        const message =
+          err instanceof Error ? err.message : "Failed to unpublish page.";
         if (/not found/i.test(message)) {
           return c.json({ code: "PAGE_NOT_FOUND", message }, 404);
         }
-        log.error("Failed to unpublish page", { err: err as Record<string, unknown> });
+        log.error("Failed to unpublish page", {
+          err: err as Record<string, unknown>,
+        });
         return c.json({ code: "UNPUBLISH_FAILED", message }, 500);
       }
-    }
+    },
   );
 
   // ── GET /:id/preview-token — generate signed preview token ────────────────
@@ -583,7 +694,10 @@ export const registerPagesRoutes = (
         const cs = await resolveStore();
         const page = await cs.getPageById(id);
         if (!page) {
-          return c.json({ code: "PAGE_NOT_FOUND", message: "Page not found." }, 404);
+          return c.json(
+            { code: "PAGE_NOT_FOUND", message: "Page not found." },
+            404,
+          );
         }
 
         const token = createPreviewToken(page.slug);
@@ -591,7 +705,7 @@ export const registerPagesRoutes = (
         // Next.js draftMode cookie is enabled server-side before the CMS
         // catch-all page renders the draft.  getSiteOrigin() is the canonical
         // origin helper (commit f10aa8f — no dead-domain fallback).
-        const origin = getSiteOrigin();
+        const origin = getStorefrontOrigin();
         const previewUrl =
           `${origin}/api/preview` +
           `?slug=${encodeURIComponent(page.slug)}` +
@@ -603,10 +717,13 @@ export const registerPagesRoutes = (
           err: err as Record<string, unknown>,
         });
         return c.json(
-          { code: "PREVIEW_TOKEN_FAILED", message: "Failed to generate preview token." },
-          500
+          {
+            code: "PREVIEW_TOKEN_FAILED",
+            message: "Failed to generate preview token.",
+          },
+          500,
         );
       }
-    }
+    },
   );
 };

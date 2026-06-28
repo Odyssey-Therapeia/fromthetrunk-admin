@@ -17,11 +17,17 @@ import Link from "next/link";
 
 import type { BlockRegistryEntry } from "@/lib/content/blocks/registry";
 
+const emptyToUndefined = (value: unknown) =>
+  value === "" || value === null ? undefined : value;
+
 export const announcementBarPropsSchema = z.object({
   messages: z.array(z.string().max(200)).min(1).max(5),
   ctaLabel: z.string().max(60).optional(),
   ctaHref: z.string().max(300).optional(),
-  background: z.enum(["primary", "accent", "foreground"]).default("primary"),
+  background: z.preprocess(
+    emptyToUndefined,
+    z.enum(["primary", "accent", "foreground"]).default("primary"),
+  ),
 });
 
 export type AnnouncementBarBlockProps = z.infer<
@@ -51,7 +57,7 @@ const themeMap: Record<
 
 function AnnouncementBarRenderer(props: Record<string, unknown>) {
   const p = props as AnnouncementBarBlockProps;
-  const theme = themeMap[p.background];
+  const theme = themeMap[p.background] ?? themeMap.primary;
 
   return (
     <div className={`w-full px-3 py-2 text-center text-xs ${theme.container}`}>

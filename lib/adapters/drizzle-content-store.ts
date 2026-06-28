@@ -33,7 +33,7 @@ import type {
 function assertNotReserved(slug: string): void {
   if (isReservedSlug(slug)) {
     throw new Error(
-      `Slug "${slug}" is reserved and cannot be used for a CMS page.`
+      `Slug "${slug}" is reserved and cannot be used for a CMS page.`,
     );
   }
 }
@@ -95,7 +95,10 @@ export function createInMemoryContentStore(): ContentStore {
       return Array.from(pagesMap.values());
     },
 
-    async updatePage(pageId: string, input: UpdatePageInput): Promise<Page | null> {
+    async updatePage(
+      pageId: string,
+      input: UpdatePageInput,
+    ): Promise<Page | null> {
       const page = pagesMap.get(pageId);
       if (!page) return null;
 
@@ -111,9 +114,30 @@ export function createInMemoryContentStore(): ContentStore {
       return updated;
     },
 
+    async deletePage(pageId: string): Promise<boolean> {
+      const page = pagesMap.get(pageId);
+
+      if (!page) {
+        return false;
+      }
+
+      pagesMap.delete(pageId);
+      pagesBySlug.delete(page.slug);
+
+      const versions = versionsByPage.get(pageId) ?? [];
+      versions.forEach((version) => {
+        versionsMap.delete(version.id);
+      });
+      versionsByPage.delete(pageId);
+
+      return true;
+    },
+
     // ── Page versions ─────────────────────────────────────────────────────
 
-    async createPageVersion(input: CreatePageVersionInput): Promise<PageVersion> {
+    async createPageVersion(
+      input: CreatePageVersionInput,
+    ): Promise<PageVersion> {
       const version: PageVersion = {
         id: newId(),
         pageId: input.pageId,
@@ -171,7 +195,7 @@ export function createInMemoryContentStore(): ContentStore {
     },
 
     async getPublishedPage(
-      slug: string
+      slug: string,
     ): Promise<{ page: Page; version: PageVersion } | null> {
       const page = pagesBySlug.get(slug);
       if (!page || page.status !== "published" || !page.publishedVersionId) {
@@ -192,13 +216,14 @@ export function createInMemoryContentStore(): ContentStore {
 
     async saveThemeSettings(
       tokens: Record<string, unknown>,
-      createdBy: string = "unknown"
+      createdBy: string = "unknown",
     ): Promise<ThemeSettings> {
       themeRow = {
         id: 1,
         tokens,
         updatedAt: new Date(),
       };
+
       // Append an immutable version row
       const version: ThemeVersion = {
         id: newId(),
@@ -207,6 +232,7 @@ export function createInMemoryContentStore(): ContentStore {
         createdAt: new Date(),
       };
       themeVersionsList.unshift(version); // newest first
+
       return themeRow;
     },
 
@@ -216,7 +242,7 @@ export function createInMemoryContentStore(): ContentStore {
     },
 
     async getThemeVersion(id: string): Promise<ThemeVersion | null> {
-      return themeVersionsList.find((v) => v.id === id) ?? null;
+      return themeVersionsList.find((version) => version.id === id) ?? null;
     },
 
     // ── Navigation menus ──────────────────────────────────────────────────
@@ -242,7 +268,7 @@ export function createInMemoryContentStore(): ContentStore {
     async createRedirect(fromPath: string, toPath: string): Promise<Redirect> {
       if (redirectsByFrom.has(fromPath)) {
         throw new Error(
-          `A redirect from "${fromPath}" already exists. from_path must be unique.`
+          `A redirect from "${fromPath}" already exists. from_path must be unique.`,
         );
       }
 
@@ -311,7 +337,10 @@ export function createDrizzleContentStore(): ContentStore {
       return rows.map(rowToPage);
     },
 
-    async updatePage(pageId: string, input: UpdatePageInput): Promise<Page | null> {
+    async updatePage(
+      pageId: string,
+      input: UpdatePageInput,
+    ): Promise<Page | null> {
       const { dbUpdatePage } = await import("@/db/queries/content");
       const row = await dbUpdatePage(pageId, {
         title: input.title,
@@ -320,7 +349,36 @@ export function createDrizzleContentStore(): ContentStore {
       return row ? rowToPage(row) : null;
     },
 
-    async createPageVersion(input: CreatePageVersionInput): Promise<PageVersion> {
+    async deletePage(pageId: string): Promise<boolean> {
+      const { dbSelectPageById } = await import("@/db/queries/content");
+      const existing = await dbSelectPageById(pageId);
+
+      if (!existing) {
+        return false;
+      }
+
+      const { db } = await import("@/db");
+      const { sql } = await import("drizzle-orm");
+
+      /**
+       * Keep this adapter self-contained instead of requiring a third query-helper
+       * file change. The table names match the CMS schema used by
+       * db/queries/content.ts.
+       *
+       * Delete versions first so this works even if the FK is not configured
+       * with ON DELETE CASCADE in a local/dev database.
+       */
+      await db.execute(
+        sql`delete from page_versions where page_id = ${pageId}`,
+      );
+      await db.execute(sql`delete from pages where id = ${pageId}`);
+
+      return true;
+    },
+
+    async createPageVersion(
+      input: CreatePageVersionInput,
+    ): Promise<PageVersion> {
       const { dbInsertPageVersion } = await import("@/db/queries/content");
       const row = await dbInsertPageVersion({
         pageId: input.pageId,
@@ -331,7 +389,8 @@ export function createDrizzleContentStore(): ContentStore {
     },
 
     async listPageVersions(pageId: string): Promise<PageVersion[]> {
-      const { dbSelectPageVersionsByPageId } = await import("@/db/queries/content");
+      const { dbSelectPageVersionsByPageId } =
+        await import("@/db/queries/content");
       const rows = await dbSelectPageVersionsByPageId(pageId);
       return rows.map(rowToVersion);
     },
@@ -349,41 +408,59 @@ export function createDrizzleContentStore(): ContentStore {
     },
 
     async getPublishedPage(
-      slug: string
+      slug: string,
     ): Promise<{ page: Page; version: PageVersion } | null> {
-      const { dbSelectPageBySlug, dbSelectPageVersionById } = await import(
-        "@/db/queries/content"
-      );
+      const { dbSelectPageBySlug, dbSelectPageVersionById } =
+        await import("@/db/queries/content");
+
       const pageRow = await dbSelectPageBySlug(slug);
-      if (!pageRow || pageRow.status !== "published" || !pageRow.publishedVersionId) {
+      if (
+        !pageRow ||
+        pageRow.status !== "published" ||
+        !pageRow.publishedVersionId
+      ) {
         return null;
       }
-      const versionRow = await dbSelectPageVersionById(pageRow.publishedVersionId);
+
+      const versionRow = await dbSelectPageVersionById(
+        pageRow.publishedVersionId,
+      );
       if (!versionRow) return null;
+
       return { page: rowToPage(pageRow), version: rowToVersion(versionRow) };
     },
 
     async getThemeSettings(): Promise<ThemeSettings | null> {
       const { dbSelectThemeSettings } = await import("@/db/queries/content");
       const row = await dbSelectThemeSettings();
+
       return row
-        ? { id: row.id, tokens: row.tokens as Record<string, unknown>, updatedAt: row.updatedAt }
+        ? {
+            id: row.id,
+            tokens: row.tokens as Record<string, unknown>,
+            updatedAt: row.updatedAt,
+          }
         : null;
     },
 
     async saveThemeSettings(
       tokens: Record<string, unknown>,
-      createdBy: string = "unknown"
+      createdBy: string = "unknown",
     ): Promise<ThemeSettings> {
-      const { dbUpsertThemeSettings, dbInsertThemeVersion } = await import(
-        "@/db/queries/content"
-      );
+      const { dbUpsertThemeSettings, dbInsertThemeVersion } =
+        await import("@/db/queries/content");
+
       // Dual-write: update singleton + append immutable version row
       const [row] = await Promise.all([
         dbUpsertThemeSettings(tokens),
         dbInsertThemeVersion({ tokens, createdBy }),
       ]);
-      return { id: row.id, tokens: row.tokens as Record<string, unknown>, updatedAt: row.updatedAt };
+
+      return {
+        id: row.id,
+        tokens: row.tokens as Record<string, unknown>,
+        updatedAt: row.updatedAt,
+      };
     },
 
     async listThemeVersions(): Promise<ThemeVersion[]> {
@@ -401,15 +478,27 @@ export function createDrizzleContentStore(): ContentStore {
     async getMenu(slot: MenuSlot): Promise<NavigationMenu | null> {
       const { dbSelectMenu } = await import("@/db/queries/content");
       const row = await dbSelectMenu(slot);
+
       return row
-        ? { id: row.id, slot: row.slot, items: row.items as unknown[], updatedAt: row.updatedAt }
+        ? {
+            id: row.id,
+            slot: row.slot,
+            items: row.items as unknown[],
+            updatedAt: row.updatedAt,
+          }
         : null;
     },
 
     async saveMenu(slot: MenuSlot, items: unknown[]): Promise<NavigationMenu> {
       const { dbUpsertMenu } = await import("@/db/queries/content");
       const row = await dbUpsertMenu(slot, items);
-      return { id: row.id, slot: row.slot, items: row.items as unknown[], updatedAt: row.updatedAt };
+
+      return {
+        id: row.id,
+        slot: row.slot,
+        items: row.items as unknown[],
+        updatedAt: row.updatedAt,
+      };
     },
 
     async createRedirect(fromPath: string, toPath: string): Promise<Redirect> {
