@@ -3,10 +3,9 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 
 import { requireAdmin, requireAuth } from "@/api/hono/middleware/auth";
-import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
+import { errorSchema } from "@/api/hono/schemas/common";
 import {
   adminCreateUserInputSchema,
-  adminResetPasswordInputSchema,
   requestEmailChangeInputSchema,
   signUpInputSchema,
   updateMeInputSchema,
@@ -14,13 +13,22 @@ import {
 } from "@/api/hono/schemas/users";
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
-import { claimCheckoutShell, getUserByEmail, getUserById, listUsers, updateUser } from "@/db/queries/users";
+import {
+  claimCheckoutShell,
+  getUserByEmail,
+  getUserById,
+  listUsers,
+  updateUser,
+} from "@/db/queries/users";
 import { requireFirstRow } from "@/db/results";
 import { addresses, users } from "@/db/schema";
-import { sendEmail } from "@/lib/email/send";
-import { emailChangeVerificationEmail, welcomeEmail } from "@/lib/email/templates";
-import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { getSiteOrigin } from "@/lib/config/site";
+import { sendEmail } from "@/lib/email/send";
+import {
+  emailChangeVerificationEmail,
+  welcomeEmail,
+} from "@/lib/email/templates";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import {
   createEmailVerificationToken,
   verifyEmailVerificationToken,
@@ -44,8 +52,9 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
         limit: 200,
         offset: 0,
       });
+
       return c.json(users, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -79,13 +88,14 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const body = c.req.valid("json");
       const existing = await getUserByEmail(body.email);
+
       if (existing) {
         return c.json(
           {
             code: "EMAIL_ALREADY_REGISTERED",
             message: "An account with this email already exists.",
           },
-          409
+          409,
         );
       }
 
@@ -101,11 +111,11 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
             updatedAt: new Date(),
           })
           .returning(),
-        "Failed to create admin user."
+        "Failed to create admin user.",
       );
 
       return c.json(created, 201);
-    }
+    },
   );
 
   app.openapi(
@@ -144,10 +154,10 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const existing = await getUserByEmail(body.email);
 
       if (existing) {
-        // Checkout shell: no password yet, created via guest checkout flow
         const isCheckoutShell =
           !existing.passwordHash &&
-          (existing.metadata as Record<string, unknown> | null)?.source === "checkout";
+          (existing.metadata as Record<string, unknown> | null)?.source ===
+            "checkout";
 
         if (!isCheckoutShell) {
           return c.json(
@@ -155,13 +165,10 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
               code: "EMAIL_ALREADY_REGISTERED",
               message: "An account with this email already exists.",
             },
-            409
+            409,
           );
         }
 
-        // Upgrade the shell in-place so existing orders remain linked.
-        // claimCheckoutShell uses WHERE password_hash IS NULL, so only one
-        // concurrent writer wins; the loser gets null back.
         const passwordHash = await bcrypt.hash(body.password, 12);
         const upgraded = await claimCheckoutShell(existing.id, {
           passwordHash,
@@ -169,13 +176,12 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
         });
 
         if (!upgraded) {
-          // Lost the race — another request already claimed this shell
           return c.json(
             {
               code: "EMAIL_ALREADY_REGISTERED",
               message: "An account with this email already exists.",
             },
-            409
+            409,
           );
         }
 
@@ -201,7 +207,7 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
             updatedAt: new Date(),
           })
           .returning(),
-        "Failed to create user."
+        "Failed to create user.",
       );
 
       const emailTemplate = welcomeEmail(body.name.trim());
@@ -212,7 +218,7 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }).catch(() => undefined);
 
       return c.json(created, 201);
-    }
+    },
   );
 
   app.openapi(
@@ -233,12 +239,16 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (authUserOrResponse instanceof Response) return authUserOrResponse;
 
       const user = await getUserById(authUserOrResponse.id);
+
       if (!user) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+        return c.json(
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
+        );
       }
 
       return c.json(user, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -276,8 +286,12 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       const body = c.req.valid("json");
       const user = await getUserById(authUserOrResponse.id);
+
       if (!user) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+        return c.json(
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
+        );
       }
 
       if (!user.passwordHash) {
@@ -286,18 +300,22 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
             code: "PASSWORD_NOT_SET",
             message: "This account does not have a password set yet.",
           },
-          400
+          400,
         );
       }
 
-      const currentPasswordMatches = await bcrypt.compare(body.currentPassword, user.passwordHash);
+      const currentPasswordMatches = await bcrypt.compare(
+        body.currentPassword,
+        user.passwordHash,
+      );
+
       if (!currentPasswordMatches) {
         return c.json(
           {
             code: "INVALID_CURRENT_PASSWORD",
             message: "Current password is incorrect.",
           },
-          401
+          401,
         );
       }
 
@@ -307,71 +325,14 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       });
 
       if (!updated) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
-      }
-
-      return c.json({ success: true }, 200);
-    }
-  );
-
-  app.openapi(
-    createRoute({
-      method: "patch",
-      path: "/{id}/password",
-      request: {
-        params: idParamSchema,
-        body: {
-          content: {
-            "application/json": { schema: adminResetPasswordInputSchema },
-          },
-          required: true,
-        },
-      },
-      responses: {
-        200: { description: "User password updated by admin" },
-        400: {
-          content: { "application/json": { schema: errorSchema } },
-          description: "Password reset only supports admin targets",
-        },
-        404: {
-          content: { "application/json": { schema: errorSchema } },
-          description: "User not found",
-        },
-      },
-      tags: ["Users"],
-    }),
-    async (c) => {
-      const adminOrResponse = requireAdmin(c);
-      if (adminOrResponse instanceof Response) return adminOrResponse;
-
-      const { id } = c.req.valid("param");
-      const body = c.req.valid("json");
-      const user = await getUserById(id);
-      if (!user) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
-      }
-
-      if (user.role !== "admin") {
         return c.json(
-          {
-            code: "ADMIN_PASSWORD_RESET_REQUIRES_ADMIN_TARGET",
-            message: "Only admin accounts can be updated from this admin password flow.",
-          },
-          400
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
         );
       }
 
-      const passwordHash = await bcrypt.hash(body.newPassword, 12);
-      const updated = await updateUser(id, {
-        passwordHash,
-      });
-
-      if (!updated) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
-      }
-
       return c.json({ success: true }, 200);
-    }
+    },
   );
 
   app.openapi(
@@ -404,6 +365,7 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (authUserOrResponse instanceof Response) return authUserOrResponse;
 
       const body = c.req.valid("json");
+
       if (body.defaultAddressId) {
         const [existingAddress] = await db
           .select({ id: addresses.id })
@@ -411,8 +373,8 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
           .where(
             and(
               eq(addresses.id, body.defaultAddressId),
-              eq(addresses.userId, authUserOrResponse.id)
-            )
+              eq(addresses.userId, authUserOrResponse.id),
+            ),
           )
           .limit(1);
 
@@ -422,7 +384,7 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
               code: "INVALID_DEFAULT_ADDRESS",
               message: "Default address must belong to the current user.",
             },
-            400
+            400,
           );
         }
       }
@@ -436,16 +398,16 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       });
 
       if (!updated) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+        return c.json(
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
+        );
       }
 
       return c.json(updated, 200);
-    }
+    },
   );
 
-  // ── P6-01: Email-change initiation ────────────────────────────────────────
-  // POST /me/email — sends a verification link to the new email address.
-  // The current email is NOT changed yet; it changes only after confirmation.
   app.openapi(
     createRoute({
       method: "post",
@@ -472,10 +434,14 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       tags: ["Users"],
     }),
     async (c) => {
-      const rateLimited = await rateLimitResponse(c.req.raw, "email-change:request", {
-        limit: 5,
-        windowSeconds: 60,
-      });
+      const rateLimited = await rateLimitResponse(
+        c.req.raw,
+        "email-change:request",
+        {
+          limit: 5,
+          windowSeconds: 60,
+        },
+      );
       if (rateLimited) return rateLimited;
 
       const authUserOrResponse = requireAuth(c);
@@ -484,35 +450,45 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       const body = c.req.valid("json");
       const newEmail = body.newEmail.trim().toLowerCase();
 
-      // Guard: new email must not be the same as current
       const currentUser = await getUserById(authUserOrResponse.id);
+
       if (!currentUser) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+        return c.json(
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
+        );
       }
+
       if (currentUser.email === newEmail) {
         return c.json(
           {
             code: "EMAIL_UNCHANGED",
             message: "The new email address is the same as the current one.",
           },
-          400
+          400,
         );
       }
 
-      // Guard: new email must not already belong to another account
       const collision = await getUserByEmail(newEmail);
+
       if (collision) {
         return c.json(
           {
             code: "EMAIL_ALREADY_IN_USE",
-            message: "This email address is already registered to another account.",
+            message:
+              "This email address is already registered to another account.",
           },
-          409
+          409,
         );
       }
 
-      const token = createEmailVerificationToken(authUserOrResponse.id, newEmail);
-      const verifyUrl = `${getSiteOrigin()}/account/profile/verify-email?token=${encodeURIComponent(token)}`;
+      const token = createEmailVerificationToken(
+        authUserOrResponse.id,
+        newEmail,
+      );
+      const verifyUrl = `${getSiteOrigin()}/account/profile/verify-email?token=${encodeURIComponent(
+        token,
+      )}`;
       const emailTemplate = emailChangeVerificationEmail(verifyUrl);
 
       sendEmail({
@@ -522,12 +498,9 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       }).catch(() => undefined);
 
       return c.json({ success: true }, 200);
-    }
+    },
   );
 
-  // ── P6-01: Email-change confirmation ──────────────────────────────────────
-  // GET /me/verify-email?token=... — validates the signed token and updates
-  // the email. Rejects forged, expired, or wrong-user tokens.
   app.openapi(
     createRoute({
       method: "get",
@@ -558,32 +531,32 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
             code: "INVALID_OR_EXPIRED_TOKEN",
             message: "The verification link is invalid or has expired.",
           },
-          400
+          400,
         );
       }
 
-      // Token is bound to a specific user — prevent cross-user replay
       if (result.userId !== authUserOrResponse.id) {
         return c.json(
           {
             code: "INVALID_OR_EXPIRED_TOKEN",
             message: "The verification link is invalid or has expired.",
           },
-          400
+          400,
         );
       }
 
       const newEmail = result.newEmail.toLowerCase();
 
-      // Double-check collision at confirmation time (race-condition safety)
       const collision = await getUserByEmail(newEmail);
+
       if (collision && collision.id !== authUserOrResponse.id) {
         return c.json(
           {
             code: "EMAIL_ALREADY_IN_USE",
-            message: "This email address is already registered to another account.",
+            message:
+              "This email address is already registered to another account.",
           },
-          409
+          409,
         );
       }
 
@@ -593,10 +566,13 @@ export const registerUserRoutes = (app: OpenAPIHono<HonoBindings>) => {
       });
 
       if (!updated) {
-        return c.json({ code: "USER_NOT_FOUND", message: "User not found." }, 404);
+        return c.json(
+          { code: "USER_NOT_FOUND", message: "User not found." },
+          404,
+        );
       }
 
       return c.json({ success: true, email: updated.email }, 200);
-    }
+    },
   );
 };

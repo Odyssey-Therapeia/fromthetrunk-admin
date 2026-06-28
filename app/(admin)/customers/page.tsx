@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Copy,
-  KeyRound,
   Loader2,
   RefreshCw,
   ShieldPlus,
@@ -40,10 +39,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type PasswordDraft = {
-  newPassword: string;
-};
-
 type UserDraft = {
   email: string;
   name: string;
@@ -68,10 +63,6 @@ type AdminCredential = {
 const USERS_QUERY_KEY = ["admin-users"] as const;
 
 const EMPTY_USERS: UserRow[] = [];
-
-const defaultPasswordDraft: PasswordDraft = {
-  newPassword: "",
-};
 
 const defaultUserDraft: UserDraft = {
   email: "",
@@ -264,15 +255,6 @@ export default function AdminCustomersPage() {
   const [createPasswordWasGenerated, setCreatePasswordWasGenerated] =
     useState(true);
 
-  const [passwordDraft, setPasswordDraft] =
-    useState<PasswordDraft>(defaultPasswordDraft);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordTarget, setPasswordTarget] = useState<null | UserRow>(null);
-  const [resetAdminCredential, setResetAdminCredential] =
-    useState<AdminCredential | null>(null);
-  const [resetPasswordWasGenerated, setResetPasswordWasGenerated] =
-    useState(true);
-
   const usersQuery = useQuery({
     queryFn: fetchUsers,
     queryKey: USERS_QUERY_KEY,
@@ -313,24 +295,6 @@ export default function AdminCustomersPage() {
     setCreateAdminError(null);
     setCreatedAdminCredential(null);
     setIsCreateAdminOpen(true);
-  };
-
-  const closeResetPasswordDialog = () => {
-    setPasswordDraft(defaultPasswordDraft);
-    setPasswordError(null);
-    setPasswordTarget(null);
-    setResetAdminCredential(null);
-    setResetPasswordWasGenerated(true);
-  };
-
-  const openResetPasswordDialog = (user: UserRow) => {
-    setPasswordDraft({
-      newPassword: generateTemporaryPassword(),
-    });
-    setResetPasswordWasGenerated(true);
-    setPasswordError(null);
-    setPasswordTarget(user);
-    setResetAdminCredential(null);
   };
 
   const createAdminMutation = useMutation({
@@ -375,47 +339,6 @@ export default function AdminCustomersPage() {
     },
   });
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: async (input: {
-      email: string;
-      name: string;
-      newPassword: string;
-      passwordWasGenerated: boolean;
-      userId: string;
-    }) => {
-      const response = await fetch(`/api/v2/users/${input.userId}/password`, {
-        body: JSON.stringify({
-          newPassword: input.newPassword,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "PATCH",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-    },
-    onError: (error) => {
-      setPasswordError(
-        error instanceof Error
-          ? error.message
-          : "Unable to reset admin password.",
-      );
-    },
-    onSuccess: async (_data, variables) => {
-      toast.success(`Password reset for ${variables.email}.`);
-      setResetAdminCredential({
-        email: variables.email,
-        name: variables.name,
-        password: variables.passwordWasGenerated ? variables.newPassword : null,
-        passwordWasGenerated: variables.passwordWasGenerated,
-      });
-      await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
-    },
-  });
-
   const handleCreateAdmin = () => {
     setCreateAdminError(null);
 
@@ -437,32 +360,9 @@ export default function AdminCustomersPage() {
     });
   };
 
-  const handleResetAdminPassword = () => {
-    if (!passwordTarget) return;
-
-    setPasswordError(null);
-
-    if (!meetsPasswordRequirements(passwordDraft.newPassword)) {
-      setPasswordError(passwordRequirements);
-      return;
-    }
-
-    resetPasswordMutation.mutate({
-      email: passwordTarget.email,
-      name: passwordTarget.name ?? passwordTarget.email,
-      newPassword: passwordDraft.newPassword,
-      passwordWasGenerated: resetPasswordWasGenerated,
-      userId: passwordTarget.id,
-    });
-  };
-
   const createPasswordLabel = createdAdminCredential
     ? `Temporary password for ${createdAdminCredential.email}`
     : "Generated temporary password";
-
-  const resetPasswordLabel = resetAdminCredential
-    ? `New password for ${resetAdminCredential.email}`
-    : "Generated new password";
 
   return (
     <div className="space-y-6">
@@ -470,7 +370,8 @@ export default function AdminCustomersPage() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Users</h2>
           <p className="text-sm text-muted-foreground">
-            Manage customer accounts, create admins, and reset admin passwords.
+            View customer accounts and create admin accounts. Existing admins
+            change their own passwords from Settings.
           </p>
         </div>
 
@@ -510,8 +411,8 @@ export default function AdminCustomersPage() {
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
           <CardDescription>
-            Admin passwords can be reset here. Existing admins already have
-            passwords unless they were created without one.
+            Existing admin password changes are self-service only. Use Settings
+            → Change my password from the logged-in account.
           </CardDescription>
         </CardHeader>
 
@@ -523,7 +424,7 @@ export default function AdminCustomersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Notes</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -556,16 +457,9 @@ export default function AdminCustomersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {user.role === "admin" ? (
-                        <Button
-                          className="gap-2"
-                          onClick={() => openResetPasswordDialog(user)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <KeyRound className="h-4 w-4" />
-                          Reset Password
-                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          Password is changed from Settings
+                        </span>
                       ) : (
                         <span className="text-xs text-muted-foreground">
                           Customer account
@@ -737,122 +631,6 @@ export default function AdminCustomersPage() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 Create Admin
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(passwordTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeResetPasswordDialog();
-          }
-        }}
-      >
-        <DialogContent className="border-border/70 bg-card sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {resetAdminCredential
-                ? "Admin Password Reset"
-                : "Reset Admin Password"}
-            </DialogTitle>
-            <DialogDescription>
-              {passwordTarget
-                ? `Generate and apply a new password for ${
-                    passwordTarget.name ?? passwordTarget.email
-                  }.`
-                : "Generate and apply a new admin password."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {resetAdminCredential ? (
-              <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Password reset.</p>
-                  <p className="mt-1 text-sm">
-                    Share the new password securely with{" "}
-                    {resetAdminCredential.email}.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
-                This does not mean the admin has no password. It creates a new
-                password and replaces the old one.
-              </div>
-            )}
-
-            {resetAdminCredential?.password ? (
-              <GeneratedPasswordBox
-                description="Copy this generated password now. It will not be emailed automatically from this screen."
-                onCopy={() =>
-                  void copyToClipboard(
-                    resetAdminCredential.password ?? "",
-                    resetPasswordLabel,
-                  )
-                }
-                password={resetAdminCredential.password}
-                title="Generated new password"
-              />
-            ) : resetAdminCredential ? (
-              <CustomPasswordSetNotice
-                description="You typed the new password manually, so it will not be shown again here. Share the password using your own secure channel."
-                title="Custom password set"
-              />
-            ) : (
-              <GeneratedPasswordBox
-                description="Review, type your own, or regenerate the password before applying it."
-                onChange={(value) => {
-                  setResetPasswordWasGenerated(false);
-                  setPasswordDraft({
-                    newPassword: value,
-                  });
-                }}
-                onCopy={() =>
-                  void copyToClipboard(
-                    passwordDraft.newPassword,
-                    resetPasswordLabel,
-                  )
-                }
-                onRegenerate={() => {
-                  setResetPasswordWasGenerated(true);
-                  setPasswordDraft({
-                    newPassword: generateTemporaryPassword(),
-                  });
-                }}
-                password={passwordDraft.newPassword}
-                title="New password"
-              />
-            )}
-
-            <p className="text-xs text-muted-foreground">
-              {passwordRequirements}
-            </p>
-
-            {passwordError ? (
-              <p className="text-sm text-destructive">{passwordError}</p>
-            ) : null}
-          </div>
-
-          <DialogFooter>
-            {resetAdminCredential ? (
-              <Button onClick={closeResetPasswordDialog} type="button">
-                Done
-              </Button>
-            ) : (
-              <Button
-                disabled={resetPasswordMutation.isPending}
-                onClick={handleResetAdminPassword}
-                type="button"
-              >
-                {resetPasswordMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Reset Password
               </Button>
             )}
           </DialogFooter>
