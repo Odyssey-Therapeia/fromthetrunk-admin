@@ -1,7 +1,6 @@
 "use client";
 
 import gsap from "gsap";
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
@@ -12,8 +11,6 @@ import {
   adminNavItems,
 } from "@/components/admin/nav-items";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { useAgentStore } from "@/lib/store/agent-store";
 import { cn } from "@/lib/utils";
 
 type AdminSidebarProps = {
@@ -44,7 +41,6 @@ const getInitials = (name: string | null, email: string | null) => {
 export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname();
   const listRef = useRef<HTMLUListElement>(null);
-  const { toggle: toggleAgent, isOpen: agentOpen } = useAgentStore();
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -99,7 +95,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   };
 
   return (
-    <aside className="sticky top-0 hidden h-[100dvh] w-72 shrink-0 overflow-hidden border-r border-border/70 bg-card/75 px-5 py-5 backdrop-blur lg:flex lg:flex-col">
+    <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 overflow-hidden border-r border-border/70 bg-card/75 px-5 py-5 backdrop-blur lg:flex lg:flex-col">
       <div className="mb-5 shrink-0 rounded-2xl border border-border/70 bg-background/75 p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <p className="truncate text-xs uppercase tracking-[0.35em] text-muted-foreground">
@@ -117,7 +113,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         </p>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <nav className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin">
         <ul ref={listRef} className="space-y-1 pb-4">
           {adminNavItems.map(renderNavItem)}
         </ul>
@@ -126,15 +122,17 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
       <div className="shrink-0 space-y-1 border-t border-border/70 pt-4">
         <ul className="space-y-1">{adminBottomNavItems.map(renderNavItem)}</ul>
 
-        <Button
-          onClick={toggleAgent}
-          variant={agentOpen ? "default" : "outline"}
-          className="mt-2 w-full justify-start gap-3 rounded-xl px-4 py-3"
-          size="sm"
-        >
-          <Sparkles className="h-4 w-4 shrink-0" />
-          <span className="truncate">AI Assistant</span>
-        </Button>
+        {/*
+          AI Assistant temporarily hidden.
+
+          To restore it later:
+          1. Import Sparkles from "lucide-react".
+          2. Import Button from "@/components/ui/button".
+          3. Import useAgentStore from "@/lib/store/agent-store".
+          4. Add:
+             const { toggle: toggleAgent, isOpen: agentOpen } = useAgentStore();
+          5. Restore the AI Assistant button here.
+        */}
 
         {user ? (
           <div className="mt-3 flex items-center gap-3 rounded-xl px-4 py-2">
