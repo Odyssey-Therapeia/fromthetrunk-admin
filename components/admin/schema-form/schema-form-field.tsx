@@ -19,7 +19,7 @@
  * FT-12  list-of-text  → repeatable list of bare string rows; emits string[] directly
  */
 
-import { put } from "@Vercel/blob/client";
+import { put } from "@vercel/blob/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ExternalLink,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { put } from "@Vercel/blob/client";
+import { put } from "@vercel/blob/client";
 import {
   Copy,
   ExternalLink,

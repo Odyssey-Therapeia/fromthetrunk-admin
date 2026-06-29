@@ -19,7 +19,7 @@
  * RIGHT_PANE_BLOCK_EDITOR — block settings open in a right-side editor pane.
  */
 
-import { put } from "@Vercel/blob/client";
+import { put } from "@vercel/blob/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
