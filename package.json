@@ -1,6 +1,6 @@
 {
   "name": "fromthetrunk-admin",
-  "version": "0.26.2",
+  "version": "0.27.0",
   "description": "Admin console for From the Trunk.",
   "main": "index.js",
   "packageManager": "pnpm@10.28.0",
