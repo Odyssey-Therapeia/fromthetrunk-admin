@@ -11,6 +11,7 @@
  */
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -40,16 +41,28 @@ function renderField(opts: RenderFieldOpts): string {
     onChange = () => {},
   } = opts;
 
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
   return renderToStaticMarkup(
-    createElement(SchemaFormField, {
-      fieldKey: "testField",
-      meta,
-      value,
-      error,
-      formValues,
-      onBlur,
-      onChange,
-    })
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(SchemaFormField, {
+        fieldKey: "testField",
+        meta,
+        value,
+        error,
+        formValues,
+        onBlur,
+        onChange,
+      })
+    )
   );
 }
 

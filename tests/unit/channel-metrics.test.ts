@@ -56,6 +56,13 @@ vi.mock("@/lib/log", () => ({
 // fetch is stubbed in beforeEach (not here at module level) to prevent
 // global state leaks between parallel test files in the same worker.
 const fetchMock = vi.hoisted(() => vi.fn());
+const getGoogleAccessTokenMock = vi.hoisted(() => vi.fn());
+const hasGoogleOAuthCredentialsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/google/oauth-access-token", () => ({
+  getGoogleAccessToken: getGoogleAccessTokenMock,
+  hasGoogleOAuthCredentials: hasGoogleOAuthCredentialsMock,
+}));
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks are registered)
@@ -90,11 +97,11 @@ const GA4_RUNREPORT_FIXTURE = {
   rows: [
     {
       dimensionValues: [{ value: "Organic Search" }],
-      metricValues: [{ value: "1240" }, { value: "23" }, { value: "1850000" }],
+      metricValues: [{ value: "1240" }, { value: "23" }, { value: "18500" }],
     },
     {
       dimensionValues: [{ value: "Direct" }],
-      metricValues: [{ value: "430" }, { value: "12" }, { value: "620000" }],
+      metricValues: [{ value: "430" }, { value: "12" }, { value: "6200" }],
     },
   ],
   rowCount: 2,
@@ -105,18 +112,19 @@ const GA4_RUNREPORT_FIXTURE = {
   ],
 };
 
+const GA4_REALTIME_FIXTURE = {
+  rows: [
+    {
+      metricValues: [{ value: "7" }],
+    },
+  ],
+  rowCount: 1,
+};
+
 const VERCEL_DEPLOYMENTS_FIXTURE = {
   deployments: [
     { uid: "dpl_abc", url: "fromthetrunk-abc.vercel.app", state: "READY", created: 1718000000000 },
     { uid: "dpl_def", url: "fromthetrunk-def.vercel.app", state: "READY", created: 1717900000000 },
-  ],
-};
-
-const VERCEL_WEB_ANALYTICS_FIXTURE = {
-  data: [
-    { key: "lcp", p75: 2450 },
-    { key: "inp", p75: 180 },
-    { key: "cls", p75: 0.08 },
   ],
 };
 
@@ -170,6 +178,12 @@ function wireDbMocks() {
   dbSelectMock.mockReturnValue({ from: selectFromMock });
 }
 
+function stubGoogleOAuthCreds() {
+  vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "google-client-id");
+  vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret");
+  vi.stubEnv("GOOGLE_OAUTH_REFRESH_TOKEN", "google-refresh-token");
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -179,6 +193,16 @@ beforeEach(() => {
   // and does not leak into other parallel test files sharing the same worker.
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
+  getGoogleAccessTokenMock.mockReset();
+  hasGoogleOAuthCredentialsMock.mockReset();
+  getGoogleAccessTokenMock.mockResolvedValue("google-access-token");
+  hasGoogleOAuthCredentialsMock.mockImplementation(() =>
+    Boolean(
+      process.env.GOOGLE_OAUTH_CLIENT_ID &&
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+        process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+    )
+  );
   logErrorMock.mockReset();
   dbInsertMock.mockReset();
   dbValuesMock.mockReset();
@@ -204,7 +228,7 @@ afterEach(() => {
 
 describe("Search Console adapter", () => {
   it("parses GSC search-analytics FIXTURE into typed SearchConsoleMetrics", async () => {
-    vi.stubEnv("GSC_SERVICE_ACCOUNT_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
     vi.stubEnv("GSC_PROPERTY", "sc-domain:fromthetrunk.shop");
 
     fetchMock.mockResolvedValueOnce(
@@ -240,7 +264,7 @@ describe("Search Console adapter", () => {
   });
 
   it("returns typed-empty (no throw) when GSC fetch fails", async () => {
-    vi.stubEnv("GSC_SERVICE_ACCOUNT_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
     vi.stubEnv("GSC_PROPERTY", "sc-domain:fromthetrunk.shop");
 
     fetchMock.mockResolvedValueOnce(new Response("Forbidden", { status: 403 }));
@@ -256,11 +280,15 @@ describe("Search Console adapter", () => {
 describe("GA4 Data adapter", () => {
   it("parses GA4 runReport FIXTURE into typed GA4DataMetrics", async () => {
     vi.stubEnv("GA4_PROPERTY_ID", "properties/123456789");
-    vi.stubEnv("GA4_DATA_SA_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
 
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(GA4_RUNREPORT_FIXTURE), { status: 200 })
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(GA4_RUNREPORT_FIXTURE), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(GA4_REALTIME_FIXTURE), { status: 200 })
+      );
 
     const adapter = buildGa4DataAdapter();
     const result = await adapter.pull();
@@ -269,11 +297,12 @@ describe("GA4 Data adapter", () => {
     expect(result.sessions).toBe(1240 + 430);
     // conversions = sum of all row metricValues[1]
     expect(result.conversions).toBe(23 + 12);
-    // totalRevenuePaise extracted from metricValues[2]
-    expect(result.totalRevenuePaise).toBe(1850000 + 620000);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toContain("analyticsdata.googleapis.com");
+    // totalRevenuePaise extracted from metricValues[2] rupees → paise
+    expect(result.totalRevenuePaise).toBe((18500 + 6200) * 100);
+    expect(result.realtimeActiveUsers).toBe(7);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const urls = fetchMock.mock.calls.map((call) => call[0] as string);
+    expect(urls.every((url) => url.includes("analyticsdata.googleapis.com"))).toBe(true);
   });
 
   it("returns typed-empty (no throw) when GA4 Data creds are absent", async () => {
@@ -288,9 +317,13 @@ describe("GA4 Data adapter", () => {
 
   it("returns typed-empty (no throw) when GA4 Data API fetch fails", async () => {
     vi.stubEnv("GA4_PROPERTY_ID", "properties/123456789");
-    vi.stubEnv("GA4_DATA_SA_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
 
-    fetchMock.mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }));
+    fetchMock
+      .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(GA4_REALTIME_FIXTURE), { status: 200 })
+      );
 
     const adapter = buildGa4DataAdapter();
     const result = await adapter.pull();
@@ -304,19 +337,19 @@ describe("Vercel Insights adapter", () => {
     vi.stubEnv("VERCEL_API_TOKEN", "vercel-token-abc");
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_test123");
 
-    // First call: web analytics (CWV), second call: deployments
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(VERCEL_WEB_ANALYTICS_FIXTURE), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 }));
+    // Current Vercel adapter pulls deployments only; CWV remains typed-zero.
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 })
+    );
 
     const adapter = buildVercelInsightsAdapter();
     const result = await adapter.pull();
 
-    expect(result.cwv.lcp).toBe(2450);
-    expect(result.cwv.inp).toBe(180);
-    expect(result.cwv.cls).toBeCloseTo(0.08);
+    expect(result.cwv.lcp).toBe(0);
+    expect(result.cwv.inp).toBe(0);
+    expect(result.cwv.cls).toBe(0);
     expect(result.recentDeployCount).toBe(2);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const urls = fetchMock.mock.calls.map((call) => call[0] as string);
     expect(urls.some((u) => u.includes("vercel.com"))).toBe(true);
   });
@@ -470,10 +503,10 @@ describe("pullAllMetrics — error isolation", () => {
     vi.stubEnv("VERCEL_API_TOKEN", "tok");
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_ok");
 
-    // fetchMock — first 2 calls for Vercel (CWV + deployments) succeed
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(VERCEL_WEB_ANALYTICS_FIXTURE), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 }));
+    // Vercel deployments fetch succeeds; CWV remains typed-zero.
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 })
+    );
 
     const results = await pullAllMetrics();
 
@@ -483,8 +516,9 @@ describe("pullAllMetrics — error isolation", () => {
     expect(results).toHaveProperty("vercelInsights");
     expect(results).toHaveProperty("metaMarketing");
 
-    // Vercel had creds + fixture → real data
-    expect(results.vercelInsights.cwv.lcp).toBe(2450);
+    // Vercel had creds + deployments fixture → deploy count updates, CWV remains typed-zero
+    expect(results.vercelInsights.cwv.lcp).toBe(0);
+    expect(results.vercelInsights.recentDeployCount).toBe(2);
 
     // Others had no creds → typed-zero
     expect(results.searchConsole.topQueries).toEqual([]);
@@ -495,7 +529,7 @@ describe("pullAllMetrics — error isolation", () => {
   it("MUTATION PROOF: if an adapter throws, the other adapters still return their values", async () => {
     // Set GA4 creds so it runs; make fetch throw for GA4 call
     vi.stubEnv("GA4_PROPERTY_ID", "properties/throw-me");
-    vi.stubEnv("GA4_DATA_SA_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
 
     fetchMock.mockRejectedValue(new Error("Network exploded"));
 
@@ -518,14 +552,10 @@ describe("pullAllMetrics — error isolation", () => {
     vi.stubEnv("VERCEL_API_TOKEN", "tok-outer");
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_outer");
 
-    // Vercel fetch: CWV + deployments both succeed with fixture data.
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(VERCEL_WEB_ANALYTICS_FIXTURE), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 })
-      );
+    // Vercel deployments fetch succeeds; CWV remains typed-zero.
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(VERCEL_DEPLOYMENTS_FIXTURE), { status: 200 })
+    );
 
     // Inject a GA4 adapter whose pull() REJECTS at the boundary level —
     // this rejection happens ABOVE the inner try/catch inside buildGa4DataAdapter(),
@@ -548,8 +578,8 @@ describe("pullAllMetrics — error isolation", () => {
     expect(results.ga4Data.sessions).toBe(0);
     expect(results.ga4Data.totalRevenuePaise).toBe(0);
 
-    // Vercel had creds + real fixture → real non-zero values (proves others were NOT blocked)
-    expect(results.vercelInsights.cwv.lcp).toBe(2450);
+    // Vercel had creds + deployments fixture → deploy count updates, proving others were NOT blocked
+    expect(results.vercelInsights.cwv.lcp).toBe(0);
     expect(results.vercelInsights.recentDeployCount).toBe(2);
 
     // The throwing GA4 adapter's pull() was actually called (not skipped)
@@ -632,25 +662,30 @@ describe("GET /refresh-channel-metrics cron route", () => {
 
     // Activate GA4 so it produces fixture-derived values (sessions=1670, revenue=2470000)
     vi.stubEnv("GA4_PROPERTY_ID", "properties/upsert-test");
-    vi.stubEnv("GA4_DATA_SA_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
 
     // Activate GSC so it produces fixture-derived values (topQueries.length=3, avgCtr from fixture)
-    vi.stubEnv("GSC_SERVICE_ACCOUNT_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
     vi.stubEnv("GSC_PROPERTY", "sc-domain:fromthetrunk.shop");
 
-    // fetch calls arrive in Promise.all order: searchConsole first, then ga4Data.
-    // (Vercel and Meta have no creds so they return typed-empty without fetching.)
-    fetchMock
-      // 1st fetch: GSC call (searchConsole is first in Promise.all)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(GSC_SEARCH_ANALYTICS_FIXTURE), { status: 200 })
-      )
-      // 2nd fetch: GA4 call (ga4Data is second in Promise.all)
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(GA4_RUNREPORT_FIXTURE), { status: 200 })
-      )
-      // Remaining adapters (Vercel × 2, Meta × 3) — no creds set, won't fetch
-      .mockResolvedValue(new Response("{}", { status: 200 }));
+    // Route fixture responses by URL so Promise.all call ordering cannot make this flaky.
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes("searchconsole.googleapis.com")) {
+        return new Response(JSON.stringify(GSC_SEARCH_ANALYTICS_FIXTURE), { status: 200 });
+      }
+
+      if (url.includes(":runRealtimeReport")) {
+        return new Response(JSON.stringify(GA4_REALTIME_FIXTURE), { status: 200 });
+      }
+
+      if (url.includes(":runReport")) {
+        return new Response(JSON.stringify(GA4_RUNREPORT_FIXTURE), { status: 200 });
+      }
+
+      return new Response("{}", { status: 200 });
+    });
 
     const app = createCronApp();
     await app.request("/refresh-channel-metrics", {
@@ -674,10 +709,10 @@ describe("GET /refresh-channel-metrics cron route", () => {
 
     const ga4Values = allValues.find((v) => v.source === "ga4-data");
     expect(ga4Values).toBeDefined();
-    // GA4 fixture totals: sessions=1240+430=1670, revenue=1850000+620000=2470000
+    // GA4 fixture totals: sessions=1240+430=1670, revenue=(18500+6200) rupees = 2470000 paise
     expect(ga4Values!.value).toMatchObject({
       sessions: 1240 + 430,
-      totalRevenuePaise: 1850000 + 620000,
+      totalRevenuePaise: (18500 + 6200) * 100,
     });
     expect(ga4Values!.metricKey).toBe("metrics");
 
@@ -698,7 +733,7 @@ describe("GET /refresh-channel-metrics cron route", () => {
     vi.stubEnv("CRON_SECRET", "super-secret");
     // Activate GA4 so it fires fetch — but make that fetch throw
     vi.stubEnv("GA4_PROPERTY_ID", "properties/throw-test");
-    vi.stubEnv("GA4_DATA_SA_JSON", JSON.stringify({ client_email: "svc@test.iam", private_key: "key" }));
+    stubGoogleOAuthCreds();
 
     fetchMock.mockRejectedValue(new Error("Simulated network failure"));
 

@@ -5,57 +5,34 @@
  *
  * Cases covered:
  *  1. createMediaFromUpload REJECTS missing alt (throws / returns error)
- *  2. createMediaFromUpload AUTO-COMPRESSES a >=1MB image (sharp is called)
- *  3. createMediaFromUpload passes through < 1MB images without compression
+ *  2. createMediaFromUpload persists the uploaded Blob URL without server-side re-compression
+ *  3. createMediaFromUpload does not fetch/re-upload uploaded Blob files
  *  4. completeUploadSchema rejects missing alt at the Zod layer
  *  5. completeUploadSchema rejects empty-string alt
  *
  * Mock boundary:
  *  - @/db/queries/media (createMediaRecord)  — DB layer
- *  - sharp                                    — image lib boundary
- *  - @vercel/blob (put)                       — Blob client boundary
  *  - global fetch                             — HTTP client boundary
- *    (production fetches the blob URL server-side for compression; tests
- *     return a fake buffer via a mocked fetch so no real HTTP calls are made)
+ *    (must NOT be called from createMediaFromUpload; the browser already
+ *     uploaded the original file directly to Blob)
  *
  * The REAL createMediaFromUpload and completeUploadSchema are under test.
  * Removing the alt check or size-gate causes the mutation-proof tests to fail.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must precede any import touching the mocked modules
 // ---------------------------------------------------------------------------
 
 const createMediaRecordMock = vi.hoisted(() => vi.fn());
-const sharpMock = vi.hoisted(() => {
-  const instance = {
-    resize: vi.fn().mockReturnThis(),
-    webp: vi.fn().mockReturnThis(),
-    toBuffer: vi.fn().mockResolvedValue({
-      data: Buffer.from("compressed-image-data"),
-      info: { width: 800, height: 1000, size: 400_000 },
-    }),
-  };
-  return vi.fn(() => instance);
-});
-
-const putMock = vi.hoisted(() => vi.fn());
 const generateClientTokenMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue("mock-token")
 );
 
 vi.mock("@/db/queries/media", () => ({
   createMediaRecord: createMediaRecordMock,
-}));
-
-vi.mock("sharp", () => ({
-  default: sharpMock,
-}));
-
-vi.mock("@vercel/blob", () => ({
-  put: putMock,
 }));
 
 vi.mock("@vercel/blob/client", () => ({
@@ -74,19 +51,6 @@ import { completeUploadSchema } from "@/api/hono/routes/media";
 // ---------------------------------------------------------------------------
 
 const ONE_MB = 1_024 * 1_024;
-
-/** Fake ArrayBuffer returned by the mocked fetch (simulates blob bytes). */
-const fakeArrayBuffer = Buffer.from("fake-image-bytes").buffer;
-
-/** Create a fake fetch response with an ok status and ArrayBuffer body. */
-function makeFakeFetchResponse() {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    arrayBuffer: vi.fn().mockResolvedValue(fakeArrayBuffer),
-  };
-}
 
 function makeInput(overrides: Partial<Parameters<typeof createMediaFromUpload>[0]> = {}) {
   return {
@@ -157,110 +121,115 @@ describe("createMediaFromUpload — alt enforcement", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Auto-compression — >=1MB images MUST be compressed via sharp
+// 2. Uploaded Blob persistence — no server-side re-compression/re-upload
 //
-// Architecture: the client PUT the file to Blob, then POSTs JSON to /complete.
-// The server has no raw buffer — it uses fetch() to read back the Blob URL,
-// then runs sharp to compress. We mock the global fetch so no real HTTP calls
-// are made, and verify that sharp is invoked only when size >= 1MB.
+// Architecture: the client uploads the original file directly to Vercel Blob,
+// then POSTs JSON to /complete. createMediaFromUpload should only persist the
+// already-uploaded Blob URL/pathname into the media table.
+//
+// Regression guard: do NOT fetch the Blob URL server-side and do NOT create a
+// second compressed WebP, because that can orphan the original upload.
 // ---------------------------------------------------------------------------
 
-describe("createMediaFromUpload — auto-compression for >=1MB uploads", () => {
+describe("createMediaFromUpload — uploaded Blob persistence", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     createMediaRecordMock.mockResolvedValue({
       id: "uuid-456",
-      alt: "Compressed saree image",
-      filename: "large-saree.jpg",
-      url: "https://blob.example.com/media/456-large-saree.webp",
-      key: "media/456-large-saree.webp",
-      mimeType: "image/webp",
-      filesize: 400_000,
-      width: 800,
-      height: 1000,
+      alt: "A beautiful Banarasi saree with gold zari work",
+      filename: "saree.jpg",
+      url: "https://blob.example.com/media/123-saree.jpg",
+      key: "media/123-saree.jpg",
+      mimeType: "image/jpeg",
+      filesize: null,
+      width: null,
+      height: null,
       blurDataUrl: null,
-      metadata: null,
+      metadata: { source: "vercel-blob" },
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    putMock.mockResolvedValue({
-      url: "https://blob.example.com/media/456-large-saree.webp",
-      pathname: "media/456-large-saree.webp",
-    });
-    // Mock global fetch — the compression path calls fetch(input.url) to get
-    // the original blob bytes before running sharp.
-    fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      makeFakeFetchResponse() as unknown as Response
-    );
+
+    fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockRejectedValue(new Error("createMediaFromUpload must not fetch uploaded blobs"));
   });
 
-  it("calls sharp when the upload size equals exactly 1MB", async () => {
-    sharpMock.mockClear();
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("persists the original uploaded Blob URL when upload size equals exactly 1MB", async () => {
     await createMediaFromUpload(
       makeInput({
         alt: "Exactly 1MB image",
         size: ONE_MB,
       })
     );
-    expect(sharpMock).toHaveBeenCalled();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(createMediaRecordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alt: "Exactly 1MB image",
+        filename: "saree.jpg",
+        filesize: ONE_MB,
+        key: "media/123-saree.jpg",
+        metadata: { source: "vercel-blob" },
+        mimeType: "image/jpeg",
+        url: "https://blob.example.com/media/123-saree.jpg",
+        width: null,
+        height: null,
+        blurDataUrl: null,
+      })
+    );
   });
 
-  it("calls sharp when the upload size exceeds 1MB", async () => {
-    sharpMock.mockClear();
+  it("persists the original uploaded Blob URL when upload size exceeds 1MB", async () => {
     await createMediaFromUpload(
       makeInput({
         alt: "Large saree image",
         size: ONE_MB + 1,
       })
     );
-    expect(sharpMock).toHaveBeenCalled();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(createMediaRecordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alt: "Large saree image",
+        filesize: ONE_MB + 1,
+        key: "media/123-saree.jpg",
+        mimeType: "image/jpeg",
+        url: "https://blob.example.com/media/123-saree.jpg",
+      })
+    );
   });
 
-  it("does NOT call sharp when the upload size is under 1MB", async () => {
-    sharpMock.mockClear();
+  it("persists the original uploaded Blob URL when upload size is under 1MB", async () => {
     await createMediaFromUpload(
       makeInput({
         alt: "Small saree image",
         size: 500_000,
       })
     );
-    expect(sharpMock).not.toHaveBeenCalled();
-  });
 
-  // MUTATION PROOF: if the size-gate were removed (always compress), fetch
-  // would be called for small files too. This proves the gate is load-bearing.
-  it("mutation-proof: fetch (blob read) is called ONLY for large files", async () => {
-    fetchSpy.mockClear();
-
-    // Large file → should call fetch to read the blob
-    await createMediaFromUpload(
-      makeInput({ alt: "Large file", size: 5 * ONE_MB })
-    );
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith("https://blob.example.com/media/123-saree.jpg");
-
-    fetchSpy.mockClear();
-
-    // Small file → must NOT call fetch
-    await createMediaFromUpload(
-      makeInput({ alt: "Small file", size: 100_000 })
-    );
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  // MUTATION PROOF: removing compression for large files fails this test
-  it("mutation-proof: compression IS applied for large files (no bypass)", async () => {
-    sharpMock.mockClear();
-    await createMediaFromUpload(
-      makeInput({
-        alt: "Very large saree image",
-        size: 5 * ONE_MB,
+    expect(createMediaRecordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alt: "Small saree image",
+        filesize: 500_000,
+        key: "media/123-saree.jpg",
+        mimeType: "image/jpeg",
+        url: "https://blob.example.com/media/123-saree.jpg",
       })
     );
-    expect(sharpMock).toHaveBeenCalledTimes(1);
-    const sharpInstance = sharpMock.mock.results[0]?.value;
-    expect(sharpInstance?.webp).toHaveBeenCalled();
+  });
+
+  it("mutation-proof: never fetches uploaded Blob bytes for any upload size", async () => {
+    await createMediaFromUpload(makeInput({ alt: "Large file", size: 5 * ONE_MB }));
+    await createMediaFromUpload(makeInput({ alt: "Small file", size: 100_000 }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

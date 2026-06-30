@@ -110,33 +110,8 @@ describe("admin user management routes", () => {
     );
   });
 
-  it("rejects resetting the password for a non-admin account", async () => {
-    const customerId = "33333333-3333-4333-8333-333333333333";
-    getUserByIdMock.mockResolvedValue({ id: customerId, role: "customer" });
-
-    const { request } = createRouteHarness({
-      register: registerUserRoutes,
-      authUser: { email: "owner@example.com", id: "admin-1", role: "admin" },
-    });
-
-    const response = await request(`/${customerId}/password`, {
-      body: JSON.stringify({ newPassword: "ResetPass123" }),
-      headers: { "Content-Type": "application/json" },
-      method: "PATCH",
-    });
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      code: "ADMIN_PASSWORD_RESET_REQUIRES_ADMIN_TARGET",
-    });
-    expect(updateUserMock).not.toHaveBeenCalled();
-  });
-
-  it("lets an admin reset another admin password", async () => {
+  it("does not expose cross-admin password reset", async () => {
     const targetAdminId = "44444444-4444-4444-8444-444444444444";
-    getUserByIdMock.mockResolvedValue({ id: targetAdminId, role: "admin" });
-    hashMock.mockResolvedValue("reset-hash");
-    updateUserMock.mockResolvedValue({ id: targetAdminId });
 
     const { request } = createRouteHarness({
       register: registerUserRoutes,
@@ -149,10 +124,10 @@ describe("admin user management routes", () => {
       method: "PATCH",
     });
 
-    expect(response.status).toBe(200);
-    expect(hashMock).toHaveBeenCalledWith("ResetPass123", 12);
-    expect(updateUserMock).toHaveBeenCalledWith(targetAdminId, {
-      passwordHash: "reset-hash",
-    });
+    expect(response.status).toBe(404);
+    expect(getUserByIdMock).not.toHaveBeenCalled();
+    expect(hashMock).not.toHaveBeenCalled();
+    expect(updateUserMock).not.toHaveBeenCalled();
   });
+
 });
