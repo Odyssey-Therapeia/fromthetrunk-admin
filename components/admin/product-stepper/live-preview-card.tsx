@@ -40,6 +40,7 @@ import type { ProductStepperValues } from "./types";
 import { useRenderLog } from "./_render-log";
 
 type LivePreviewCardProps = {
+  defaultExpanded?: boolean;
   imageUrls?: Array<{
     id: string;
     url: string;
@@ -62,10 +63,14 @@ const getStoryTitle = (values: ProductStepperValues) =>
 const getDisplayText = (value: string, fallback = "Not set") =>
   value.trim().length > 0 ? value : fallback;
 
-function LivePreviewCardImpl({ imageUrls = [], values }: LivePreviewCardProps) {
+function LivePreviewCardImpl({
+  defaultExpanded = false,
+  imageUrls = [],
+  values,
+}: LivePreviewCardProps) {
   useRenderLog("LivePreviewCard");
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isProductPreviewOpen, setIsProductPreviewOpen] = useState(false);
 
   const displayImages = useMemo(

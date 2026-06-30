@@ -317,14 +317,16 @@ export function buildGa4DataAdapter(): ChannelMetricsAdapter<GA4DataMetrics> {
 
         if (reportResponse.ok) {
           const data = (await reportResponse.json()) as Ga4RunReportResponse;
-          const row = data.rows?.[0];
+          const rows = data.rows ?? [];
 
-          sessions = parseInt(row?.metricValues[0]?.value ?? "0", 10);
-          conversions = parseInt(row?.metricValues[1]?.value ?? "0", 10);
+          for (const row of rows) {
+            sessions += parseInt(row.metricValues[0]?.value ?? "0", 10);
+            conversions += parseInt(row.metricValues[1]?.value ?? "0", 10);
 
-          // GA4 totalRevenue is returned in currency units. Convert INR rupees → paise.
-          const totalRevenueRupees = Number(row?.metricValues[2]?.value ?? "0");
-          totalRevenuePaise = Math.round(totalRevenueRupees * 100);
+            // GA4 totalRevenue is returned in currency units. Convert INR rupees → paise.
+            const totalRevenueRupees = Number(row.metricValues[2]?.value ?? "0");
+            totalRevenuePaise += Math.round(totalRevenueRupees * 100);
+          }
         } else {
           log.error("[ga4-data] GA4 Data API returned non-ok", {
             status: reportResponse.status,

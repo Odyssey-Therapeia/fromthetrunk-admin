@@ -26,6 +26,9 @@ import type { HonoBindings } from "@/api/hono/types";
 
 const getChannelMetricsMock = vi.hoisted(() => vi.fn());
 const getEventCountsMock = vi.hoisted(() => vi.fn());
+const getCommerceMetricsMock = vi.hoisted(() => vi.fn());
+const getTopMoversMock = vi.hoisted(() => vi.fn());
+const getDiscoveryMoversMock = vi.hoisted(() => vi.fn());
 const sendEmailMock = vi.hoisted(() => vi.fn());
 const getOrderNotificationRecipientsMock = vi.hoisted(() => vi.fn());
 
@@ -41,6 +44,9 @@ vi.mock("@/db", () => ({ db: dbMock }));
 vi.mock("@/db/queries/control-centre", () => ({
   getChannelMetrics: getChannelMetricsMock,
   getEventCounts: getEventCountsMock,
+  getCommerceMetrics: getCommerceMetricsMock,
+  getTopMovers: getTopMoversMock,
+  getDiscoveryMovers: getDiscoveryMoversMock,
 }));
 
 vi.mock("@/lib/email/send", () => ({
@@ -84,6 +90,7 @@ const DEFAULT_CHANNEL_METRICS = {
     conversions: 5,
     totalRevenuePaise: 1000000,
     conversionRate: 0.12,
+    realtimeActiveUsers: 2,
   },
   searchConsole: { indexedPageCount: 10, topQueries: [], avgCtr: 0.05 },
   vercelInsights: {
@@ -105,6 +112,34 @@ const DEFAULT_EVENT_COUNTS = {
   reservationExpired: 2,
   reservationsCreated: 8,
   wishlistAdded: 1,
+  productCardClick: 12,
+  productView: 10,
+  addToCart: 4,
+  collectionView: 20,
+  cartViewed: 3,
+  checkoutStarted: 2,
+};
+
+const DEFAULT_COMMERCE_METRICS = {
+  grossSalesPaise: 1000000,
+  paidOrderCount: 5,
+  pendingPaymentLinks: 1,
+  abandonedPendingOrders: 2,
+  soldPieces: 5,
+  reservedPieces: 1,
+  availablePieces: 20,
+};
+
+const DEFAULT_TOP_MOVERS = {
+  viewedProducts: [],
+  addedToBagProducts: [],
+  wishlistedProducts: [],
+  paidProducts: [],
+};
+
+const DEFAULT_DISCOVERY_MOVERS = {
+  topSearchTerms: [],
+  topFilters: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -118,6 +153,9 @@ describe("GET /weekly-ops-digest cron", () => {
 
     getChannelMetricsMock.mockResolvedValue(DEFAULT_CHANNEL_METRICS);
     getEventCountsMock.mockResolvedValue(DEFAULT_EVENT_COUNTS);
+    getCommerceMetricsMock.mockResolvedValue(DEFAULT_COMMERCE_METRICS);
+    getTopMoversMock.mockResolvedValue(DEFAULT_TOP_MOVERS);
+    getDiscoveryMoversMock.mockResolvedValue(DEFAULT_DISCOVERY_MOVERS);
     sendEmailMock.mockResolvedValue(true);
     getOrderNotificationRecipientsMock.mockReturnValue([
       "ops@fromthetrunk.com",
@@ -197,6 +235,7 @@ describe("GET /weekly-ops-digest cron", () => {
         conversions: 5,
         totalRevenuePaise: 1000000,
         conversionRate: 0.12,
+        realtimeActiveUsers: 2,
       },
     });
 

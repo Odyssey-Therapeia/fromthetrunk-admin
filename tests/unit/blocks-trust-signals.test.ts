@@ -3,8 +3,8 @@
  *
  * Mutation-proof discipline (mirrors block-hero.test.ts / block-p308-new-blocks.test.ts):
  *   - Imports the REAL block module and the REAL registry (no block mocks).
- *   - propsSchema accepts a valid object and REJECTS invalid ones (missing /
- *     wrong-typed field, over-length, wrong arity).
+ *   - propsSchema accepts valid objects and draft-safe partial rows while still
+ *     rejecting wrong-typed fields and over-length content.
  *   - The Renderer output (via renderBlock → renderToStaticMarkup) contains the
  *     key content (stat values + labels).
  *
@@ -95,17 +95,17 @@ describe("trust-signals block — propsSchema save-time validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("applies the current homepage defaults when stats omitted", () => {
+  it("defaults omitted stats to an empty draft-safe list", () => {
     const result = trustSignalsPropsSchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.stats).toEqual(VALID_STATS);
+      expect(result.data.stats).toEqual([]);
     }
   });
 
-  // ── REJECTION cases (mutation proof) ───────────────────────────────────────
+  // ── Draft-safe coercion cases ───────────────────────────────────────────────
 
-  it("rejects a stat missing its value field", () => {
+  it("accepts a stat missing its value field as a draft row", () => {
     const result = trustSignalsPropsSchema.safeParse({
       stats: [
         { label: "Authenticated Sarees" },
@@ -113,14 +113,26 @@ describe("trust-signals block — propsSchema save-time validation", () => {
         VALID_STATS[2],
       ],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stats[0]).toMatchObject({
+        value: "",
+        label: "Authenticated Sarees",
+      });
+    }
   });
 
-  it("rejects a stat missing its label field", () => {
+  it("accepts a stat missing its label field as a draft row", () => {
     const result = trustSignalsPropsSchema.safeParse({
       stats: [{ value: "200+" }, VALID_STATS[1], VALID_STATS[2]],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stats[0]).toMatchObject({
+        value: "200+",
+        label: "",
+      });
+    }
   });
 
   it("rejects a stat with a wrong-typed value (number instead of string)", () => {
@@ -130,18 +142,24 @@ describe("trust-signals block — propsSchema save-time validation", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects fewer than 3 stats (tuple arity)", () => {
+  it("accepts fewer than 3 stats for draft-safe editing", () => {
     const result = trustSignalsPropsSchema.safeParse({
       stats: [VALID_STATS[0], VALID_STATS[1]],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stats).toHaveLength(2);
+    }
   });
 
-  it("rejects more than 3 stats (tuple arity)", () => {
+  it("truncates more than 3 stats to the supported render limit", () => {
     const result = trustSignalsPropsSchema.safeParse({
       stats: [...VALID_STATS, { value: "1", label: "Extra" }],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stats).toEqual(VALID_STATS);
+    }
   });
 
   it("rejects a value exceeding 40 chars", () => {
@@ -169,27 +187,24 @@ describe("trust-signals block — render-time validation (defense in depth)", ()
     ).rejects.toThrow();
   });
 
-  it("renderBlock throws when the tuple arity is wrong", async () => {
-    await expect(
-      renderBlock({
-        type: "trust-signals",
-        props: { stats: [VALID_STATS[0]] },
-      })
-    ).rejects.toThrow();
-  });
-});
-
-describe("trust-signals block — Renderer output contains key content", () => {
-  it("renders the default stat values and labels", async () => {
-    const node = await renderBlock({ type: "trust-signals", props: {} });
+  it("renderBlock accepts non-tuple arity and renders complete draft rows", async () => {
+    const node = await renderBlock({
+      type: "trust-signals",
+      props: { stats: [VALID_STATS[0]] },
+    });
     const html = renderToStaticMarkup(node as ReactElement);
 
     expect(html).toContain("200+");
     expect(html).toContain("Authenticated Sarees");
-    expect(html).toContain("50+");
-    expect(html).toContain("Happy Collectors");
-    expect(html).toContain("100%");
-    expect(html).toContain("Provenance Verified");
+  });
+});
+
+describe("trust-signals block — Renderer output contains key content", () => {
+  it("renders nothing when no complete stats are supplied", async () => {
+    const node = await renderBlock({ type: "trust-signals", props: {} });
+    const html = renderToStaticMarkup(node as ReactElement);
+
+    expect(html).toBe("");
   });
 
   it("renders custom stat content supplied via props", async () => {
@@ -211,8 +226,11 @@ describe("trust-signals block — Renderer output contains key content", () => {
     expect(html).toContain("Hand Restored");
   });
 
-  it("uses the same section markup/classes as the live section", async () => {
-    const node = await renderBlock({ type: "trust-signals", props: {} });
+  it("uses the same section markup/classes as the live section when visible stats exist", async () => {
+    const node = await renderBlock({
+      type: "trust-signals",
+      props: { stats: VALID_STATS },
+    });
     const html = renderToStaticMarkup(node as ReactElement);
 
     // Faithful reproduction of the hardcoded section's tokens/classes.
