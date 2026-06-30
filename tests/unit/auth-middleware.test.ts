@@ -41,6 +41,7 @@ describe("authMiddleware", () => {
     );
 
     expect(getTokenMock).toHaveBeenCalledWith({
+      cookieName: "ftt-admin.session-token",
       req: rawRequest,
       secret: "test-secret",
     });
