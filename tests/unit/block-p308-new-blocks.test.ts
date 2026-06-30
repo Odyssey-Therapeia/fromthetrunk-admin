@@ -11,7 +11,7 @@
  *   - Tests import the REAL block module (not mocked).
  *   - propsSchema save-time tests call safeParse directly on the real schema.
  *   - renderBlock render-time tests call renderBlock() via the real registry
- *     and assert BlockPropsValidationError is thrown for invalid props.
+ *     and assert hard-invalid props still throw while draft-safe props normalize.
  *   - No mocks on the blocks themselves — lowest-level deps only.
  *
  * Also covers block-registry for all 9 registered block types (getBlock,
@@ -183,7 +183,7 @@ describe("image-text-split block", () => {
   });
 
   describe("propsSchema — save-time validation", () => {
-    it("accepts minimal valid props (heading + body + image UUID)", () => {
+    it("accepts minimal valid props (heading + body; image is draft-optional)", () => {
       const result = imageTextSplitPropsSchema.safeParse({
         heading: "Our Story",
         body: "Some body text",
@@ -223,21 +223,27 @@ describe("image-text-split block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects missing image", () => {
+    it("accepts missing image as draft-safe", () => {
       const result = imageTextSplitPropsSchema.safeParse({
         heading: "Some heading",
         body: "Some body",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.image).toBeUndefined();
+      }
     });
 
-    it("rejects image that is not a valid UUID", () => {
+    it("accepts image as a draft-safe string value", () => {
       const result = imageTextSplitPropsSchema.safeParse({
         heading: "Some heading",
         body: "Some body",
         image: "not-a-uuid",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.image).toBe("not-a-uuid");
+      }
     });
 
     it("rejects heading exceeding 200 chars", () => {
@@ -268,14 +274,17 @@ describe("image-text-split block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects invalid background enum", () => {
+    it("normalizes invalid background to transparent", () => {
       const result = imageTextSplitPropsSchema.safeParse({
         heading: "Heading",
         body: "Body",
         image: VALID_UUID,
         background: "dark",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.background).toBe("transparent");
+      }
     });
 
     it("applies default imagePosition=right", () => {
@@ -328,17 +337,17 @@ describe("image-text-split block", () => {
       ).rejects.toThrow();
     });
 
-    it("renderBlock throws when image is not a UUID", async () => {
-      await expect(
-        renderBlock({
-          type: "image-text-split",
-          props: {
-            heading: "Heading",
-            body: "Body",
-            image: "not-a-uuid",
-          },
-        })
-      ).rejects.toThrow();
+    it("renderBlock accepts unresolved image strings and renders the draft-safe placeholder", async () => {
+      const node = await renderBlock({
+        type: "image-text-split",
+        props: {
+          heading: "Heading",
+          body: "Body",
+          image: "not-a-uuid",
+        },
+      });
+
+      expect(node).toBeDefined();
     });
   });
 });
@@ -390,11 +399,14 @@ describe("story-editorial block", () => {
       expect(result.success).toBe(true);
     });
 
-    it("rejects empty beats array", () => {
+    it("accepts empty beats array as draft-safe", () => {
       const result = storyEditorialPropsSchema.safeParse({
         beats: [],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.beats).toEqual([]);
+      }
     });
 
     it("rejects beats array exceeding 6 items", () => {
@@ -403,11 +415,14 @@ describe("story-editorial block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects beat with empty paragraphs array", () => {
+    it("accepts beat with empty paragraphs array as a draft row", () => {
       const result = storyEditorialPropsSchema.safeParse({
         beats: [{ paragraphs: [], layout: "image-right" }],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.beats[0]?.paragraphs).toEqual([]);
+      }
     });
 
     it("rejects beat with more than 4 paragraphs", () => {
@@ -434,18 +449,24 @@ describe("story-editorial block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects invalid layout enum in a beat", () => {
+    it("normalizes invalid layout enum in a beat to image-right", () => {
       const result = storyEditorialPropsSchema.safeParse({
         beats: [{ paragraphs: ["A para."], layout: "side-by-side" }],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.beats[0]?.layout).toBe("image-right");
+      }
     });
 
-    it("rejects beat image that is not a UUID", () => {
+    it("accepts beat image as a draft-safe string value", () => {
       const result = storyEditorialPropsSchema.safeParse({
         beats: [{ paragraphs: ["Para."], layout: "image-right", image: "not-a-uuid" }],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.beats[0]?.image).toBe("not-a-uuid");
+      }
     });
 
     it("rejects more than 6 climax lines", () => {
@@ -457,12 +478,15 @@ describe("story-editorial block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects missing beats entirely", () => {
+    it("defaults missing beats to an empty draft-safe list", () => {
       const result = storyEditorialPropsSchema.safeParse({
         ctaLabel: "CTA Only",
         ctaHref: "/page",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.beats).toEqual([]);
+      }
     });
 
     it("accepts all valid layout enum values", () => {
@@ -488,35 +512,35 @@ describe("story-editorial block", () => {
       expect(node).toBeDefined();
     });
 
-    it("renderBlock throws when beats is missing", async () => {
-      await expect(
-        renderBlock({
-          type: "story-editorial",
-          props: {
-            ctaLabel: "No beats",
-          },
-        })
-      ).rejects.toThrow();
+    it("renderBlock returns null when beats are missing and no visible content exists", async () => {
+      const node = await renderBlock({
+        type: "story-editorial",
+        props: {
+          ctaLabel: "No beats",
+        },
+      });
+
+      expect(node).toBeNull();
     });
 
-    it("renderBlock throws when beats is empty", async () => {
-      await expect(
-        renderBlock({
-          type: "story-editorial",
-          props: { beats: [] },
-        })
-      ).rejects.toThrow();
+    it("renderBlock returns null when beats are empty", async () => {
+      const node = await renderBlock({
+        type: "story-editorial",
+        props: { beats: [] },
+      });
+
+      expect(node).toBeNull();
     });
 
-    it("renderBlock throws when beat has invalid layout", async () => {
-      await expect(
-        renderBlock({
-          type: "story-editorial",
-          props: {
-            beats: [{ paragraphs: ["Para."], layout: "invalid-layout" }],
-          },
-        })
-      ).rejects.toThrow();
+    it("renderBlock normalizes invalid beat layout and renders visible paragraphs", async () => {
+      const node = await renderBlock({
+        type: "story-editorial",
+        props: {
+          beats: [{ paragraphs: ["Para."], layout: "invalid-layout" }],
+        },
+      });
+
+      expect(node).toBeDefined();
     });
   });
 });
@@ -585,12 +609,15 @@ describe("newsletter-signup block", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects invalid background enum", () => {
+    it("normalizes invalid background to card", () => {
       const result = newsletterSignupPropsSchema.safeParse({
         heading: "Valid heading",
         background: "dark",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.background).toBe("card");
+      }
     });
 
     it("applies default inputPlaceholder", () => {
@@ -658,16 +685,16 @@ describe("newsletter-signup block", () => {
       ).rejects.toThrow();
     });
 
-    it("renderBlock throws when background is an invalid enum value", async () => {
-      await expect(
-        renderBlock({
-          type: "newsletter-signup",
-          props: {
-            heading: "Valid heading",
-            background: "not-valid",
-          },
-        })
-      ).rejects.toThrow();
+    it("renderBlock normalizes invalid background to the default card background", async () => {
+      const node = await renderBlock({
+        type: "newsletter-signup",
+        props: {
+          heading: "Valid heading",
+          background: "not-valid",
+        },
+      });
+
+      expect(node).toBeDefined();
     });
   });
 });

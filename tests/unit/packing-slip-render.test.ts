@@ -19,12 +19,12 @@ import { describe, expect, it } from "vitest";
 
 const PACKING_SLIP_PAGE = resolve(
   process.cwd(),
-  "app/(admin)/admin/orders/[id]/packing-slip/page.tsx"
+  "app/(admin)/orders/[id]/packing-slip/page.tsx"
 );
 
 const PRINT_CONTROLS = resolve(
   process.cwd(),
-  "app/(admin)/admin/orders/[id]/packing-slip/print-controls.tsx"
+  "app/(admin)/orders/[id]/packing-slip/print-controls.tsx"
 );
 
 describe("packing-slip RSC safety (REPAIR-1)", () => {

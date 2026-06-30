@@ -50,12 +50,12 @@ describe("Hero block", () => {
       expect(result.success).toBe(true);
     });
 
-    it("rejects backgroundImage that is not a UUID", () => {
+    it("accepts backgroundImage as a draft-safe string value", () => {
       const result = heroBlock.propsSchema.safeParse({
         headline: "Test",
         backgroundImage: "not-a-uuid",
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
 
     it("rejects eyebrow exceeding 80 characters", () => {
