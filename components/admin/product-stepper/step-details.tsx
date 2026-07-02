@@ -69,6 +69,7 @@ const fabricOptions = [
   "Kanjeevaram Mix",
   "Organza",
   "Cotton Silk",
+  "Linen Blend",
 ] as const;
 
 const conditionOptions = [
@@ -78,6 +79,7 @@ const conditionOptions = [
   "Good",
   "Fair",
   "Needs Restoration",
+  "New",
 ] as const;
 
 const noCollectionValue = "__no_collection__";
