@@ -4,16 +4,24 @@
  * SERVICE (lib/google-merchant/register-gcp.ts):
  *   - Calls exactly POST .../accounts/v1/accounts/{id}/developerRegistration:registerGcp
  *     with a bearer token and the configured developerEmail.
- *   - 409 / ALREADY_EXISTS is an idempotent success, not a failure.
- *   - 401 / 403 / 429 / 5xx map to sanitised errors that quote no token,
- *     no credential configuration and no upstream body.
+ *   - A 409 / ALREADY_EXISTS is only a CANDIDATE for idempotency: it is
+ *     verified against live Google state via
+ *       GET .../accounts/v1/accounts:getAccountForGcpRegistration
+ *       GET .../accounts/v1/accounts/{id}/developerRegistration
+ *     and is reported as success ONLY when the GCP project is registered to
+ *     this deployment's Merchant Center account.
+ *   - A confirmed different account is a sanitised 409 that never names the
+ *     other account; unverifiable conflicts and upstream/network failures fail
+ *     closed through the existing sanitised mapping.
+ *   - Every DeveloperRegistration payload is strictly validated.
  *   - Never reads or writes the database, never touches products.
  *
  * ROUTE (POST /api/v2/integrations/google-merchant/register):
  *   - Kill switch and production gate return an indistinguishable 404 and run
  *     BEFORE authentication, so the endpoint is invisible while disabled.
  *   - Admin-only; wrong confirmation phrase is rejected without calling the
- *     service; the success body carries only the whitelisted fields.
+ *     service; the success body carries exactly registered, name and gcpIds —
+ *     a fresh and a verified pre-existing registration are indistinguishable.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,11 +54,25 @@ import { createRouteHarness } from "../helpers/route-harness";
 // ---------------------------------------------------------------------------
 
 const ACCOUNT_ID = "5833526164";
+const OTHER_ACCOUNT_ID = "9999999999";
 const DEVELOPER_EMAIL = "partner-access@odysseytherapeia.com";
 const ACCESS_TOKEN = "ya29.ACCESS-TOKEN-SUPER-SECRET";
 const GCP_PROJECT_ID = "ftt-merchant-integration";
+
+const ACCOUNT_NAME = `accounts/${ACCOUNT_ID}`;
 const REGISTRATION_NAME = `accounts/${ACCOUNT_ID}/developerRegistration`;
-const EXPECTED_URL = `https://merchantapi.googleapis.com/accounts/v1/${REGISTRATION_NAME}:registerGcp`;
+
+const BASE_URL = "https://merchantapi.googleapis.com/accounts/v1";
+const REGISTER_URL = `${BASE_URL}/${REGISTRATION_NAME}:registerGcp`;
+const GET_ACCOUNT_URL = `${BASE_URL}/accounts:getAccountForGcpRegistration`;
+const GET_REGISTRATION_URL = `${BASE_URL}/${REGISTRATION_NAME}`;
+
+/** The public success payload — identical for fresh and verified-existing. */
+const PUBLIC_SUCCESS: GoogleMerchantRegistrationResult = {
+  gcpIds: [GCP_PROJECT_ID],
+  name: REGISTRATION_NAME,
+  registered: true,
+};
 
 const jsonResponse = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -58,7 +80,42 @@ const jsonResponse = (status: number, body: unknown): Response =>
     status,
   });
 
+const textResponse = (status: number, body: string): Response =>
+  new Response(body, { status });
+
+const developerRegistrationBody = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  gcpIds: [GCP_PROJECT_ID],
+  name: REGISTRATION_NAME,
+  ...overrides,
+});
+
+const conflictBody = (status = "ALREADY_EXISTS") => ({
+  error: {
+    code: 409,
+    message: `Developer registration already exists for ${ACCESS_TOKEN}`,
+    status,
+  },
+});
+
 const fetchMock = vi.fn();
+
+/** Queue responses in call order; anything beyond the queue is an error. */
+const queueResponses = (...responses: Array<Response | Error>) => {
+  fetchMock.mockReset();
+  for (const response of responses) {
+    if (response instanceof Error) {
+      fetchMock.mockRejectedValueOnce(response);
+    } else {
+      fetchMock.mockResolvedValueOnce(response);
+    }
+  }
+  fetchMock.mockRejectedValue(new Error("unexpected extra fetch call"));
+};
+
+const fetchUrls = (): string[] =>
+  fetchMock.mock.calls.map((call) => String(call[0]));
 
 const loggedText = (): string =>
   [logMock.debug, logMock.error, logMock.info, logMock.warn]
@@ -78,6 +135,11 @@ const stubServiceEnv = (overrides: Record<string, string | undefined> = {}) => {
   }
 };
 
+/**
+ * Assert the failure is the expected sanitised GoogleMerchantError and that it
+ * leaks neither the bearer token, the credential configuration, a stack trace
+ * nor another Merchant account ID.
+ */
 const expectGoogleMerchantError = async (
   promise: Promise<unknown>,
   code: string,
@@ -89,19 +151,23 @@ const expectGoogleMerchantError = async (
 
   expect(error).toBeInstanceOf(GoogleMerchantError);
   const merchantError = error as GoogleMerchantError;
+
   expect(merchantError.code).toBe(code);
   expect(merchantError.message).not.toContain(ACCESS_TOKEN);
+  expect(merchantError.message).not.toContain(OTHER_ACCOUNT_ID);
+  expect(merchantError.message).not.toContain("external_account");
+
+  const logged = loggedText();
+  expect(logged).not.toContain(ACCESS_TOKEN);
+  expect(logged).not.toContain(OTHER_ACCOUNT_ID);
+  expect(logged).not.toContain("external_account");
+
   return merchantError;
 };
 
 beforeEach(() => {
   getAccessTokenMock.mockResolvedValue(ACCESS_TOKEN);
-  fetchMock.mockResolvedValue(
-    jsonResponse(200, {
-      gcpIds: [GCP_PROJECT_ID],
-      name: REGISTRATION_NAME,
-    }),
-  );
+  queueResponses(jsonResponse(200, developerRegistrationBody()));
   vi.stubGlobal("fetch", fetchMock);
   stubServiceEnv();
 });
@@ -112,17 +178,14 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Service — request shape
+// Service — fresh registration
 // ---------------------------------------------------------------------------
 
-describe("registerGoogleMerchantGcpProject — successful registration", () => {
+describe("registerGoogleMerchantGcpProject — fresh registration", () => {
   it("returns the registration name and gcpIds", async () => {
-    await expect(registerGoogleMerchantGcpProject()).resolves.toEqual({
-      alreadyRegistered: false,
-      gcpIds: [GCP_PROJECT_ID],
-      name: REGISTRATION_NAME,
-      registered: true,
-    });
+    await expect(registerGoogleMerchantGcpProject()).resolves.toEqual(
+      PUBLIC_SUCCESS,
+    );
   });
 
   it("POSTs registerGcp with the bearer token and developer email", async () => {
@@ -131,7 +194,7 @@ describe("registerGoogleMerchantGcpProject — successful registration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(url).toBe(EXPECTED_URL);
+    expect(url).toBe(REGISTER_URL);
     expect(init.method).toBe("POST");
     expect(init.headers).toEqual({
       Authorization: `Bearer ${ACCESS_TOKEN}`,
@@ -142,32 +205,29 @@ describe("registerGoogleMerchantGcpProject — successful registration", () => {
     });
   });
 
-  it("uses the configured account ID in the resource path", async () => {
-    stubServiceEnv({ GOOGLE_MERCHANT_ACCOUNT_ID: "9999999999" });
-
+  it("does not call the verification endpoints on success", async () => {
     await registerGoogleMerchantGcpProject();
 
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toContain("accounts/9999999999/developerRegistration");
+    expect(fetchUrls()).toEqual([REGISTER_URL]);
   });
 
-  it("falls back to the derived name when Google omits it", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { gcpIds: [GCP_PROJECT_ID] }));
-
-    const result = await registerGoogleMerchantGcpProject();
-    expect(result.name).toBe(REGISTRATION_NAME);
-  });
-
-  it("drops non-string gcpIds", async () => {
-    fetchMock.mockResolvedValue(
+  it("uses the configured account ID in the resource path", async () => {
+    stubServiceEnv({ GOOGLE_MERCHANT_ACCOUNT_ID: OTHER_ACCOUNT_ID });
+    queueResponses(
       jsonResponse(200, {
-        gcpIds: [GCP_PROJECT_ID, 42, null],
-        name: REGISTRATION_NAME,
+        gcpIds: [GCP_PROJECT_ID],
+        name: `accounts/${OTHER_ACCOUNT_ID}/developerRegistration`,
       }),
     );
 
     const result = await registerGoogleMerchantGcpProject();
-    expect(result.gcpIds).toEqual([GCP_PROJECT_ID]);
+
+    expect(fetchUrls()[0]).toContain(
+      `accounts/${OTHER_ACCOUNT_ID}/developerRegistration:registerGcp`,
+    );
+    expect(result.name).toBe(
+      `accounts/${OTHER_ACCOUNT_ID}/developerRegistration`,
+    );
   });
 
   it("never logs the access token", async () => {
@@ -176,57 +236,350 @@ describe("registerGoogleMerchantGcpProject — successful registration", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Service — idempotency
-// ---------------------------------------------------------------------------
-
-describe("registerGoogleMerchantGcpProject — already registered", () => {
-  it("treats HTTP 409 as an idempotent success", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(409, {
-        error: { code: 409, message: "Already exists.", status: "ALREADY_EXISTS" },
+describe("registerGoogleMerchantGcpProject — strict success validation", () => {
+  const invalidBodies: Array<{ body: unknown; label: string }> = [
+    { body: { gcpIds: [GCP_PROJECT_ID] }, label: "no name" },
+    {
+      body: developerRegistrationBody({ name: 42 }),
+      label: "a non-string name",
+    },
+    {
+      body: developerRegistrationBody({
+        name: `accounts/${OTHER_ACCOUNT_ID}/developerRegistration`,
       }),
-    );
+      label: "another account's registration name",
+    },
+    { body: { name: REGISTRATION_NAME }, label: "no gcpIds" },
+    {
+      body: developerRegistrationBody({ gcpIds: GCP_PROJECT_ID }),
+      label: "a non-array gcpIds",
+    },
+    {
+      body: developerRegistrationBody({ gcpIds: [GCP_PROJECT_ID, 42] }),
+      label: "a non-string gcpId",
+    },
+  ];
 
-    await expect(registerGoogleMerchantGcpProject()).resolves.toEqual({
-      alreadyRegistered: true,
-      gcpIds: [],
-      name: REGISTRATION_NAME,
-      registered: true,
+  for (const { body, label } of invalidBodies) {
+    it(`rejects a 200 with ${label}`, async () => {
+      queueResponses(jsonResponse(200, body));
+
+      await expectGoogleMerchantError(
+        registerGoogleMerchantGcpProject(),
+        "GOOGLE_REQUEST_FAILED",
+      );
     });
-  });
+  }
 
-  it("treats an ALREADY_EXISTS status on a 400 as an idempotent success", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(400, {
-        error: { code: 400, message: "Already registered.", status: "ALREADY_EXISTS" },
-      }),
+  it("rejects a non-JSON 200", async () => {
+    queueResponses(textResponse(200, "<html>ok</html>"));
+
+    await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
     );
-
-    const result = await registerGoogleMerchantGcpProject();
-    expect(result.registered).toBe(true);
-    expect(result.alreadyRegistered).toBe(true);
-  });
-
-  it("is safe to call twice", async () => {
-    const first = await registerGoogleMerchantGcpProject();
-
-    fetchMock.mockResolvedValue(
-      jsonResponse(409, { error: { status: "ALREADY_EXISTS" } }),
-    );
-    const second = await registerGoogleMerchantGcpProject();
-
-    expect(first.registered).toBe(true);
-    expect(second.registered).toBe(true);
-    expect(second.name).toBe(first.name);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Service — upstream failures
+// Service — conflict verification (same Merchant account)
 // ---------------------------------------------------------------------------
 
-describe("registerGoogleMerchantGcpProject — Google failures", () => {
+describe("registerGoogleMerchantGcpProject — verified duplicate", () => {
+  it("verifies a 409 against the same Merchant account and returns the registration", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      jsonResponse(200, developerRegistrationBody()),
+    );
+
+    await expect(registerGoogleMerchantGcpProject()).resolves.toEqual(
+      PUBLIC_SUCCESS,
+    );
+    expect(fetchUrls()).toEqual([
+      REGISTER_URL,
+      GET_ACCOUNT_URL,
+      GET_REGISTRATION_URL,
+    ]);
+  });
+
+  it("verifies a 400/ALREADY_EXISTS the same way", async () => {
+    queueResponses(
+      jsonResponse(400, {
+        error: { code: 400, message: "Already registered.", status: "ALREADY_EXISTS" },
+      }),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      jsonResponse(200, developerRegistrationBody()),
+    );
+
+    await expect(registerGoogleMerchantGcpProject()).resolves.toEqual(
+      PUBLIC_SUCCESS,
+    );
+    expect(fetchUrls()).toEqual([
+      REGISTER_URL,
+      GET_ACCOUNT_URL,
+      GET_REGISTRATION_URL,
+    ]);
+  });
+
+  it("is indistinguishable from a fresh registration", async () => {
+    const fresh = await registerGoogleMerchantGcpProject();
+
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      jsonResponse(200, developerRegistrationBody()),
+    );
+    const verified = await registerGoogleMerchantGcpProject();
+
+    expect(verified).toEqual(fresh);
+    expect(Object.keys(verified).sort()).toEqual([
+      "gcpIds",
+      "name",
+      "registered",
+    ]);
+  });
+
+  it("sends both verification requests as authenticated GETs with no body", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      jsonResponse(200, developerRegistrationBody()),
+    );
+
+    await registerGoogleMerchantGcpProject();
+
+    for (const index of [1, 2]) {
+      const [, init] = fetchMock.mock.calls[index] as [string, RequestInit];
+      expect(init.method).toBe("GET");
+      expect(init.body).toBeUndefined();
+      expect(init.headers).toEqual({
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Service — conflict verification failures (fail closed)
+// ---------------------------------------------------------------------------
+
+describe("registerGoogleMerchantGcpProject — different Merchant account", () => {
+  it("returns a sanitised 409 that does not name the other account", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: `accounts/${OTHER_ACCOUNT_ID}` }),
+    );
+
+    const error = await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_ACCOUNT_MISMATCH",
+    );
+
+    expect(error.status).toBe(409);
+    // The developerRegistration lookup is never reached.
+    expect(fetchUrls()).toEqual([REGISTER_URL, GET_ACCOUNT_URL]);
+  });
+});
+
+describe("registerGoogleMerchantGcpProject — unverifiable conflict", () => {
+  it("fails closed on an arbitrary 409 whose registration cannot be verified", async () => {
+    // No ALREADY_EXISTS marker, and the project is registered nowhere.
+    queueResponses(
+      jsonResponse(409, { error: { code: 409, message: "Conflict." } }),
+      jsonResponse(404, { error: { code: 404, status: "NOT_FOUND" } }),
+    );
+
+    const error = await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
+    );
+
+    expect(error.status).toBe(502);
+  });
+
+  const malformedAccountBodies: Array<{ body: unknown; label: string }> = [
+    { body: {}, label: "a missing name" },
+    { body: { name: 5833526164 }, label: "a non-string name" },
+    { body: { name: "" }, label: "an empty name" },
+    { body: { name: ACCOUNT_ID }, label: "a bare account ID" },
+    {
+      body: { name: "merchantAccounts/5833526164" },
+      label: "an unexpected name format",
+    },
+    { body: { name: "accounts/5833526164/x" }, label: "a trailing segment" },
+    { body: { name: "accounts/not-a-number" }, label: "a non-numeric account" },
+    { body: [ACCOUNT_NAME], label: "a JSON array" },
+  ];
+
+  for (const { body, label } of malformedAccountBodies) {
+    it(`fails closed when getAccountForGcpRegistration returns ${label}`, async () => {
+      queueResponses(
+        jsonResponse(409, conflictBody()),
+        jsonResponse(200, body),
+      );
+
+      await expectGoogleMerchantError(
+        registerGoogleMerchantGcpProject(),
+        "GOOGLE_REQUEST_FAILED",
+      );
+      expect(fetchUrls()).toEqual([REGISTER_URL, GET_ACCOUNT_URL]);
+    });
+  }
+
+  it("fails closed when getAccountForGcpRegistration returns malformed JSON", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      textResponse(200, "{not json"),
+    );
+
+    await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
+    );
+  });
+
+  const upstreamFailures: Array<{
+    code: string;
+    status: number;
+    upstream: number;
+  }> = [
+    { code: "GOOGLE_UNAUTHENTICATED", status: 502, upstream: 401 },
+    { code: "GOOGLE_PERMISSION_DENIED", status: 502, upstream: 403 },
+    { code: "GOOGLE_REQUEST_FAILED", status: 502, upstream: 404 },
+    { code: "GOOGLE_RATE_LIMITED", status: 429, upstream: 429 },
+    { code: "GOOGLE_UNAVAILABLE", status: 502, upstream: 500 },
+    { code: "GOOGLE_UNAVAILABLE", status: 502, upstream: 503 },
+  ];
+
+  for (const { code, status, upstream } of upstreamFailures) {
+    it(`maps getAccountForGcpRegistration HTTP ${upstream} to ${code}`, async () => {
+      queueResponses(
+        jsonResponse(409, conflictBody()),
+        jsonResponse(upstream, {
+          error: {
+            code: upstream,
+            message: `Verification failed for ${ACCESS_TOKEN} on accounts/${OTHER_ACCOUNT_ID}`,
+          },
+        }),
+      );
+
+      const error = await expectGoogleMerchantError(
+        registerGoogleMerchantGcpProject(),
+        code,
+      );
+
+      expect(error.status).toBe(status);
+      expect(error.upstreamStatus).toBe(upstream);
+    });
+  }
+
+  it("fails closed when getAccountForGcpRegistration throws a network error", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      new Error(`socket hang up ${ACCESS_TOKEN}`),
+    );
+
+    const error = await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
+    );
+
+    expect(error.status).toBe(502);
+  });
+});
+
+describe("registerGoogleMerchantGcpProject — developerRegistration lookup", () => {
+  const malformedRegistrationBodies: Array<{ body: unknown; label: string }> = [
+    { body: {}, label: "an empty object" },
+    { body: { gcpIds: [GCP_PROJECT_ID] }, label: "no name" },
+    { body: { name: REGISTRATION_NAME }, label: "no gcpIds" },
+    {
+      body: developerRegistrationBody({ gcpIds: [GCP_PROJECT_ID, null] }),
+      label: "a non-string gcpId",
+    },
+    {
+      body: developerRegistrationBody({
+        name: `accounts/${OTHER_ACCOUNT_ID}/developerRegistration`,
+      }),
+      label: "another account's registration",
+    },
+  ];
+
+  for (const { body, label } of malformedRegistrationBodies) {
+    it(`fails closed when getDeveloperRegistration returns ${label}`, async () => {
+      queueResponses(
+        jsonResponse(409, conflictBody()),
+        jsonResponse(200, { name: ACCOUNT_NAME }),
+        jsonResponse(200, body),
+      );
+
+      await expectGoogleMerchantError(
+        registerGoogleMerchantGcpProject(),
+        "GOOGLE_REQUEST_FAILED",
+      );
+    });
+  }
+
+  it("fails closed when getDeveloperRegistration returns malformed JSON", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      textResponse(200, "<html>500</html>"),
+    );
+
+    await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
+    );
+  });
+
+  const upstreamFailures: Array<{ code: string; upstream: number }> = [
+    { code: "GOOGLE_UNAUTHENTICATED", upstream: 401 },
+    { code: "GOOGLE_PERMISSION_DENIED", upstream: 403 },
+    { code: "GOOGLE_REQUEST_FAILED", upstream: 404 },
+    { code: "GOOGLE_RATE_LIMITED", upstream: 429 },
+    { code: "GOOGLE_UNAVAILABLE", upstream: 500 },
+  ];
+
+  for (const { code, upstream } of upstreamFailures) {
+    it(`maps getDeveloperRegistration HTTP ${upstream} to ${code}`, async () => {
+      queueResponses(
+        jsonResponse(409, conflictBody()),
+        jsonResponse(200, { name: ACCOUNT_NAME }),
+        jsonResponse(upstream, {
+          error: { code: upstream, message: `Denied ${ACCESS_TOKEN}` },
+        }),
+      );
+
+      const error = await expectGoogleMerchantError(
+        registerGoogleMerchantGcpProject(),
+        code,
+      );
+
+      expect(error.upstreamStatus).toBe(upstream);
+    });
+  }
+
+  it("fails closed when getDeveloperRegistration throws a network error", async () => {
+    queueResponses(
+      jsonResponse(409, conflictBody()),
+      jsonResponse(200, { name: ACCOUNT_NAME }),
+      new Error("ECONNRESET"),
+    );
+
+    await expectGoogleMerchantError(
+      registerGoogleMerchantGcpProject(),
+      "GOOGLE_REQUEST_FAILED",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Service — non-conflict failures and pre-flight guards
+// ---------------------------------------------------------------------------
+
+describe("registerGoogleMerchantGcpProject — registerGcp failures", () => {
   const failureCases: Array<{
     code: string;
     status: number;
@@ -241,8 +594,8 @@ describe("registerGoogleMerchantGcpProject — Google failures", () => {
   ];
 
   for (const { code, status, upstream } of failureCases) {
-    it(`maps HTTP ${upstream} to ${code}`, async () => {
-      fetchMock.mockResolvedValue(
+    it(`maps HTTP ${upstream} to ${code} without verifying`, async () => {
+      queueResponses(
         jsonResponse(upstream, {
           error: {
             code: upstream,
@@ -259,28 +612,21 @@ describe("registerGoogleMerchantGcpProject — Google failures", () => {
 
       expect(error.status).toBe(status);
       expect(error.upstreamStatus).toBe(upstream);
-      // The upstream body (which quoted the token) must not be echoed.
-      expect(error.message).not.toContain(ACCESS_TOKEN);
-      expect(loggedText()).not.toContain(ACCESS_TOKEN);
+      expect(fetchUrls()).toEqual([REGISTER_URL]);
     });
   }
 
   it("maps a network failure to GOOGLE_REQUEST_FAILED", async () => {
-    fetchMock.mockRejectedValue(new Error(`socket hang up ${ACCESS_TOKEN}`));
+    queueResponses(new Error(`socket hang up ${ACCESS_TOKEN}`));
 
-    const error = await expectGoogleMerchantError(
+    await expectGoogleMerchantError(
       registerGoogleMerchantGcpProject(),
       "GOOGLE_REQUEST_FAILED",
     );
-
-    expect(error.message).not.toContain(ACCESS_TOKEN);
-    expect(loggedText()).not.toContain(ACCESS_TOKEN);
   });
 
   it("survives a non-JSON error body", async () => {
-    fetchMock.mockResolvedValue(
-      new Response("<html>502 Bad Gateway</html>", { status: 502 }),
-    );
+    queueResponses(textResponse(502, "<html>502 Bad Gateway</html>"));
 
     await expectGoogleMerchantError(
       registerGoogleMerchantGcpProject(),
@@ -335,16 +681,9 @@ type ErrorBody = { code: string; message: string };
 const ADMIN = { email: "admin@example.com", id: "admin-1", role: "admin" };
 const CUSTOMER = { email: "user@example.com", id: "user-1", role: "customer" };
 
-const SUCCESS: GoogleMerchantRegistrationResult = {
-  alreadyRegistered: false,
-  gcpIds: [GCP_PROJECT_ID],
-  name: REGISTRATION_NAME,
-  registered: true,
-};
-
 const makeHarness = (
   authUser: { email: string; id: string; role: string } | null,
-  registerGcpProject = vi.fn().mockResolvedValue(SUCCESS),
+  registerGcpProject = vi.fn().mockResolvedValue(PUBLIC_SUCCESS),
 ) => ({
   harness: createRouteHarness({
     authUser,
@@ -502,24 +841,30 @@ describe("POST /register — success", () => {
     enableProductionRegistration();
   });
 
-  it("returns only registered, name, gcpIds and alreadyRegistered", async () => {
+  it("returns exactly registered, name and gcpIds", async () => {
     const { harness, registerGcpProject } = makeHarness(ADMIN);
     const response = await post(harness);
+    const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      alreadyRegistered: false,
+    expect(JSON.parse(body)).toEqual({
       gcpIds: [GCP_PROJECT_ID],
       name: REGISTRATION_NAME,
       registered: true,
     });
+    expect(Object.keys(JSON.parse(body)).sort()).toEqual([
+      "gcpIds",
+      "name",
+      "registered",
+    ]);
     expect(registerGcpProject).toHaveBeenCalledTimes(1);
   });
 
   it("strips any extra field the service might return", async () => {
     const leaky = vi.fn().mockResolvedValue({
-      ...SUCCESS,
+      ...PUBLIC_SUCCESS,
       accessToken: ACCESS_TOKEN,
+      alreadyRegistered: true,
       credentialConfiguration: { type: "external_account" },
     });
 
@@ -529,32 +874,45 @@ describe("POST /register — success", () => {
 
     expect(response.status).toBe(200);
     expect(Object.keys(JSON.parse(body)).sort()).toEqual([
-      "alreadyRegistered",
       "gcpIds",
       "name",
       "registered",
     ]);
+    expect(body).not.toContain("alreadyRegistered");
     expect(body).not.toContain(ACCESS_TOKEN);
-  });
-
-  it("reports an already-registered project idempotently", async () => {
-    const { harness } = makeHarness(
-      ADMIN,
-      vi.fn().mockResolvedValue({ ...SUCCESS, alreadyRegistered: true }),
-    );
-
-    const response = await post(harness);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      alreadyRegistered: true,
-      registered: true,
-    });
   });
 });
 
 describe("POST /register — failure handling", () => {
   beforeEach(() => {
     enableProductionRegistration();
+  });
+
+  it("surfaces a verified account mismatch as a sanitised 409", async () => {
+    const { harness } = makeHarness(
+      ADMIN,
+      vi
+        .fn()
+        .mockRejectedValue(
+          new GoogleMerchantError(
+            "GOOGLE_ACCOUNT_MISMATCH",
+            "The GCP project is already registered to a different Merchant Center account.",
+            409,
+            409,
+          ),
+        ),
+    );
+
+    const response = await post(harness);
+    const body = await response.text();
+
+    expect(response.status).toBe(409);
+    expect(JSON.parse(body) as ErrorBody).toEqual({
+      code: "GOOGLE_ACCOUNT_MISMATCH",
+      message:
+        "The GCP project is already registered to a different Merchant Center account.",
+    });
+    expect(body).not.toContain(OTHER_ACCOUNT_ID);
   });
 
   it("surfaces the sanitised status and code of a GoogleMerchantError", async () => {
@@ -582,7 +940,7 @@ describe("POST /register — failure handling", () => {
 
   it("never leaks a token, credential configuration or stack trace", async () => {
     const leaky = new Error(
-      `boom: token=${ACCESS_TOKEN} config={"type":"external_account"}`,
+      `boom: token=${ACCESS_TOKEN} config={"type":"external_account"} account=accounts/${OTHER_ACCOUNT_ID}`,
     );
 
     const { harness } = makeHarness(ADMIN, vi.fn().mockRejectedValue(leaky));
@@ -592,6 +950,7 @@ describe("POST /register — failure handling", () => {
     expect(response.status).toBe(500);
     expect(body).not.toContain(ACCESS_TOKEN);
     expect(body).not.toContain("external_account");
+    expect(body).not.toContain(OTHER_ACCOUNT_ID);
     expect(body).not.toContain("at Object");
     expect(JSON.parse(body)).toEqual({
       code: "REGISTRATION_FAILED",

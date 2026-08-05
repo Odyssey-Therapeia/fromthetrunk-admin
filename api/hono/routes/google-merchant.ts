@@ -72,6 +72,10 @@ export const registerGoogleMerchantRoutes = (
         401: { description: "Unauthorized" },
         403: { description: "Forbidden" },
         404: { description: "Registration endpoint is not available" },
+        409: {
+          description:
+            "The GCP project is registered to a different Merchant Center account",
+        },
         429: { description: "Google rate-limited the request" },
         500: { description: "Registration failed" },
         502: { description: "Google Merchant API rejected the request" },
@@ -109,7 +113,6 @@ export const registerGoogleMerchantRoutes = (
 
         log.info("Merchant Center developer registration completed", {
           adminId: adminOrResponse.id,
-          alreadyRegistered: result.alreadyRegistered,
         });
 
         // Re-parsed through the strict response schema: only whitelisted fields
@@ -118,7 +121,6 @@ export const registerGoogleMerchantRoutes = (
           registered: true,
           name: result.name,
           gcpIds: result.gcpIds,
-          alreadyRegistered: result.alreadyRegistered,
         });
 
         return c.json(body, 200);

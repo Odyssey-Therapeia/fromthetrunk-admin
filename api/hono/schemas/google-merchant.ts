@@ -22,12 +22,15 @@ export type RegisterGcpRequest = z.infer<typeof registerGcpRequestSchema>;
  * The handler parses its response body through this schema before sending it,
  * so no field of the upstream Google payload (and no credential material) can
  * reach the client by accident.
+ *
+ * A freshly registered project and an already-registered-and-verified project
+ * produce an identical body: the caller is deliberately not told which of the
+ * two happened.
  */
 export const registerGcpResponseSchema = z.strictObject({
   registered: z.literal(true),
   name: z.string(),
   gcpIds: z.array(z.string()),
-  alreadyRegistered: z.boolean(),
 });
 
 export type RegisterGcpResponse = z.infer<typeof registerGcpResponseSchema>;
