@@ -150,14 +150,21 @@ function mkProduct(
   } as unknown as ProductWithRelations;
 }
 
+/**
+ * A realistic ProductInput response.
+ *
+ * NOTE: it carries NO `dataSource` — that field belongs to the processed
+ * Product resource (accounts.products.get), not to ProductInput. Requiring it
+ * used to turn a successful insert into a 502.
+ */
 const successBody = (overrides: Record<string, unknown> = {}) => ({
-  attributes: { title: "Tangerine Noir Floral Border Weave" },
   contentLanguage: "en",
-  dataSource: DATA_SOURCE_NAME,
   feedLabel: "IN",
   name: PRODUCT_INPUT_NAME,
   offerId: TEST_INSERT_PRODUCT_ID,
   product: PROCESSED_PRODUCT_NAME,
+  productAttributes: { title: "Tangerine Noir Floral Border Weave" },
+  versionNumber: "1",
   ...overrides,
 });
 
@@ -638,13 +645,8 @@ describe("insertGoogleMerchantTestProduct — response validation", () => {
     { body: successBody({ offerId: "another-offer" }), label: "another offerId" },
     { body: successBody({ contentLanguage: "hi" }), label: "another language" },
     { body: successBody({ feedLabel: "US" }), label: "another feed label" },
-    {
-      body: successBody({
-        dataSource: `accounts/${ACCOUNT_ID}/dataSources/99999`,
-      }),
-      label: "another data source",
-    },
     { body: successBody({ name: 42 }), label: "a non-string name" },
+    { body: successBody({ product: 42 }), label: "a non-string product" },
   ];
 
   for (const { body, label } of malformed) {
@@ -665,6 +667,96 @@ describe("insertGoogleMerchantTestProduct — response validation", () => {
       insertGoogleMerchantTestProduct(),
       "GOOGLE_REQUEST_FAILED",
     );
+  });
+
+  // ── dataSource is a Product field, not a ProductInput field ───────────────
+
+  it("accepts a valid ProductInput response that has no dataSource", async () => {
+    const body = successBody();
+    expect(body).not.toHaveProperty("dataSource");
+
+    fetchMock.mockResolvedValue(jsonResponse(200, body));
+
+    await expect(insertGoogleMerchantTestProduct()).resolves.toEqual({
+      inserted: true,
+      offerId: TEST_INSERT_PRODUCT_ID,
+      processedProductName: PROCESSED_PRODUCT_NAME,
+      productId: TEST_INSERT_PRODUCT_ID,
+      productInputName: PRODUCT_INPUT_NAME,
+    });
+  });
+
+  it("accepts the minimal set of fields Google actually returns", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        contentLanguage: "en",
+        feedLabel: "IN",
+        name: PRODUCT_INPUT_NAME,
+        offerId: TEST_INSERT_PRODUCT_ID,
+        product: PROCESSED_PRODUCT_NAME,
+      }),
+    );
+
+    await expect(insertGoogleMerchantTestProduct()).resolves.toMatchObject({
+      inserted: true,
+    });
+  });
+
+  it("ignores a dataSource field if Google returns one", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        ...successBody(),
+        dataSource: `accounts/${ACCOUNT_ID}/dataSources/99999`,
+      }),
+    );
+
+    const result = await insertGoogleMerchantTestProduct();
+
+    expect(result.inserted).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("dataSources");
+    expect(JSON.stringify(result)).not.toContain("99999");
+  });
+
+  it("still pins the data source on the request, not the response", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, successBody()));
+
+    await insertGoogleMerchantTestProduct();
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe(EXPECTED_URL);
+    expect(url).toContain(
+      `dataSource=accounts%2F${ACCOUNT_ID}%2FdataSources%2F${DATA_SOURCE_ID}`,
+    );
+  });
+
+  it("ignores every documented ProductInput output field", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        ...successBody(),
+        base64EncodedName: "YWNjb3VudHM=",
+        base64EncodedProduct: "cHJvZHVjdHM=",
+        customAttributes: [{ name: "internal", value: ACCESS_TOKEN }],
+        legacyLocal: false,
+        productAttributes: { title: "Tangerine Noir Floral Border Weave" },
+        versionNumber: "7",
+      }),
+    );
+
+    const result = await insertGoogleMerchantTestProduct();
+    const serialised = JSON.stringify(result);
+
+    expect(result.inserted).toBe(true);
+    for (const field of [
+      "base64EncodedName",
+      "base64EncodedProduct",
+      "customAttributes",
+      "legacyLocal",
+      "productAttributes",
+      "versionNumber",
+    ]) {
+      expect(serialised).not.toContain(field);
+    }
+    expect(serialised).not.toContain(ACCESS_TOKEN);
   });
 
   it("ignores extra fields in an otherwise valid response", async () => {
