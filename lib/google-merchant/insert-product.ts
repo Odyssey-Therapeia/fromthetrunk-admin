@@ -86,16 +86,25 @@ async function resolveEffectiveStockStatus(
 /**
  * Strictly validate the `ProductInput` Google returns.
  *
- * Only the six fields that establish the insertion are read; everything else in
- * the payload is ignored and never surfaced. Each identity field must match
- * what we sent — a response describing another offer, another account or
- * another data source is treated as an unexpected response, not a success.
+ * The five fields validated here are the ones that establish the insertion:
+ * both resource names must belong to OUR account, and the offer identity must
+ * match what we submitted — a response describing another offer or another
+ * account is an unexpected response, not a success.
+ *
+ * `dataSource` is deliberately NOT checked. It is a field of the processed
+ * `Product` resource (accounts.products.get), not of `ProductInput`: requiring
+ * it turned successful inserts into a 502. The data source is still pinned on
+ * the way in, as the `?dataSource=` query parameter of the insert request.
+ *
+ * Everything else Google returns — base64EncodedName, base64EncodedProduct,
+ * legacyLocal, versionNumber, productAttributes, customAttributes, and any
+ * field added later — is ignored. Nothing beyond the two resource names is read
+ * from the payload, so none of it can reach the caller.
  */
 function validateProductInputResponse(
   payload: MerchantApiPayload,
   expected: {
     accountId: string;
-    dataSourceName: string;
     offerId: string;
     upstreamStatus: number;
   },
@@ -105,8 +114,7 @@ function validateProductInputResponse(
   const productInputPrefix = `accounts/${expected.accountId}/productInputs/`;
   const productPrefix = `accounts/${expected.accountId}/products/`;
 
-  const { contentLanguage, dataSource, feedLabel, name, offerId, product } =
-    payload;
+  const { contentLanguage, feedLabel, name, offerId, product } = payload;
 
   if (typeof name !== "string" || !name.startsWith(productInputPrefix)) {
     throw fail();
@@ -123,7 +131,6 @@ function validateProductInputResponse(
   if (offerId !== expected.offerId) throw fail();
   if (contentLanguage !== "en") throw fail();
   if (feedLabel !== "IN") throw fail();
-  if (dataSource !== expected.dataSourceName) throw fail();
 
   return { processedProductName: product, productInputName: name };
 }
@@ -220,7 +227,6 @@ export async function insertGoogleMerchantTestProduct(
   const { processedProductName, productInputName } =
     validateProductInputResponse(await readJsonSafely(response), {
       accountId: config.accountId,
-      dataSourceName,
       offerId: productInput.offerId,
       upstreamStatus: response.status,
     });
