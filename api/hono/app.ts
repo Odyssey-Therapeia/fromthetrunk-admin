@@ -30,6 +30,7 @@ import { registerWishlistRoutes } from "@/api/hono/routes/wishlist";
 import { registerWebhookRoutes } from "@/api/hono/routes/webhooks";
 import { registerFeedsRoutes } from "@/api/hono/routes/feeds";
 import { registerGoogleMerchantRoutes } from "@/api/hono/routes/google-merchant";
+import { registerGoogleMerchantProductRoutes } from "@/api/hono/routes/google-merchant-products";
 import { registerHealthRoutes } from "@/api/hono/routes/health";
 import { registerTagRoutes } from "@/api/hono/routes/tags";
 import { registerProductStoryRoutes } from "@/api/hono/routes/product-story";
@@ -171,6 +172,10 @@ app.route("/feeds", feedsApp);
 const googleMerchantApp = new OpenAPIHono<HonoBindings>();
 registerGoogleMerchantRoutes(googleMerchantApp);
 app.route("/integrations/google-merchant", googleMerchantApp);
+
+const googleMerchantProductsApp = new OpenAPIHono<HonoBindings>();
+registerGoogleMerchantProductRoutes(googleMerchantProductsApp);
+app.route("/integrations/google-merchant/products", googleMerchantProductsApp);
 
 const healthApp = new OpenAPIHono<HonoBindings>();
 registerHealthRoutes(healthApp);
