@@ -50,6 +50,15 @@ export type GoogleMerchantErrorCode =
   | "GOOGLE_RATE_LIMITED"
   | "GOOGLE_UNAVAILABLE"
   | "GOOGLE_REQUEST_FAILED"
+  | "PRODUCT_NOT_FOUND"
+  | "PRODUCT_NOT_PUBLISHED"
+  | "PRODUCT_SLUG_MISMATCH"
+  | "PRODUCT_NOT_PURCHASABLE"
+  | "PRODUCT_PRICE_INVALID"
+  | "PRODUCT_IMAGE_MISSING"
+  | "PRODUCT_IMAGE_INVALID"
+  | "PRODUCT_LINK_INVALID"
+  | "MERCHANT_PRODUCT_DATA_INCOMPLETE"
   | "NOT_SERVER_RUNTIME";
 
 /**
@@ -79,6 +88,27 @@ export class GoogleMerchantError extends Error {
     this.code = code;
     this.status = status;
     this.upstreamStatus = upstreamStatus;
+  }
+}
+
+/**
+ * The product is missing attributes Google requires for an apparel offer.
+ *
+ * `missingFields` is a list of OUR field names (color, gender, …) — never a
+ * database column, a row value, a credential or a stack frame. The route
+ * surfaces it verbatim in a 422 so an admin knows what to fill in.
+ */
+export class GoogleMerchantProductDataError extends GoogleMerchantError {
+  readonly missingFields: string[];
+
+  constructor(missingFields: string[]) {
+    super(
+      "MERCHANT_PRODUCT_DATA_INCOMPLETE",
+      "The product is missing required Google Merchant attributes.",
+      422,
+    );
+    this.name = "GoogleMerchantProductDataError";
+    this.missingFields = [...missingFields];
   }
 }
 
@@ -126,6 +156,26 @@ export function isProductionRuntime(): boolean {
 export function isGoogleMerchantRegistrationEnabled(): boolean {
   return process.env.GOOGLE_MERCHANT_REGISTRATION_ENABLED === "true";
 }
+
+/**
+ * Kill switch for the single controlled product-insert endpoint.
+ *
+ * Same contract as the registration switch: the route 404s unless this is the
+ * exact string "true", and it must be turned off again once the one controlled
+ * insertion has been made. There is no catalogue sync behind this flag.
+ */
+export function isGoogleMerchantTestInsertEnabled(): boolean {
+  return process.env.GOOGLE_MERCHANT_TEST_INSERT_ENABLED === "true";
+}
+
+/**
+ * The canonical storefront origin.
+ *
+ * Landing-page and image links submitted to Google must be served from this
+ * origin — a preview deployment URL in a feed would be both wrong and
+ * unverifiable for Google's crawler. Mirrors the default in `lib/config/site`.
+ */
+export const CANONICAL_SITE_ORIGIN = "https://www.fromthetrunk.shop";
 
 export type GoogleMerchantConfig = {
   /** Merchant Center account ID, digits only. */
@@ -201,4 +251,49 @@ export function getGoogleMerchantConfig(): GoogleMerchantConfig {
     dataSourceId: readEnv("GOOGLE_MERCHANT_DATA_SOURCE_ID"),
     dataSourceName: readEnv("GOOGLE_MERCHANT_DATA_SOURCE_NAME"),
   };
+}
+
+/**
+ * The data source every product input must be written to. Fails closed.
+ *
+ * Required (unlike for registration) because an insert without a data source —
+ * or against a data source belonging to another account — is not something we
+ * want to discover from Google's error message.
+ */
+export function getGoogleMerchantDataSourceName(
+  config: GoogleMerchantConfig,
+): string {
+  if (!config.dataSourceName) {
+    throw new GoogleMerchantError(
+      "CONFIG_MISSING",
+      "GOOGLE_MERCHANT_DATA_SOURCE_NAME is not configured.",
+      500,
+    );
+  }
+
+  const expectedPrefix = `accounts/${config.accountId}/dataSources/`;
+
+  if (
+    !config.dataSourceName.startsWith(expectedPrefix) ||
+    !/^\d+$/.test(config.dataSourceName.slice(expectedPrefix.length))
+  ) {
+    throw new GoogleMerchantError(
+      "CONFIG_INVALID",
+      "GOOGLE_MERCHANT_DATA_SOURCE_NAME must be accounts/{accountId}/dataSources/{dataSourceId}.",
+      500,
+    );
+  }
+
+  if (
+    config.dataSourceId &&
+    config.dataSourceName !== `${expectedPrefix}${config.dataSourceId}`
+  ) {
+    throw new GoogleMerchantError(
+      "CONFIG_INVALID",
+      "GOOGLE_MERCHANT_DATA_SOURCE_NAME and GOOGLE_MERCHANT_DATA_SOURCE_ID disagree.",
+      500,
+    );
+  }
+
+  return config.dataSourceName;
 }
