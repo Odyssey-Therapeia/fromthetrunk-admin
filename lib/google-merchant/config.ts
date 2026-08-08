@@ -59,6 +59,8 @@ export type GoogleMerchantErrorCode =
   | "PRODUCT_IMAGE_INVALID"
   | "PRODUCT_LINK_INVALID"
   | "MERCHANT_PRODUCT_DATA_INCOMPLETE"
+  | "CATALOGUE_BACKFILL_REFUSED"
+  | "CATALOGUE_BACKFILL_WRITE_FAILED"
   | "NOT_SERVER_RUNTIME";
 
 /**
@@ -166,6 +168,17 @@ export function isGoogleMerchantRegistrationEnabled(): boolean {
  */
 export function isGoogleMerchantTestInsertEnabled(): boolean {
   return process.env.GOOGLE_MERCHANT_TEST_INSERT_ENABLED === "true";
+}
+
+/**
+ * Kill switch for the catalogue attribute backfill APPLY endpoint.
+ *
+ * The preview needs no switch — it cannot write. Apply mutates
+ * `products.attributes`, so it stays 404 unless this is the exact string
+ * "true", and must be turned off again once the backfill has run.
+ */
+export function isGoogleMerchantCatalogueBackfillEnabled(): boolean {
+  return process.env.GOOGLE_MERCHANT_CATALOGUE_BACKFILL_ENABLED === "true";
 }
 
 /**
