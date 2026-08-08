@@ -61,6 +61,7 @@ export type GoogleMerchantErrorCode =
   | "MERCHANT_PRODUCT_DATA_INCOMPLETE"
   | "CATALOGUE_BACKFILL_REFUSED"
   | "CATALOGUE_BACKFILL_WRITE_FAILED"
+  | "SYNC_LIMIT_INVALID"
   | "NOT_SERVER_RUNTIME";
 
 /**
@@ -179,6 +180,17 @@ export function isGoogleMerchantTestInsertEnabled(): boolean {
  */
 export function isGoogleMerchantCatalogueBackfillEnabled(): boolean {
   return process.env.GOOGLE_MERCHANT_CATALOGUE_BACKFILL_ENABLED === "true";
+}
+
+/**
+ * Kill switch for the catalogue synchronisation APPLY endpoint.
+ *
+ * The preview and status endpoints need no switch — they only read. Apply
+ * writes product inputs into Merchant Center, so it stays 404 unless this is
+ * the exact string "true", and must be turned off again between batches.
+ */
+export function isGoogleMerchantCatalogueSyncEnabled(): boolean {
+  return process.env.GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED === "true";
 }
 
 /**
