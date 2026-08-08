@@ -177,7 +177,7 @@ const AGE_GROUP_VALUES = new Set([
  * title, and `detailsLength` (a drape measurement, with a fabricated default
  * when unset) is NOT treated as an apparel size.
  */
-const ATTRIBUTE_KEYS: Record<ApparelField, string[]> = {
+export const ATTRIBUTE_KEYS: Record<ApparelField, string[]> = {
   // Compared after normalisation, so "age_group", "age-group" and "Age Group"
   // all match "agegroup".
   ageGroup: ["agegroup"],
@@ -190,18 +190,34 @@ export type ApparelField = "ageGroup" | "color" | "gender" | "size";
 
 export type ApparelAttributes = Record<ApparelField, string>;
 
-const normaliseAttributeKey = (key: string): string =>
+/** "age_group", "age-group" and "Age Group" all normalise to "agegroup". */
+export const normaliseAttributeKey = (key: string): string =>
   key.toLowerCase().replace(/[\s_-]+/g, "");
+
+/**
+ * Every attribute entry whose key matches one of `aliases`, in insertion order.
+ *
+ * The single key-matching primitive for the whole integration: the mapper reads
+ * values through it, and the catalogue backfill uses it to decide whether a
+ * field is already populated. Neither can invent its own key spellings.
+ */
+export function findAttributeEntries(
+  attributes: Record<string, unknown>,
+  aliases: string[],
+): Array<{ key: string; value: unknown }> {
+  const wanted = new Set(aliases.map(normaliseAttributeKey));
+
+  return Object.entries(attributes)
+    .filter(([key]) => wanted.has(normaliseAttributeKey(key)))
+    .map(([key, value]) => ({ key, value }));
+}
 
 /** Read the first non-empty string stored under any of `keys`. */
 function readAttribute(
   attributes: Record<string, unknown>,
   keys: string[],
 ): null | string {
-  const wanted = new Set(keys.map(normaliseAttributeKey));
-
-  for (const [key, value] of Object.entries(attributes)) {
-    if (!wanted.has(normaliseAttributeKey(key))) continue;
+  for (const { value } of findAttributeEntries(attributes, keys)) {
     if (typeof value !== "string") continue;
 
     const trimmed = value.trim();
