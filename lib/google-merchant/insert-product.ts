@@ -26,7 +26,6 @@ import { getProduct } from "@/db/queries/products";
 import { getBatchActiveReservationsCounts } from "@/db/queries/reservations";
 import type { ProductWithRelations } from "@/db/queries/products";
 import { isInventoryV2 } from "@/lib/config/flags";
-import { getGoogleMerchantAccessToken } from "@/lib/google-merchant/auth";
 import {
   GoogleMerchantError,
   assertServerRuntime,
@@ -34,18 +33,11 @@ import {
   getGoogleMerchantDataSourceName,
 } from "@/lib/google-merchant/config";
 import {
-  MERCHANT_API_BASE_URL,
-  mapGoogleFailure,
-  merchantApiFetch,
-  readJsonSafely,
-  unexpectedResponse,
-} from "@/lib/google-merchant/merchant-api";
-import type { MerchantApiPayload } from "@/lib/google-merchant/merchant-api";
-import {
   TEST_INSERT_PRODUCT_ID,
   TEST_INSERT_PRODUCT_SLUG,
   buildMerchantProductInput,
 } from "@/lib/google-merchant/product-input";
+import { upsertGoogleMerchantProductInput } from "@/lib/google-merchant/upsert-product-input";
 import { createLogger } from "@/lib/log";
 
 const log = createLogger("google-merchant:insert-product");
@@ -84,58 +76,6 @@ async function resolveEffectiveStockStatus(
 }
 
 /**
- * Strictly validate the `ProductInput` Google returns.
- *
- * The five fields validated here are the ones that establish the insertion:
- * both resource names must belong to OUR account, and the offer identity must
- * match what we submitted — a response describing another offer or another
- * account is an unexpected response, not a success.
- *
- * `dataSource` is deliberately NOT checked. It is a field of the processed
- * `Product` resource (accounts.products.get), not of `ProductInput`: requiring
- * it turned successful inserts into a 502. The data source is still pinned on
- * the way in, as the `?dataSource=` query parameter of the insert request.
- *
- * Everything else Google returns — base64EncodedName, base64EncodedProduct,
- * legacyLocal, versionNumber, productAttributes, customAttributes, and any
- * field added later — is ignored. Nothing beyond the two resource names is read
- * from the payload, so none of it can reach the caller.
- */
-function validateProductInputResponse(
-  payload: MerchantApiPayload,
-  expected: {
-    accountId: string;
-    offerId: string;
-    upstreamStatus: number;
-  },
-): { processedProductName: string; productInputName: string } {
-  const fail = () => unexpectedResponse(expected.upstreamStatus);
-
-  const productInputPrefix = `accounts/${expected.accountId}/productInputs/`;
-  const productPrefix = `accounts/${expected.accountId}/products/`;
-
-  const { contentLanguage, feedLabel, name, offerId, product } = payload;
-
-  if (typeof name !== "string" || !name.startsWith(productInputPrefix)) {
-    throw fail();
-  }
-
-  if (name.length <= productInputPrefix.length) throw fail();
-
-  if (typeof product !== "string" || !product.startsWith(productPrefix)) {
-    throw fail();
-  }
-
-  if (product.length <= productPrefix.length) throw fail();
-
-  if (offerId !== expected.offerId) throw fail();
-  if (contentLanguage !== "en") throw fail();
-  if (feedLabel !== "IN") throw fail();
-
-  return { processedProductName: product, productInputName: name };
-}
-
-/**
  * Insert the one controlled product into Merchant Center.
  *
  * @param productId must be `TEST_INSERT_PRODUCT_ID`; any other id is refused
@@ -156,8 +96,10 @@ export async function insertGoogleMerchantTestProduct(
     );
   }
 
-  const config = getGoogleMerchantConfig();
-  const dataSourceName = getGoogleMerchantDataSourceName(config);
+  // Fail before any database work when the deployment is not configured. The
+  // shared write primitive validates this again at submit time; doing it here
+  // too keeps a misconfigured environment from touching the catalogue at all.
+  getGoogleMerchantDataSourceName(getGoogleMerchantConfig());
 
   const product = await getProduct(productId);
 
@@ -202,34 +144,8 @@ export async function insertGoogleMerchantTestProduct(
     product,
   });
 
-  const accessToken = await getGoogleMerchantAccessToken();
-
-  // URLSearchParams so the `accounts/…/dataSources/…` slashes are percent-
-  // encoded rather than pasted raw into the query string.
-  const query = new URLSearchParams({ dataSource: dataSourceName });
-  const url = `${MERCHANT_API_BASE_URL}/products/v1/accounts/${config.accountId}/productInputs:insert?${query.toString()}`;
-
-  const response = await merchantApiFetch(url, accessToken, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(productInput),
-  });
-
-  if (!response.ok) {
-    const error = mapGoogleFailure(response.status);
-    log.error("Merchant API productInputs:insert failed", {
-      code: error.code,
-      status: response.status,
-    });
-    throw error;
-  }
-
   const { processedProductName, productInputName } =
-    validateProductInputResponse(await readJsonSafely(response), {
-      accountId: config.accountId,
-      offerId: productInput.offerId,
-      upstreamStatus: response.status,
-    });
+    await upsertGoogleMerchantProductInput(productInput);
 
   log.info("Merchant API accepted the product input", {
     productId: product.id,
