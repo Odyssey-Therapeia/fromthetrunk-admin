@@ -22,13 +22,7 @@ import { getBatchActiveReservationsCounts } from "@/db/queries/reservations";
 import { deriveStockStatus } from "@/db/inventory";
 import { isInventoryV2 } from "@/lib/config/flags";
 import { mapProductToFeedItem } from "@/lib/channels/feed-mapping";
-
-// ---------------------------------------------------------------------------
-// Test-product exclusion identifier (P1-15)
-// The live "test chiffon do not buy if not authorized" product must never
-// appear in the feed. We match on the lower-cased name prefix.
-// ---------------------------------------------------------------------------
-const TEST_PRODUCT_NAME_PREFIX = "test chiffon";
+import { isExcludedTestProduct } from "@/lib/channels/feed-exclusions";
 
 /**
  * Returns true if a product should be excluded from the feed.
@@ -42,7 +36,8 @@ const TEST_PRODUCT_NAME_PREFIX = "test chiffon";
  */
 export function shouldExcludeFromFeed(product: ProductWithRelations): boolean {
   if (product.status !== "published") return true;
-  if (product.name.toLowerCase().startsWith(TEST_PRODUCT_NAME_PREFIX)) return true;
+  // Shared with the Google Merchant catalogue audit — see lib/channels/feed-exclusions.
+  if (isExcludedTestProduct(product)) return true;
   if (product.images.length === 0) return true;
   return false;
 }

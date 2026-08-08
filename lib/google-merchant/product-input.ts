@@ -255,6 +255,33 @@ export function resolveApparelAttributes(product: ProductWithRelations): {
   return { missing, values };
 }
 
+/**
+ * The product's EXPLICITLY recorded fabric, or null when there is none.
+ *
+ * `buildMerchantProductInput` submits `getProductDisplayDetails().fabric`, which
+ * falls back to a value inferred from the name/story and ultimately to the
+ * generic "Heirloom saree" — good enough for storefront copy, but a fabricated
+ * `material` for Google. The catalogue-readiness audit therefore uses THIS
+ * resolver to insist the fabric is real data before calling a product ready.
+ *
+ * Kept here, beside `resolveApparelAttributes`, so all Merchant attribute
+ * resolution lives in one module and the audit cannot invent its own key
+ * spellings. The mapper's own behaviour is deliberately unchanged.
+ */
+export function resolveExplicitMaterial(
+  product: ProductWithRelations,
+): null | string {
+  const recorded = product.detailsFabric?.trim();
+  if (recorded && recorded.length > 0) return recorded;
+
+  const attributes =
+    typeof product.attributes === "object" && product.attributes !== null
+      ? product.attributes
+      : {};
+
+  return readAttribute(attributes, ["fabric", "material"]);
+}
+
 // ---------------------------------------------------------------------------
 // URLs
 // ---------------------------------------------------------------------------
