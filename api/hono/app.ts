@@ -33,6 +33,7 @@ import { registerGoogleMerchantRoutes } from "@/api/hono/routes/google-merchant"
 import { registerGoogleMerchantProductRoutes } from "@/api/hono/routes/google-merchant-products";
 import { registerGoogleMerchantCatalogueRoutes } from "@/api/hono/routes/google-merchant-catalogue";
 import { registerGoogleMerchantBackfillRoutes } from "@/api/hono/routes/google-merchant-backfill";
+import { registerGoogleMerchantSyncRoutes } from "@/api/hono/routes/google-merchant-sync";
 import { registerHealthRoutes } from "@/api/hono/routes/health";
 import { registerTagRoutes } from "@/api/hono/routes/tags";
 import { registerProductStoryRoutes } from "@/api/hono/routes/product-story";
@@ -175,6 +176,7 @@ const googleMerchantApp = new OpenAPIHono<HonoBindings>();
 registerGoogleMerchantRoutes(googleMerchantApp);
 registerGoogleMerchantCatalogueRoutes(googleMerchantApp);
 registerGoogleMerchantBackfillRoutes(googleMerchantApp);
+registerGoogleMerchantSyncRoutes(googleMerchantApp);
 app.route("/integrations/google-merchant", googleMerchantApp);
 
 const googleMerchantProductsApp = new OpenAPIHono<HonoBindings>();
