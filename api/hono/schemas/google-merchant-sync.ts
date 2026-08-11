@@ -22,6 +22,26 @@ export const applySyncRequestSchema = z.strictObject({
   limit: z.number().int().min(1).max(MAX_SYNC_BATCH_SIZE),
 });
 
+export const SYNC_RESYNC_CONFIRMATION =
+  "RESYNC_FTT_GOOGLE_MERCHANT_PRODUCT" as const;
+
+export const resyncRequestSchema = z.strictObject({
+  confirm: z.literal(SYNC_RESYNC_CONFIRMATION),
+  productId: z.string().uuid(),
+});
+
+export const resyncResponseSchema = z.strictObject({
+  resynced: z.literal(true),
+  productId: z.string(),
+  offerId: z.string(),
+  productInputName: z.string(),
+  processedProductName: z.string(),
+  merchantImages: z.strictObject({
+    primary: z.string(),
+    additionalCount: z.number().int(),
+  }),
+});
+
 export const syncActionSchema = z.strictObject({
   productId: z.string(),
   offerId: z.string(),

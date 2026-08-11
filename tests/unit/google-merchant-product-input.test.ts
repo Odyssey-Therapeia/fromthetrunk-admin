@@ -42,15 +42,15 @@ const mkMedia = (url: string, id = "media-1") => ({
   blurDataUrl: null,
   createdAt: NOW,
   filename: "img.jpg",
-  filesize: null,
-  height: null,
+  filesize: 2_000_000,
+  height: 1600,
   id,
   key: "media/img.jpg",
   metadata: null,
   mimeType: "image/jpeg",
   updatedAt: NOW,
   url,
-  width: null,
+  width: 1200,
 });
 
 /** Complete apparel attributes — the shape a Merchant-ready product needs. */
@@ -287,14 +287,14 @@ describe("buildMerchantProductInput — mapped content", () => {
   it("rejects a non-https primary image", () => {
     expectMerchantError(
       () => build({ images: [{ media: mkMedia("http://x.test/a.jpg"), sortOrder: 0 }] }),
-      "PRODUCT_IMAGE_INVALID",
+      "MERCHANT_NO_SAFE_IMAGE",
     );
   });
 
   it("rejects an unresolvable primary image", () => {
     expectMerchantError(
       () => build({ images: [{ media: { url: 42 }, sortOrder: 0 }] }),
-      "PRODUCT_IMAGE_MISSING",
+      "MERCHANT_NO_SAFE_IMAGE",
     );
   });
 

@@ -35,8 +35,13 @@ import { mapProductToFeedItem } from "@/lib/channels/feed-mapping";
 import {
   CANONICAL_SITE_ORIGIN,
   GoogleMerchantError,
+  GoogleMerchantImageError,
   GoogleMerchantProductDataError,
 } from "@/lib/google-merchant/config";
+import {
+  collectIgnoredImageReasons,
+  selectMerchantImages,
+} from "@/lib/google-merchant/image-safety";
 import { getProductDisplayDetails } from "@/lib/products/display-details";
 
 /** The single product this endpoint is allowed to insert. */
@@ -44,9 +49,6 @@ export const TEST_INSERT_PRODUCT_ID = "6747c35c-682b-4387-a710-b165249470a2";
 
 /** Its expected slug — a mismatch means the UUID now points at another row. */
 export const TEST_INSERT_PRODUCT_SLUG = "tangerine-noir-floral-border-weave";
-
-/** Google accepts at most 10 additional image links. */
-const MAX_ADDITIONAL_IMAGE_LINKS = 10;
 
 /**
  * Paise → micros: 1 paise = 10 000 micros (1 rupee = 1 000 000 micros).
@@ -356,31 +358,6 @@ function buildCanonicalLandingPageUrl(slug: string): URL {
   return link;
 }
 
-/**
- * Absolutise and validate a media URL.
- *
- * `resolveMediaURL` returns either an absolute URL (Vercel Blob) or a
- * site-relative path (`/media/...`), so relative paths are resolved against the
- * canonical origin. Only https survives — Google rejects http, and data:/blob:
- * URLs are not fetchable by the crawler.
- */
-function toPublicImageUrl(raw: string): null | string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-
-  let url: URL;
-  try {
-    url = new URL(trimmed, `${CANONICAL_SITE_ORIGIN}/`);
-  } catch {
-    return null;
-  }
-
-  if (url.protocol !== "https:") return null;
-  if (url.hostname.length === 0) return null;
-
-  return url.toString();
-}
-
 // ---------------------------------------------------------------------------
 // Builder
 // ---------------------------------------------------------------------------
@@ -429,7 +406,17 @@ export function buildMerchantProductInput({
   // Pinned to the claimed storefront origin, NOT to NEXT_PUBLIC_SERVER_URL.
   const landingPageUrl = buildCanonicalLandingPageUrl(product.slug).toString();
 
-  if (mapped.imageUrl === null) {
+  // MERCHANT-SAFE IMAGE SELECTION (Phase 2A.2).
+  //
+  // Deliberately NOT `mapped.imageUrl` / `mapped.additionalImageUrls`: the
+  // shared feed mapper submits every image, which is correct for the storefront
+  // and the RSS/Meta feeds but not for Merchant, whose file-size, pixel and
+  // dimension limits reject oversized assets. `selectMerchantImages` keeps the
+  // original ordering and picks the first SAFE image as the primary, so a 22 MB
+  // sort-0 photo is skipped rather than disqualifying the product.
+  const images = selectMerchantImages(product);
+
+  if (images.diagnostics.totalImages === 0) {
     throw new GoogleMerchantError(
       "PRODUCT_IMAGE_MISSING",
       "The product has no resolvable public image.",
@@ -437,22 +424,11 @@ export function buildMerchantProductInput({
     );
   }
 
-  const imageLink = toPublicImageUrl(mapped.imageUrl);
-  if (!imageLink) {
-    throw new GoogleMerchantError(
-      "PRODUCT_IMAGE_INVALID",
-      "The product's primary image is not a public https URL.",
-      422,
+  if (images.imageLink === null) {
+    throw new GoogleMerchantImageError(
+      collectIgnoredImageReasons(images.diagnostics),
     );
   }
-
-  // Additional images keep the mapper's sortOrder ordering. Unresolvable extras
-  // are dropped rather than failing the insert — the primary image is the one
-  // Google requires.
-  const additionalImageLinks = mapped.additionalImageUrls
-    .map((url) => toPublicImageUrl(url))
-    .filter((url): url is string => url !== null)
-    .slice(0, MAX_ADDITIONAL_IMAGE_LINKS);
 
   const apparel = resolveApparelAttributes(product);
   if (apparel.missing.length > 0) {
@@ -474,8 +450,8 @@ export function buildMerchantProductInput({
       description: mapped.description,
       link: landingPageUrl,
       canonicalLink: landingPageUrl,
-      imageLink,
-      additionalImageLinks,
+      imageLink: images.imageLink,
+      additionalImageLinks: images.additionalImageLinks,
       availability: "IN_STOCK",
       condition: "USED",
       // Always false: no GTIN and no MPN exist for a one-of-one pre-loved item,

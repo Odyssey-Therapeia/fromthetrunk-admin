@@ -31,8 +31,14 @@ import type { ProductWithRelations } from "@/db/queries/products";
 import { isExcludedTestProduct } from "@/lib/channels/feed-exclusions";
 import {
   GoogleMerchantError,
+  GoogleMerchantImageError,
   GoogleMerchantProductDataError,
 } from "@/lib/google-merchant/config";
+import { selectMerchantImages } from "@/lib/google-merchant/image-safety";
+import type {
+  MerchantImageDiagnostics,
+  MerchantImageSafetyReason,
+} from "@/lib/google-merchant/image-safety";
 import {
   buildMerchantProductInput,
   resolveExplicitMaterial,
@@ -57,6 +63,7 @@ export const MERCHANT_READINESS_STATES = [
   "READY",
   "MISSING_REQUIRED_ATTRIBUTES",
   "NO_VALID_IMAGE",
+  "NO_MERCHANT_SAFE_IMAGE",
   "INVALID_PRICE",
   "INVALID_LANDING_PAGE",
   "UNSUPPORTED_PRODUCT_TYPE",
@@ -80,6 +87,13 @@ export const MERCHANT_AUDIT_REASON_CODES = [
   "missing_material",
   "no_public_image",
   "image_not_public_https",
+  "merchant_image_url_not_public_https",
+  "merchant_image_mime_unsupported",
+  "merchant_image_filesize_missing",
+  "merchant_image_too_large",
+  "merchant_image_dimensions_missing",
+  "merchant_image_dimensions_too_small",
+  "merchant_image_too_many_pixels",
   "price_not_positive_integer",
   "landing_page_not_canonical",
   "mapper_rejected",
@@ -87,6 +101,32 @@ export const MERCHANT_AUDIT_REASON_CODES = [
 
 export type MerchantAuditReasonCode =
   (typeof MERCHANT_AUDIT_REASON_CODES)[number];
+
+/**
+ * Image-safety reason → readiness reason code.
+ *
+ * The audit never re-implements an image rule: `selectMerchantImages` decides,
+ * and this table only renames its verdicts for the public report.
+ */
+const IMAGE_REASON_CODES: Record<
+  MerchantImageSafetyReason,
+  MerchantAuditReasonCode
+> = {
+  DIMENSIONS_MISSING: "merchant_image_dimensions_missing",
+  DIMENSIONS_TOO_SMALL: "merchant_image_dimensions_too_small",
+  FILESIZE_MISSING: "merchant_image_filesize_missing",
+  FILE_TOO_LARGE: "merchant_image_too_large",
+  TOO_MANY_PIXELS: "merchant_image_too_many_pixels",
+  UNSUPPORTED_MIME_TYPE: "merchant_image_mime_unsupported",
+  URL_NOT_PUBLIC_HTTPS: "merchant_image_url_not_public_https",
+};
+
+/** Safe, aggregate image counts — no media ids, URLs or storage keys. */
+export type MerchantImageAuditSummary = {
+  totalImages: number;
+  safeImages: number;
+  ignoredImages: number;
+};
 
 /**
  * The only product information that leaves the audit.
@@ -105,6 +145,8 @@ export type MerchantProductAuditReport = {
   merchantReadiness: MerchantReadiness;
   missingFields: string[];
   reasons: MerchantAuditReasonCode[];
+  /** Safe aggregate counts for the Merchant image selection. */
+  images: MerchantImageAuditSummary;
 };
 
 export type MerchantProductAudit = {
@@ -114,6 +156,12 @@ export type MerchantProductAudit = {
    * READY. This is Phase 2B's input: audit → READY → take this object → upsert.
    */
   productInput: MerchantProductInput | null;
+  /**
+   * INTERNAL image diagnostics — media ids, sort orders and per-asset reasons.
+   * Kept for debugging and never returned wholesale by a public endpoint; the
+   * route publishes only `report.images` counts and `report.reasons`.
+   */
+  imageDiagnostics: MerchantImageDiagnostics;
 };
 
 export type MerchantAuditSummary = {
@@ -143,15 +191,34 @@ export type MerchantInventoryContext = {
 // Per-product audit
 // ---------------------------------------------------------------------------
 
+const emptyDiagnostics = (): MerchantImageDiagnostics => ({
+  duplicateImages: 0,
+  ignored: [],
+  ignoredImages: 0,
+  safeImages: 0,
+  totalImages: 0,
+});
+
+const toImageSummary = (
+  diagnostics: MerchantImageDiagnostics,
+): MerchantImageAuditSummary => ({
+  ignoredImages: diagnostics.ignoredImages,
+  safeImages: diagnostics.safeImages,
+  totalImages: diagnostics.totalImages,
+});
+
 const blocked = (
   product: ProductWithRelations,
   stockStatus: StockStatus,
   merchantReadiness: MerchantReadiness,
   reasons: MerchantAuditReasonCode[],
   missingFields: string[] = [],
+  diagnostics: MerchantImageDiagnostics = emptyDiagnostics(),
 ): MerchantProductAudit => ({
+  imageDiagnostics: diagnostics,
   productInput: null,
   report: {
+    images: toImageSummary(diagnostics),
     merchantReadiness,
     missingFields,
     name: product.name,
@@ -173,6 +240,7 @@ function classifyMapperError(
   product: ProductWithRelations,
   stockStatus: StockStatus,
   error: unknown,
+  diagnostics: MerchantImageDiagnostics,
 ): MerchantProductAudit {
   if (error instanceof GoogleMerchantProductDataError) {
     return blocked(
@@ -181,27 +249,65 @@ function classifyMapperError(
       "MISSING_REQUIRED_ATTRIBUTES",
       ["missing_apparel_attributes"],
       [...error.missingFields],
+      diagnostics,
+    );
+  }
+
+  // The product HAS images, but every one of them breaks a Merchant limit.
+  // The detailed codes come from the selector's own verdicts.
+  if (error instanceof GoogleMerchantImageError) {
+    const reasons = error.imageReasons
+      .map((reason) => IMAGE_REASON_CODES[reason as MerchantImageSafetyReason])
+      .filter((code): code is MerchantAuditReasonCode => Boolean(code));
+
+    return blocked(
+      product,
+      stockStatus,
+      "NO_MERCHANT_SAFE_IMAGE",
+      reasons.length > 0 ? reasons : ["no_public_image"],
+      [],
+      diagnostics,
     );
   }
 
   if (error instanceof GoogleMerchantError) {
     switch (error.code) {
       case "PRODUCT_IMAGE_MISSING":
-        return blocked(product, stockStatus, "NO_VALID_IMAGE", [
-          "no_public_image",
-        ]);
+        return blocked(
+          product,
+          stockStatus,
+          "NO_VALID_IMAGE",
+          ["no_public_image"],
+          [],
+          diagnostics,
+        );
       case "PRODUCT_IMAGE_INVALID":
-        return blocked(product, stockStatus, "NO_VALID_IMAGE", [
-          "image_not_public_https",
-        ]);
+        return blocked(
+          product,
+          stockStatus,
+          "NO_VALID_IMAGE",
+          ["image_not_public_https"],
+          [],
+          diagnostics,
+        );
       case "PRODUCT_PRICE_INVALID":
-        return blocked(product, stockStatus, "INVALID_PRICE", [
-          "price_not_positive_integer",
-        ]);
+        return blocked(
+          product,
+          stockStatus,
+          "INVALID_PRICE",
+          ["price_not_positive_integer"],
+          [],
+          diagnostics,
+        );
       case "PRODUCT_LINK_INVALID":
-        return blocked(product, stockStatus, "INVALID_LANDING_PAGE", [
-          "landing_page_not_canonical",
-        ]);
+        return blocked(
+          product,
+          stockStatus,
+          "INVALID_LANDING_PAGE",
+          ["landing_page_not_canonical"],
+          [],
+          diagnostics,
+        );
       case "PRODUCT_NOT_PURCHASABLE":
         // The effective status said available but the mapper disagreed, i.e.
         // the raw stockStatus column contradicts the derived state. Report the
@@ -211,15 +317,29 @@ function classifyMapperError(
           stockStatus,
           product.stockStatus === "sold" ? "SOLD" : "RESERVED",
           ["stock_status_disagreement"],
+          [],
+          diagnostics,
         );
       default:
-        return blocked(product, stockStatus, "MAPPING_ERROR", [
-          "mapper_rejected",
-        ]);
+        return blocked(
+          product,
+          stockStatus,
+          "MAPPING_ERROR",
+          ["mapper_rejected"],
+          [],
+          diagnostics,
+        );
     }
   }
 
-  return blocked(product, stockStatus, "MAPPING_ERROR", ["mapper_rejected"]);
+  return blocked(
+    product,
+    stockStatus,
+    "MAPPING_ERROR",
+    ["mapper_rejected"],
+    [],
+    diagnostics,
+  );
 }
 
 /**
@@ -254,14 +374,25 @@ export function auditMerchantProduct(
     return blocked(product, effectiveStockStatus, "SOLD", ["inventory_sold"]);
   }
 
+  // The SAME selector the mapper uses — the audit never re-derives image rules,
+  // it just keeps the diagnostics for reporting. Inside the try, so a product
+  // row that throws while being read still classifies as MAPPING_ERROR.
+  let imageDiagnostics = emptyDiagnostics();
+
   let productInput: MerchantProductInput;
   try {
+    imageDiagnostics = selectMerchantImages(product).diagnostics;
     productInput = buildMerchantProductInput({
       effectiveStockStatus,
       product,
     });
   } catch (error) {
-    return classifyMapperError(product, effectiveStockStatus, error);
+    return classifyMapperError(
+      product,
+      effectiveStockStatus,
+      error,
+      imageDiagnostics,
+    );
   }
 
   // Stricter than the mapper by design: an inferred fabric is not real data.
@@ -272,12 +403,15 @@ export function auditMerchantProduct(
       "MISSING_REQUIRED_ATTRIBUTES",
       ["missing_material"],
       ["material"],
+      imageDiagnostics,
     );
   }
 
   return {
+    imageDiagnostics,
     productInput,
     report: {
+      images: toImageSummary(imageDiagnostics),
       merchantReadiness: "READY",
       missingFields: [],
       name: product.name,

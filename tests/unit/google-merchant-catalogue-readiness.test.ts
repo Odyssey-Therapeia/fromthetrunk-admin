@@ -51,15 +51,15 @@ const mkMedia = (url: string, id = "media-1") => ({
   blurDataUrl: null,
   createdAt: NOW,
   filename: "img.jpg",
-  filesize: null,
-  height: null,
+  filesize: 2_000_000,
+  height: 1600,
   id,
   key: "media/img.jpg",
   metadata: null,
   mimeType: "image/jpeg",
   updatedAt: NOW,
   url,
-  width: null,
+  width: 1200,
 });
 
 let sequence = 0;
@@ -272,8 +272,8 @@ describe("auditMerchantProduct — unusable product data", () => {
       images: [{ media: mkMedia("http://insecure.test/a.jpg"), sortOrder: 0 }],
     });
 
-    expect(report.merchantReadiness).toBe("NO_VALID_IMAGE");
-    expect(report.reasons).toEqual(["image_not_public_https"]);
+    expect(report.merchantReadiness).toBe("NO_MERCHANT_SAFE_IMAGE");
+    expect(report.reasons).toEqual(["merchant_image_url_not_public_https"]);
   });
 
   it("flags an unresolvable image", () => {
@@ -281,7 +281,7 @@ describe("auditMerchantProduct — unusable product data", () => {
       images: [{ media: { url: 42 }, sortOrder: 0 }],
     });
 
-    expect(report.merchantReadiness).toBe("NO_VALID_IMAGE");
+    expect(report.merchantReadiness).toBe("NO_MERCHANT_SAFE_IMAGE");
   });
 
   it("flags a zero price", () => {
@@ -500,6 +500,7 @@ describe("summariseMerchantAudit", () => {
       MAPPING_ERROR: 0,
       MISSING_REQUIRED_ATTRIBUTES: 1,
       NOT_PUBLISHED: 0,
+      NO_MERCHANT_SAFE_IMAGE: 0,
       NO_VALID_IMAGE: 1,
       READY: 2,
       RESERVED: 1,
@@ -569,10 +570,11 @@ describe("summariseMerchantAudit", () => {
 // ---------------------------------------------------------------------------
 
 describe("audit report — safe output only", () => {
-  it("emits exactly the eight agreed keys", () => {
+  it("emits exactly the agreed safe keys", () => {
     const { report } = auditOne();
 
     expect(Object.keys(report).sort()).toEqual([
+      "images",
       "merchantReadiness",
       "missingFields",
       "name",
