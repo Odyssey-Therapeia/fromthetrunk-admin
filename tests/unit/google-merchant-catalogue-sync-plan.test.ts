@@ -315,6 +315,56 @@ describe("planCatalogueSync — delete candidates", () => {
     });
   });
 
+  it("flags a managed offer whose local product has NO_MERCHANT_SAFE_IMAGE", () => {
+    // The expected pre-backfill state: Phase 2A.2 image safety fails closed on
+    // null dimensions, so a currently-approved offer becomes a DELETE_CANDIDATE
+    // until the metadata backfill runs. Nothing deletes it — Phase 2B.1 has no
+    // delete path — and it must never be picked up by a write batch.
+    const plan = planCatalogueSync(
+      [mkAudit(TANGERINE_ID, { merchantReadiness: "NO_MERCHANT_SAFE_IMAGE" })],
+      [mkGoogle(TANGERINE_ID)],
+      DATA_SOURCE,
+    );
+
+    expect(plan.actions[0].report.action).toBe("DELETE_CANDIDATE");
+    expect(plan.actions[0].report.reason).toBe("NO_MERCHANT_SAFE_IMAGE");
+    expect(plan.actions[0].productInput).toBeNull();
+    expect(plan.summary.deleteCandidates).toBe(1);
+    expect(plan.summary.insert).toBe(0);
+    expect(selectInsertBatch(plan, 5)).toEqual([]);
+  });
+
+  it("models the whole pre-backfill fleet: six managed offers, zero writes", () => {
+    const offerIds = [TANGERINE_ID, ...Array.from({ length: 5 }, (_, i) => uuid(i + 1))];
+
+    const plan = planCatalogueSync(
+      offerIds.map((id) => mkAudit(id, { merchantReadiness: "NO_MERCHANT_SAFE_IMAGE" })),
+      offerIds.map((id) => mkGoogle(id)),
+      DATA_SOURCE,
+    );
+
+    expect(plan.summary).toMatchObject({
+      alreadyPresent: 0,
+      conflicts: 0,
+      deleteCandidates: 6,
+      googleManaged: 6,
+      insert: 0,
+      localReady: 0,
+    });
+    expect(selectInsertBatch(plan, 5)).toEqual([]);
+  });
+
+  it("returns those offers to ALREADY_PRESENT once readiness recovers", () => {
+    const plan = planCatalogueSync(
+      [mkAudit(TANGERINE_ID)],
+      [mkGoogle(TANGERINE_ID)],
+      DATA_SOURCE,
+    );
+
+    expect(plan.actions[0].report.action).toBe("ALREADY_PRESENT");
+    expect(plan.summary.deleteCandidates).toBe(0);
+  });
+
   it("flags an unpublished local product present in Google", () => {
     const plan = planCatalogueSync(
       [mkAudit(uuid(1), { merchantReadiness: "NOT_PUBLISHED" })],

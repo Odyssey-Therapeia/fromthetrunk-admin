@@ -82,9 +82,17 @@ const mkAudit = (
   merchantReadiness = "READY",
 ): MerchantProductAudit =>
   ({
+    imageDiagnostics: {
+      duplicateImages: 0,
+      ignored: [],
+      ignoredImages: 0,
+      safeImages: 1,
+      totalImages: 1,
+    },
     productInput:
       merchantReadiness === "READY" ? mkProductInput(productId) : null,
     report: {
+      images: { ignoredImages: 0, safeImages: 1, totalImages: 1 },
       merchantReadiness,
       missingFields: [],
       name: `Saree ${productId.slice(-2)}`,

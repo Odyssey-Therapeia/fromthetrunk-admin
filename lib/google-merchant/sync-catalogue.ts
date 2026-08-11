@@ -22,6 +22,8 @@
 import { runMerchantCatalogueAudit } from "@/lib/google-merchant/audit-catalogue";
 import { getGoogleMerchantAccessToken } from "@/lib/google-merchant/auth";
 import {
+  EXPECTED_CONTENT_LANGUAGE,
+  EXPECTED_FEED_LABEL,
   buildMerchantStatusReports,
   planCatalogueSync,
   selectInsertBatch,
@@ -36,7 +38,10 @@ import {
   getGoogleMerchantConfig,
   getGoogleMerchantDataSourceName,
 } from "@/lib/google-merchant/config";
-import { listGoogleMerchantProducts } from "@/lib/google-merchant/google-catalogue";
+import {
+  isManagedByDataSource,
+  listGoogleMerchantProducts,
+} from "@/lib/google-merchant/google-catalogue";
 import { upsertGoogleMerchantProductInput } from "@/lib/google-merchant/upsert-product-input";
 import { createLogger } from "@/lib/log";
 
@@ -214,5 +219,143 @@ export async function applyMerchantCatalogueSyncBatch(
     ),
     requestedLimit: limit,
     succeeded: products.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Controlled single-product resync
+// ---------------------------------------------------------------------------
+
+export type MerchantResyncResult = {
+  resynced: true;
+  productId: string;
+  offerId: string;
+  productInputName: string;
+  processedProductName: string;
+  /** Safe image summary — the primary URL and how many extras were sent. */
+  merchantImages: { primary: string; additionalCount: number };
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Re-submit ONE existing Merchant product with its current ProductInput.
+ *
+ * The bootstrap planner deliberately leaves ALREADY_PRESENT offers alone, so
+ * this is the only way to push a corrected payload — for example after the
+ * image-metadata backfill makes the Merchant-safe image selection drop an
+ * oversized photo that Google rejected.
+ *
+ * Everything is recomputed from current state: the readiness audit decides
+ * whether the product may be submitted at all, the ProductInput is the one the
+ * audit built (never rebuilt here), and the offer must already exist in OUR
+ * data source with the expected language and feed label. Anything else fails
+ * closed without writing.
+ */
+export async function resyncMerchantProduct(
+  productId: string,
+): Promise<MerchantResyncResult> {
+  assertServerRuntime();
+
+  if (!UUID_PATTERN.test(productId)) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_FOUND",
+      "That product id is not a valid product identifier.",
+      400,
+    );
+  }
+
+  const config = getGoogleMerchantConfig();
+  const dataSourceName = getGoogleMerchantDataSourceName(config);
+
+  // 1-4. Current local state, through the SAME readiness logic as everything else.
+  const audit = await runMerchantCatalogueAudit();
+  const entry = audit.audits.find(
+    (candidate) => candidate.report.productId === productId,
+  );
+
+  if (!entry) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_FOUND",
+      "The product is not a published product in this catalogue.",
+      404,
+    );
+  }
+
+  if (entry.report.merchantReadiness !== "READY" || !entry.productInput) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_PURCHASABLE",
+      `The product is not ready for Merchant submission (${entry.report.merchantReadiness}).`,
+      409,
+    );
+  }
+
+  const productInput = entry.productInput;
+
+  // 5-9. Current Google state: the offer must already be ours, and unambiguous.
+  const accessToken = await getGoogleMerchantAccessToken();
+  const googleProducts = await listGoogleMerchantProducts(
+    config.accountId,
+    accessToken,
+  );
+
+  const managed = googleProducts.filter(
+    (product) =>
+      isManagedByDataSource(product, dataSourceName) &&
+      product.offerId === productInput.offerId,
+  );
+
+  if (managed.length === 0) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_FOUND",
+      "The offer is not present in the configured Merchant data source.",
+      409,
+    );
+  }
+
+  if (managed.length > 1) {
+    throw new GoogleMerchantError(
+      "GOOGLE_REQUEST_FAILED",
+      "The offer is duplicated in the configured Merchant data source.",
+      409,
+    );
+  }
+
+  const [existing] = managed;
+
+  if (existing.contentLanguage !== EXPECTED_CONTENT_LANGUAGE) {
+    throw new GoogleMerchantError(
+      "GOOGLE_REQUEST_FAILED",
+      "The existing offer has an unexpected content language.",
+      409,
+    );
+  }
+
+  if (existing.feedLabel !== EXPECTED_FEED_LABEL) {
+    throw new GoogleMerchantError(
+      "GOOGLE_REQUEST_FAILED",
+      "The existing offer has an unexpected feed label.",
+      409,
+    );
+  }
+
+  // 10. The shared write primitive — one Merchant write, nothing rebuilt.
+  const result = await upsertGoogleMerchantProductInput(productInput, {
+    accessToken,
+  });
+
+  log.info("Merchant product resynced", { productId });
+
+  return {
+    merchantImages: {
+      additionalCount: productInput.productAttributes.additionalImageLinks.length,
+      primary: productInput.productAttributes.imageLink,
+    },
+    offerId: result.offerId,
+    processedProductName: result.processedProductName,
+    productId,
+    productInputName: result.productInputName,
+    resynced: true,
   };
 }

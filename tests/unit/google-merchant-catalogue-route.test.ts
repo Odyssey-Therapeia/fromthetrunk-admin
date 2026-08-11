@@ -73,15 +73,15 @@ const mkMedia = (url: string) => ({
   blurDataUrl: null,
   createdAt: NOW,
   filename: "img.jpg",
-  filesize: null,
-  height: null,
+  filesize: 2_000_000,
+  height: 1600,
   id: "media-1",
   key: "media/img.jpg",
   metadata: null,
   mimeType: "image/jpeg",
   updatedAt: NOW,
   url,
-  width: null,
+  width: 1200,
 });
 
 let sequence = 0;
@@ -345,12 +345,13 @@ describe("GET /catalogue-readiness — body", () => {
     expect(body.products).toHaveLength(5);
   });
 
-  it("emits exactly the eight safe keys per product", async () => {
+  it("emits exactly the agreed safe keys per product", async () => {
     const body = (await (
       await makeHarness(ADMIN).request("/catalogue-readiness")
     ).json()) as ReadinessBody;
 
     expect(Object.keys(body.products[0]).sort()).toEqual([
+      "images",
       "merchantReadiness",
       "missingFields",
       "name",

@@ -90,15 +90,15 @@ const mkMedia = (url: string) => ({
   blurDataUrl: null,
   createdAt: NOW,
   filename: "img.jpg",
-  filesize: null,
-  height: null,
+  filesize: 2_000_000,
+  height: 1600,
   id: "media-1",
   key: "media/img.jpg",
   metadata: null,
   mimeType: "image/jpeg",
   updatedAt: NOW,
   url,
-  width: null,
+  width: 1200,
 });
 
 function mkProduct(
@@ -428,7 +428,7 @@ describe("insertGoogleMerchantTestProduct — product guards", () => {
 
     await expectMerchantError(
       insertGoogleMerchantTestProduct(),
-      "PRODUCT_IMAGE_INVALID",
+      "MERCHANT_NO_SAFE_IMAGE",
     );
   });
 

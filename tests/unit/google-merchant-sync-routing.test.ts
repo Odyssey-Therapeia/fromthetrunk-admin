@@ -45,11 +45,23 @@ const previewSyncMock = vi.hoisted(() => vi.fn());
 const applySyncMock = vi.hoisted(() => vi.fn());
 const syncStatusMock = vi.hoisted(() => vi.fn());
 
+const resyncMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@/lib/google-merchant/sync-catalogue", () => ({
   MAX_SYNC_BATCH_SIZE: 5,
   applyMerchantCatalogueSyncBatch: applySyncMock,
   getMerchantCatalogueSyncStatus: syncStatusMock,
   previewMerchantCatalogueSync: previewSyncMock,
+  resyncMerchantProduct: resyncMock,
+}));
+
+const metadataPreviewMock = vi.hoisted(() => vi.fn());
+const metadataApplyMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/google-merchant/image-metadata-backfill", () => ({
+  MAX_METADATA_BATCH_SIZE: 25,
+  applyMerchantImageMetadataBackfill: metadataApplyMock,
+  previewMerchantImageMetadata: metadataPreviewMock,
 }));
 
 const logMock = vi.hoisted(() => ({
@@ -96,6 +108,33 @@ beforeEach(() => {
 
   previewSyncMock.mockResolvedValue(emptyPlan);
   syncStatusMock.mockResolvedValue([]);
+  resyncMock.mockResolvedValue({
+    merchantImages: { additionalCount: 2, primary: "https://x.test/a.jpg" },
+    offerId: "0768b66c-4a38-4135-801d-87bbc95a096b",
+    processedProductName: "accounts/5833526164/products/en~IN~x",
+    productId: "0768b66c-4a38-4135-801d-87bbc95a096b",
+    productInputName: "accounts/5833526164/productInputs/en~IN~x",
+    resynced: true,
+  });
+  metadataPreviewMock.mockResolvedValue({
+    examples: [],
+    summary: {
+      alreadyComplete: 0,
+      knownOversizedFiles: 0,
+      missingDimensions: 0,
+      referencedMedia: 0,
+      unsupportedMimeTypes: 0,
+    },
+  });
+  metadataApplyMock.mockResolvedValue({
+    applied: true,
+    attempted: 0,
+    failed: 0,
+    failures: [],
+    hasMore: false,
+    nextAfterMediaId: null,
+    updated: 0,
+  });
   applySyncMock.mockResolvedValue({
     applied: true,
     attempted: 0,
@@ -290,6 +329,61 @@ describe("OpenAPI document", () => {
     expect(Object.keys(document.paths[preview])).toEqual(["get"]);
     expect(Object.keys(document.paths[status])).toEqual(["get"]);
     expect(Object.keys(document.paths[apply])).toEqual(["post"]);
+  });
+
+  it("publishes the Phase 2A.2 endpoints too", async () => {
+    const app = await loadApp();
+
+    const document = (await (
+      await app.fetch(new Request("http://localhost/api/v2/openapi.json"))
+    ).json()) as { paths: Record<string, Record<string, unknown>> };
+
+    const resync = "/api/v2/integrations/google-merchant/catalogue-sync/resync";
+    const metadataPreview =
+      "/api/v2/integrations/google-merchant/image-metadata/preview";
+    const metadataApply =
+      "/api/v2/integrations/google-merchant/image-metadata/apply";
+
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining([resync, metadataPreview, metadataApply]),
+    );
+    expect(Object.keys(document.paths[resync])).toEqual(["post"]);
+    expect(Object.keys(document.paths[metadataPreview])).toEqual(["get"]);
+    expect(Object.keys(document.paths[metadataApply])).toEqual(["post"]);
+  });
+
+  it("serves the Phase 2A.2 endpoints through the real router", async () => {
+    vi.stubEnv("GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED", "true");
+    vi.stubEnv("VERCEL_ENV", "production");
+    const app = await loadApp();
+
+    const metadata = await app.fetch(
+      new Request(
+        "http://localhost/api/v2/integrations/google-merchant/image-metadata/preview",
+        asAdmin,
+      ),
+    );
+    expect(metadata.status).toBe(200);
+    expect(metadataPreviewMock).toHaveBeenCalled();
+
+    const resync = await app.fetch(
+      new Request(
+        "http://localhost/api/v2/integrations/google-merchant/catalogue-sync/resync",
+        {
+          ...asAdmin,
+          body: JSON.stringify({
+            confirm: "RESYNC_FTT_GOOGLE_MERCHANT_PRODUCT",
+            productId: "0768b66c-4a38-4135-801d-87bbc95a096b",
+          }),
+          headers: { ...asAdmin.headers, "Content-Type": "application/json" },
+          method: "POST",
+        },
+      ),
+    );
+    expect(resync.status).toBe(200);
+    expect(resyncMock).toHaveBeenCalledWith(
+      "0768b66c-4a38-4135-801d-87bbc95a096b",
+    );
   });
 
   it("keeps the earlier Google Merchant endpoints mounted alongside them", async () => {

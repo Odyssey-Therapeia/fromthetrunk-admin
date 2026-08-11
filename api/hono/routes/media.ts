@@ -8,7 +8,9 @@ import { requireAdmin } from "@/api/hono/middleware/auth";
 import { errorSchema, idParamSchema } from "@/api/hono/schemas/common";
 import type { HonoBindings } from "@/api/hono/types";
 import { createMediaRecord, deleteMedia, listMedia } from "@/db/queries/media";
+import { parseImageDimensions } from "@/lib/media/image-dimensions";
 import {
+  MediaMetadataUnavailableError,
   createMediaFromUpload,
   generateUploadUrl,
 } from "@/lib/media/blob-upload";
@@ -180,8 +182,12 @@ export const registerMediaRoutes = (app: OpenAPIHono<HonoBindings>) => {
     const uploadDir = join(process.cwd(), "public", "dev-uploads", "media");
     const uploadPath = join(uploadDir, storedFilename);
 
+    // Parse dimensions from the bytes already in hand — no HTTP, no re-encode.
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const dimensions = parseImageDimensions(bytes);
+
     await mkdir(uploadDir, { recursive: true });
-    await writeFile(uploadPath, Buffer.from(await file.arrayBuffer()));
+    await writeFile(uploadPath, bytes);
 
     const pathname = `dev-uploads/media/${storedFilename}`;
     const publicPath = `/dev-uploads/media/${storedFilename}`;
@@ -191,14 +197,16 @@ export const registerMediaRoutes = (app: OpenAPIHono<HonoBindings>) => {
       blurDataUrl: null,
       filename: file.name,
       filesize: file.size,
-      height: null,
+      height: dimensions.status === "ok" ? dimensions.height : null,
       key: pathname,
       metadata: {
         source: "local-dev",
       },
-      mimeType,
+      // The parsed container beats the browser-reported type, which is derived
+      // from the filename extension and can be wrong.
+      mimeType: dimensions.status === "ok" ? dimensions.mimeType : mimeType,
       url: publicPath,
-      width: null,
+      width: dimensions.status === "ok" ? dimensions.width : null,
     });
 
     return c.json(media, 201);
@@ -226,8 +234,28 @@ export const registerMediaRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (adminOrResponse instanceof Response) return adminOrResponse;
 
       const body = c.req.valid("json");
-      const media = await createMediaFromUpload(body);
-      return c.json(media, 201);
+
+      try {
+        const media = await createMediaFromUpload(body);
+        return c.json(media, 201);
+      } catch (error) {
+        // Phase 2A.2: metadata could not be established, so NO media row was
+        // created. The uploaded blob is still in place — completion is
+        // retryable with the same url/pathname.
+        if (error instanceof MediaMetadataUnavailableError) {
+          return c.json(
+            {
+              code: "MEDIA_METADATA_UNAVAILABLE",
+              message: error.message,
+              reason: error.code,
+              retryable: true,
+            },
+            422,
+          );
+        }
+
+        throw error;
+      }
     },
   );
 

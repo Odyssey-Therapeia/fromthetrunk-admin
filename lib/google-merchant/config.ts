@@ -59,6 +59,7 @@ export type GoogleMerchantErrorCode =
   | "PRODUCT_IMAGE_INVALID"
   | "PRODUCT_LINK_INVALID"
   | "MERCHANT_PRODUCT_DATA_INCOMPLETE"
+  | "MERCHANT_NO_SAFE_IMAGE"
   | "CATALOGUE_BACKFILL_REFUSED"
   | "CATALOGUE_BACKFILL_WRITE_FAILED"
   | "SYNC_LIMIT_INVALID"
@@ -112,6 +113,28 @@ export class GoogleMerchantProductDataError extends GoogleMerchantError {
     );
     this.name = "GoogleMerchantProductDataError";
     this.missingFields = [...missingFields];
+  }
+}
+
+/**
+ * The product has images, but none of them satisfy Merchant's limits.
+ *
+ * `imageReasons` are the distinct `MerchantImageSafetyReason` values across the
+ * discarded assets — policy codes only, never a media row, a URL or a storage
+ * key. Kept as a subclass (like GoogleMerchantProductDataError) so the readiness
+ * audit can map them to detailed reason codes without re-running the selector.
+ */
+export class GoogleMerchantImageError extends GoogleMerchantError {
+  readonly imageReasons: string[];
+
+  constructor(imageReasons: string[]) {
+    super(
+      "MERCHANT_NO_SAFE_IMAGE",
+      "The product has no image that satisfies Google Merchant's limits.",
+      422,
+    );
+    this.name = "GoogleMerchantImageError";
+    this.imageReasons = [...imageReasons];
   }
 }
 
@@ -191,6 +214,19 @@ export function isGoogleMerchantCatalogueBackfillEnabled(): boolean {
  */
 export function isGoogleMerchantCatalogueSyncEnabled(): boolean {
   return process.env.GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED === "true";
+}
+
+/**
+ * Kill switch for the media metadata backfill APPLY endpoint.
+ *
+ * The preview needs no switch — it only reads. Apply probes remote media and
+ * writes machine-derived metadata onto media rows, so it stays 404 unless this
+ * is the exact string "true".
+ */
+export function isGoogleMerchantImageMetadataBackfillEnabled(): boolean {
+  return (
+    process.env.GOOGLE_MERCHANT_IMAGE_METADATA_BACKFILL_ENABLED === "true"
+  );
 }
 
 /**
