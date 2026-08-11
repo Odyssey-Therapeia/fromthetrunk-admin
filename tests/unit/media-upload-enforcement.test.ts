@@ -6,15 +6,22 @@
  * Cases covered:
  *  1. createMediaFromUpload REJECTS missing alt (throws / returns error)
  *  2. createMediaFromUpload persists the uploaded Blob URL without server-side re-compression
- *  3. createMediaFromUpload does not fetch/re-upload uploaded Blob files
+ *  3. createMediaFromUpload does not download/re-upload uploaded Blob files
+ *     (Phase 2A.2: it DOES issue a bounded metadata probe — a HEAD plus a
+ *     ~64 KB Range read — but never downloads the file and never creates a
+ *     second Blob. The probe is mocked here; see media-upload-metadata.test.ts
+ *     for its own coverage.)
  *  4. completeUploadSchema rejects missing alt at the Zod layer
  *  5. completeUploadSchema rejects empty-string alt
  *
  * Mock boundary:
  *  - @/db/queries/media (createMediaRecord)  — DB layer
+ *  - @/lib/media/image-metadata (probeImageMetadata) — the bounded metadata
+ *    probe; stubbed so this file keeps testing persistence, not networking
  *  - global fetch                             — HTTP client boundary
- *    (must NOT be called from createMediaFromUpload; the browser already
- *     uploaded the original file directly to Blob)
+ *    (must NEVER be called directly from createMediaFromUpload: the browser
+ *     already uploaded the original file, and nothing here re-downloads or
+ *     re-uploads it)
  *
  * The REAL createMediaFromUpload and completeUploadSchema are under test.
  * Removing the alt check or size-gate causes the mutation-proof tests to fail.
@@ -37,6 +44,21 @@ vi.mock("@/db/queries/media", () => ({
 
 vi.mock("@vercel/blob/client", () => ({
   generateClientTokenFromReadWriteToken: generateClientTokenMock,
+}));
+
+/** Phase 2A.2: metadata must be established before a row is written. */
+const probeImageMetadataMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    filesize: 2_000_000,
+    height: 1600,
+    mimeType: "image/jpeg",
+    ok: true,
+    width: 1200,
+  }),
+);
+
+vi.mock("@/lib/media/image-metadata", () => ({
+  probeImageMetadata: probeImageMetadataMock,
 }));
 
 // ---------------------------------------------------------------------------
@@ -151,6 +173,8 @@ describe("createMediaFromUpload — uploaded Blob persistence", () => {
       updatedAt: new Date(),
     });
 
+    // Any DIRECT fetch from createMediaFromUpload is still forbidden: the only
+    // network access permitted is the bounded probe, which is mocked above.
     fetchSpy = vi
       .spyOn(global, "fetch")
       .mockRejectedValue(new Error("createMediaFromUpload must not fetch uploaded blobs"));
@@ -173,14 +197,16 @@ describe("createMediaFromUpload — uploaded Blob persistence", () => {
       expect.objectContaining({
         alt: "Exactly 1MB image",
         filename: "saree.jpg",
-        filesize: ONE_MB,
+        blurDataUrl: null,
+        // Machine metadata comes from the bounded probe (Phase 2A.2), never
+        // from the client-reported size, and is never null.
+        filesize: 2_000_000,
+        height: 1600,
         key: "media/123-saree.jpg",
         metadata: { source: "vercel-blob" },
         mimeType: "image/jpeg",
         url: "https://blob.example.com/media/123-saree.jpg",
-        width: null,
-        height: null,
-        blurDataUrl: null,
+        width: 1200,
       })
     );
   });
@@ -197,7 +223,7 @@ describe("createMediaFromUpload — uploaded Blob persistence", () => {
     expect(createMediaRecordMock).toHaveBeenCalledWith(
       expect.objectContaining({
         alt: "Large saree image",
-        filesize: ONE_MB + 1,
+        filesize: 2_000_000,
         key: "media/123-saree.jpg",
         mimeType: "image/jpeg",
         url: "https://blob.example.com/media/123-saree.jpg",
@@ -217,7 +243,7 @@ describe("createMediaFromUpload — uploaded Blob persistence", () => {
     expect(createMediaRecordMock).toHaveBeenCalledWith(
       expect.objectContaining({
         alt: "Small saree image",
-        filesize: 500_000,
+        filesize: 2_000_000,
         key: "media/123-saree.jpg",
         mimeType: "image/jpeg",
         url: "https://blob.example.com/media/123-saree.jpg",
@@ -225,11 +251,35 @@ describe("createMediaFromUpload — uploaded Blob persistence", () => {
     );
   });
 
-  it("mutation-proof: never fetches uploaded Blob bytes for any upload size", async () => {
+  it("mutation-proof: never creates a second Blob for any upload size", async () => {
     await createMediaFromUpload(makeInput({ alt: "Large file", size: 5 * ONE_MB }));
     await createMediaFromUpload(makeInput({ alt: "Small file", size: 100_000 }));
 
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(generateClientTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("persists the probed dimensions rather than nulls (Phase 2A.2)", async () => {
+    await createMediaFromUpload(makeInput({ alt: "Probed image" }));
+
+    expect(createMediaRecordMock).toHaveBeenCalledWith(
+      expect.objectContaining({ height: 1600, width: 1200 }),
+    );
+  });
+
+  it("creates NO row when metadata cannot be established", async () => {
+    probeImageMetadataMock.mockResolvedValue({
+      code: "UNSUPPORTED_IMAGE",
+      message: "The media is not a JPEG, PNG or WebP image.",
+      ok: false,
+    });
+
+    await expect(
+      createMediaFromUpload(makeInput({ alt: "Unreadable image" })),
+    ).rejects.toThrow(/could not be determined/);
+
+    expect(createMediaRecordMock).not.toHaveBeenCalled();
+    expect(generateClientTokenMock).not.toHaveBeenCalled();
   });
 });
 

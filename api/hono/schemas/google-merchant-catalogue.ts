@@ -21,6 +21,12 @@ export const merchantProductReadinessSchema = z.strictObject({
   merchantReadiness: z.enum(MERCHANT_READINESS_STATES),
   missingFields: z.array(z.string()),
   reasons: z.array(z.enum(MERCHANT_AUDIT_REASON_CODES)),
+  /** Aggregate counts only — no media ids, URLs or storage keys. */
+  images: z.strictObject({
+    totalImages: z.number().int(),
+    safeImages: z.number().int(),
+    ignoredImages: z.number().int(),
+  }),
 });
 
 export const merchantCatalogueReadinessSummarySchema = z.strictObject({

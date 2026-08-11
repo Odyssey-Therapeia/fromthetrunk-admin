@@ -23,7 +23,10 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import {
   SYNC_APPLY_CONFIRMATION,
+  SYNC_RESYNC_CONFIRMATION,
   applySyncRequestSchema,
+  resyncRequestSchema,
+  resyncResponseSchema,
   syncApplyFailureSchema,
   syncApplySuccessSchema,
   syncPreviewResponseSchema,
@@ -46,8 +49,12 @@ import {
   applyMerchantCatalogueSyncBatch,
   getMerchantCatalogueSyncStatus,
   previewMerchantCatalogueSync,
+  resyncMerchantProduct,
 } from "@/lib/google-merchant/sync-catalogue";
-import type { MerchantSyncApplyResult } from "@/lib/google-merchant/sync-catalogue";
+import type {
+  MerchantResyncResult,
+  MerchantSyncApplyResult,
+} from "@/lib/google-merchant/sync-catalogue";
 import { errorResponse } from "@/lib/http/error-response";
 import { createLogger } from "@/lib/log";
 
@@ -57,6 +64,7 @@ export type GoogleMerchantSyncRouteDeps = {
   /** Injected in tests; default to the real read-only / writing services. */
   previewSync?: () => Promise<SyncPlan>;
   applySync?: (limit: number) => Promise<MerchantSyncApplyResult>;
+  resyncProduct?: (productId: string) => Promise<MerchantResyncResult>;
   syncStatus?: () => Promise<MerchantProductStatusReport[]>;
 };
 
@@ -93,6 +101,7 @@ export const registerGoogleMerchantSyncRoutes = (
   const previewSync = deps.previewSync ?? previewMerchantCatalogueSync;
   const applySync = deps.applySync ?? applyMerchantCatalogueSyncBatch;
   const syncStatus = deps.syncStatus ?? getMerchantCatalogueSyncStatus;
+  const resyncProduct = deps.resyncProduct ?? resyncMerchantProduct;
 
   app.openapi(
     createRoute({
@@ -244,6 +253,72 @@ export const registerGoogleMerchantSyncRoutes = (
         });
 
         return failed("The catalogue sync batch could not be completed.");
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/catalogue-sync/resync",
+      description:
+        `Re-submit ONE existing Merchant offer with its current ProductInput — ` +
+        `the way to push a corrected payload, since the planner leaves ` +
+        `ALREADY_PRESENT offers alone. Admin-only, production-only, and gated by ` +
+        `the same GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED switch as apply. Body: ` +
+        `{"confirm":"${SYNC_RESYNC_CONFIRMATION}","productId":"<uuid>"}.`,
+      responses: {
+        200: { description: "Offer resubmitted" },
+        400: { description: "Missing or invalid confirmation / product id" },
+        401: { description: "Unauthorized" },
+        403: { description: "Forbidden" },
+        404: { description: "Endpoint unavailable, or product not found" },
+        409: { description: "Product not READY, or the offer conflicts" },
+        500: { description: "Resync failed" },
+        502: { description: "Google rejected the request" },
+      },
+      summary: "Resync one Google Merchant product",
+      tags: ["Integrations"],
+    }),
+    async (c) => {
+      if (!isGoogleMerchantCatalogueSyncEnabled() || !isProductionRuntime()) {
+        return notFound();
+      }
+
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const rawBody = await c.req.json().catch(() => null);
+      const parsed = resyncRequestSchema.safeParse(rawBody);
+
+      if (!parsed.success) {
+        return errorResponse(
+          400,
+          `Request body must be {"confirm":"${SYNC_RESYNC_CONFIRMATION}","productId":"<uuid>"}.`,
+          "INVALID_REQUEST",
+        );
+      }
+
+      try {
+        const result = await resyncProduct(parsed.data.productId);
+
+        log.info("Merchant product resynced", {
+          adminId: adminOrResponse.id,
+          productId: parsed.data.productId,
+        });
+
+        return c.json(resyncResponseSchema.parse(result), 200);
+      } catch (error) {
+        if (error instanceof GoogleMerchantError) {
+          log.error("Merchant product resync failed", { code: error.code });
+          return errorResponse(error.status, error.message, error.code);
+        }
+
+        log.error("Merchant product resync failed", {
+          code: "CATALOGUE_SYNC_FAILED",
+        });
+
+        return failed("The product resync could not be completed.");
       }
     },
   );

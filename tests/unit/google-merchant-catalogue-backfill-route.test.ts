@@ -112,7 +112,14 @@ function mkProduct(
     id: `00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`,
     images: [
       {
-        media: { id: "m1", url: "https://blob.vercel-storage.com/a.jpg" },
+        media: {
+          filesize: 2_000_000,
+          height: 1600,
+          id: "m1",
+          mimeType: "image/jpeg",
+          url: "https://blob.vercel-storage.com/a.jpg",
+          width: 1200,
+        },
         sortOrder: 0,
       },
     ],
