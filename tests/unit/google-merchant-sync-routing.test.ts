@@ -46,10 +46,12 @@ const applySyncMock = vi.hoisted(() => vi.fn());
 const syncStatusMock = vi.hoisted(() => vi.fn());
 
 const resyncMock = vi.hoisted(() => vi.fn());
+const deleteUnsupportedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/google-merchant/sync-catalogue", () => ({
   MAX_SYNC_BATCH_SIZE: 5,
   applyMerchantCatalogueSyncBatch: applySyncMock,
+  deleteUnsupportedMerchantProduct: deleteUnsupportedMock,
   getMerchantCatalogueSyncStatus: syncStatusMock,
   previewMerchantCatalogueSync: previewSyncMock,
   resyncMerchantProduct: resyncMock,
@@ -82,6 +84,9 @@ const BASE = "http://localhost/api/v2/integrations/google-merchant";
 const PREVIEW_PATH = `${BASE}/catalogue-sync/preview`;
 const STATUS_PATH = `${BASE}/catalogue-sync/status`;
 const APPLY_PATH = `${BASE}/catalogue-sync/apply`;
+const DELETE_PATH = `${BASE}/catalogue-sync/delete`;
+
+const BLOUSE_ID = "1bf63a12-c29a-4b18-a9fc-2c9ee41fc22e";
 
 const emptyPlan = {
   actions: [],
@@ -142,6 +147,12 @@ beforeEach(() => {
     remainingInsertCandidates: 0,
     requestedLimit: 5,
     succeeded: 0,
+  });
+  deleteUnsupportedMock.mockResolvedValue({
+    deleted: true,
+    offerId: BLOUSE_ID,
+    productId: BLOUSE_ID,
+    productInputName: `accounts/5833526164/productInputs/en~IN~${BLOUSE_ID}`,
   });
 });
 
@@ -302,6 +313,81 @@ describe("POST /api/v2/integrations/google-merchant/catalogue-sync/apply", () =>
 });
 
 // ---------------------------------------------------------------------------
+// Delete — the one deletion entry point, mounted at the exact expected path
+// ---------------------------------------------------------------------------
+
+describe("POST /api/v2/integrations/google-merchant/catalogue-sync/delete", () => {
+  const postDelete = (init: RequestInit = {}) =>
+    new Request(DELETE_PATH, {
+      body: JSON.stringify({
+        confirm: "DELETE_FTT_UNSUPPORTED_GOOGLE_MERCHANT_PRODUCT",
+        productId: BLOUSE_ID,
+      }),
+      method: "POST",
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    });
+
+  const enableProductionSync = () => {
+    vi.stubEnv("GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED", "true");
+    vi.stubEnv("VERCEL_ENV", "production");
+  };
+
+  it("is mounted at the exact path — 401 unauthenticated once the gates pass", async () => {
+    enableProductionSync();
+    const app = await loadApp();
+
+    const response = await app.fetch(postDelete());
+
+    expect(response.status).toBe(401);
+    expect(deleteUnsupportedMock).not.toHaveBeenCalled();
+  });
+
+  it("serves an admin through the real app", async () => {
+    enableProductionSync();
+    const app = await loadApp();
+
+    const response = await app.fetch(postDelete(asAdmin));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: true });
+    expect(deleteUnsupportedMock).toHaveBeenCalledWith(BLOUSE_ID);
+  });
+
+  it("404s through the real app while the shared kill switch is off", async () => {
+    vi.stubEnv("GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED", "false");
+    vi.stubEnv("VERCEL_ENV", "production");
+    const app = await loadApp();
+
+    expect((await app.fetch(postDelete(asAdmin))).status).toBe(404);
+    expect(deleteUnsupportedMock).not.toHaveBeenCalled();
+  });
+
+  it("404s through the real app outside production", async () => {
+    vi.stubEnv("GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED", "true");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    const app = await loadApp();
+
+    expect((await app.fetch(postDelete(asAdmin))).status).toBe(404);
+    expect(deleteUnsupportedMock).not.toHaveBeenCalled();
+  });
+
+  it("does not answer an HTTP DELETE on the delete path", async () => {
+    // Our boundary is POST-with-confirmation; only the upstream Google call is
+    // an HTTP DELETE.
+    enableProductionSync();
+    const app = await loadApp();
+
+    const response = await app.fetch(
+      new Request(DELETE_PATH, { ...asAdmin, method: "DELETE" }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(deleteUnsupportedMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The router's own view of the mounted tree
 // ---------------------------------------------------------------------------
 
@@ -337,6 +423,12 @@ describe("OpenAPI document", () => {
     const document = (await (
       await app.fetch(new Request("http://localhost/api/v2/openapi.json"))
     ).json()) as { paths: Record<string, Record<string, unknown>> };
+
+    const remove = "/api/v2/integrations/google-merchant/catalogue-sync/delete";
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining([remove]),
+    );
+    expect(Object.keys(document.paths[remove])).toEqual(["post"]);
 
     const resync = "/api/v2/integrations/google-merchant/catalogue-sync/resync";
     const metadataPreview =

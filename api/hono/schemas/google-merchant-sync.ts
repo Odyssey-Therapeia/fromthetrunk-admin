@@ -42,6 +42,44 @@ export const resyncResponseSchema = z.strictObject({
   }),
 });
 
+/**
+ * The controlled deletion of ONE unsupported product type.
+ *
+ * A distinct confirmation phrase from apply and resync on purpose: a deletion
+ * is permanent, so a copy-pasted body from another endpoint must not work here.
+ */
+export const SYNC_DELETE_UNSUPPORTED_CONFIRMATION =
+  "DELETE_FTT_UNSUPPORTED_GOOGLE_MERCHANT_PRODUCT" as const;
+
+export const deleteUnsupportedRequestSchema = z.strictObject({
+  confirm: z.literal(SYNC_DELETE_UNSUPPORTED_CONFIRMATION),
+  productId: z.string().uuid(),
+});
+
+/** A delete that was issued and accepted by Google. */
+const deleteUnsupportedDeletedSchema = z.strictObject({
+  deleted: z.literal(true),
+  productId: z.string(),
+  offerId: z.string(),
+  productInputName: z.string(),
+});
+
+/**
+ * The offer was already absent from our data source, so NO delete request was
+ * sent. Reported honestly rather than dressed up as a success.
+ */
+const deleteUnsupportedAlreadyAbsentSchema = z.strictObject({
+  deleted: z.literal(false),
+  alreadyAbsent: z.literal(true),
+  productId: z.string(),
+  offerId: z.string(),
+});
+
+export const deleteUnsupportedResponseSchema = z.union([
+  deleteUnsupportedDeletedSchema,
+  deleteUnsupportedAlreadyAbsentSchema,
+]);
+
 export const syncActionSchema = z.strictObject({
   productId: z.string(),
   offerId: z.string(),

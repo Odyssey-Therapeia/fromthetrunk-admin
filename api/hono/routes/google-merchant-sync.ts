@@ -10,7 +10,13 @@
  * POST /api/v2/integrations/google-merchant/catalogue-sync/apply
  *   — Admin-only, production-only, 404 unless
  *     GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED === "true". Inserts at most five
- *     products per invocation, sequentially.
+ *     products per invocation, sequentially. INSERT-only: it never deletes.
+ *
+ * POST /api/v2/integrations/google-merchant/catalogue-sync/delete
+ *   — Same gates. The ONLY deletion entry point in the integration, and it
+ *     removes exactly one ProductInput, only for a product the audit calls
+ *     UNSUPPORTED_PRODUCT_TYPE. Bulk deletion and automatic cleanup of
+ *     DELETE_CANDIDATE offers remain unimplemented.
  *
  * No business logic here: the routes validate, delegate to
  * `lib/google-merchant/sync-catalogue.ts` and sanitise the output. A mid-batch
@@ -23,8 +29,11 @@ import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { requireAdmin } from "@/api/hono/middleware/auth";
 import {
   SYNC_APPLY_CONFIRMATION,
+  SYNC_DELETE_UNSUPPORTED_CONFIRMATION,
   SYNC_RESYNC_CONFIRMATION,
   applySyncRequestSchema,
+  deleteUnsupportedRequestSchema,
+  deleteUnsupportedResponseSchema,
   resyncRequestSchema,
   resyncResponseSchema,
   syncApplyFailureSchema,
@@ -47,11 +56,13 @@ import {
 import {
   MAX_SYNC_BATCH_SIZE,
   applyMerchantCatalogueSyncBatch,
+  deleteUnsupportedMerchantProduct,
   getMerchantCatalogueSyncStatus,
   previewMerchantCatalogueSync,
   resyncMerchantProduct,
 } from "@/lib/google-merchant/sync-catalogue";
 import type {
+  MerchantDeleteResult,
   MerchantResyncResult,
   MerchantSyncApplyResult,
 } from "@/lib/google-merchant/sync-catalogue";
@@ -65,6 +76,7 @@ export type GoogleMerchantSyncRouteDeps = {
   previewSync?: () => Promise<SyncPlan>;
   applySync?: (limit: number) => Promise<MerchantSyncApplyResult>;
   resyncProduct?: (productId: string) => Promise<MerchantResyncResult>;
+  deleteUnsupportedProduct?: (productId: string) => Promise<MerchantDeleteResult>;
   syncStatus?: () => Promise<MerchantProductStatusReport[]>;
 };
 
@@ -102,6 +114,8 @@ export const registerGoogleMerchantSyncRoutes = (
   const applySync = deps.applySync ?? applyMerchantCatalogueSyncBatch;
   const syncStatus = deps.syncStatus ?? getMerchantCatalogueSyncStatus;
   const resyncProduct = deps.resyncProduct ?? resyncMerchantProduct;
+  const deleteUnsupportedProduct =
+    deps.deleteUnsupportedProduct ?? deleteUnsupportedMerchantProduct;
 
   app.openapi(
     createRoute({
@@ -319,6 +333,87 @@ export const registerGoogleMerchantSyncRoutes = (
         });
 
         return failed("The product resync could not be completed.");
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/catalogue-sync/delete",
+      description:
+        `Permanently delete ONE ProductInput from the Merchant API data source, ` +
+        `and ONLY when the local audit classifies that product as ` +
+        `UNSUPPORTED_PRODUCT_TYPE — the cleanup path for offers inserted before ` +
+        `the saree-only eligibility gate existed. READY, SOLD, RESERVED and ` +
+        `image-blocked products are always refused; this is not a bulk delete ` +
+        `and never processes DELETE_CANDIDATE offers in general. POST rather ` +
+        `than DELETE because an explicit confirmation body is required. ` +
+        `Admin-only, production-only, and gated by the same ` +
+        `GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED switch as apply and resync. ` +
+        `Body: {"confirm":"${SYNC_DELETE_UNSUPPORTED_CONFIRMATION}","productId":"<uuid>"}. ` +
+        `A 200 with deleted:false means the offer was already absent and no ` +
+        `delete request was sent.`,
+      responses: {
+        200: { description: "Offer deleted, or already absent" },
+        400: { description: "Missing or invalid confirmation / product id" },
+        401: { description: "Unauthorized" },
+        403: { description: "Forbidden" },
+        404: { description: "Endpoint unavailable, or product not found" },
+        409: {
+          description:
+            "Product is not UNSUPPORTED_PRODUCT_TYPE, or the offer conflicts",
+        },
+        500: { description: "Delete failed" },
+        502: { description: "Google rejected the request" },
+      },
+      summary: "Delete one unsupported Google Merchant product",
+      tags: ["Integrations"],
+    }),
+    async (c) => {
+      // Same kill switch and production gate as apply/resync, before any auth
+      // work, so the endpoint behaves exactly like a route that does not exist.
+      if (!isGoogleMerchantCatalogueSyncEnabled() || !isProductionRuntime()) {
+        return notFound();
+      }
+
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      const rawBody = await c.req.json().catch(() => null);
+      const parsed = deleteUnsupportedRequestSchema.safeParse(rawBody);
+
+      if (!parsed.success) {
+        return errorResponse(
+          400,
+          `Request body must be {"confirm":"${SYNC_DELETE_UNSUPPORTED_CONFIRMATION}","productId":"<uuid>"}.`,
+          "INVALID_REQUEST",
+        );
+      }
+
+      try {
+        const result = await deleteUnsupportedProduct(parsed.data.productId);
+
+        log.info("Unsupported Merchant product delete completed", {
+          adminId: adminOrResponse.id,
+          deleted: result.deleted,
+          productId: parsed.data.productId,
+        });
+
+        return c.json(deleteUnsupportedResponseSchema.parse(result), 200);
+      } catch (error) {
+        if (error instanceof GoogleMerchantError) {
+          log.error("Unsupported Merchant product delete failed", {
+            code: error.code,
+          });
+          return errorResponse(error.status, error.message, error.code);
+        }
+
+        log.error("Unsupported Merchant product delete failed", {
+          code: "CATALOGUE_SYNC_FAILED",
+        });
+
+        return failed("The product deletion could not be completed.");
       }
     },
   );
