@@ -14,9 +14,16 @@
  * already inserted stay inserted, and the next apply recomputes Google state
  * and naturally resumes with what is still missing.
  *
- * NOT in this phase: deletion (candidates are reported only), product-save /
- * reservation / order hooks, cron reconciliation, an unrestricted full sync,
- * and any persisted sync state.
+ * `deleteUnsupportedMerchantProduct()` is the ONE deletion entry point in the
+ * whole integration. It removes a single ProductInput, and only when the local
+ * audit classifies that product as UNSUPPORTED_PRODUCT_TYPE — the cleanup path
+ * for offers inserted before the saree-only eligibility gate existed.
+ *
+ * STILL NOT IMPLEMENTED, deliberately: bulk deletion, automatic deletion of
+ * DELETE_CANDIDATE offers, deletion of SOLD / RESERVED / image-blocked
+ * products, cron or webhook reconciliation, product-save / reservation / order
+ * hooks, an unrestricted full sync, and any persisted sync state. The planner
+ * stays read-only and `applyMerchantCatalogueSyncBatch` stays INSERT-only.
  */
 
 import { runMerchantCatalogueAudit } from "@/lib/google-merchant/audit-catalogue";
@@ -38,10 +45,12 @@ import {
   getGoogleMerchantConfig,
   getGoogleMerchantDataSourceName,
 } from "@/lib/google-merchant/config";
+import { deleteGoogleMerchantProductInput } from "@/lib/google-merchant/delete-product-input";
 import {
   isManagedByDataSource,
   listGoogleMerchantProducts,
 } from "@/lib/google-merchant/google-catalogue";
+import type { GoogleMerchantProductSummary } from "@/lib/google-merchant/google-catalogue";
 import { upsertGoogleMerchantProductInput } from "@/lib/google-merchant/upsert-product-input";
 import { createLogger } from "@/lib/log";
 
@@ -240,6 +249,56 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
+ * The verdict of looking one offer up in the CURRENT Google state.
+ *
+ * Shared by resync and delete so ownership and identity are checked in exactly
+ * one place. "Absent" is a fact, not an error — each caller decides what it
+ * means: resync refuses (there is nothing to correct), delete treats it as
+ * already-clean and issues no request.
+ */
+type ManagedOfferLookup =
+  | { status: "absent" }
+  | { status: "duplicated" }
+  | { status: "unexpected_content_language" }
+  | { status: "unexpected_feed_label" }
+  | { status: "found"; product: GoogleMerchantProductSummary };
+
+/**
+ * Find the ONE offer in our data source carrying this offerId.
+ *
+ * Ownership first: a product from "Found by Google", a supplemental feed or any
+ * other API source is filtered out before the offerId is even compared, so it
+ * can never be matched, resubmitted or deleted. Identity second: the surviving
+ * offer must be `en` / `IN`, or the caller fails closed.
+ */
+function findManagedMerchantOffer(
+  googleProducts: GoogleMerchantProductSummary[],
+  dataSourceName: string,
+  offerId: string,
+): ManagedOfferLookup {
+  const managed = googleProducts.filter(
+    (product) =>
+      isManagedByDataSource(product, dataSourceName) &&
+      product.offerId === offerId,
+  );
+
+  if (managed.length === 0) return { status: "absent" };
+  if (managed.length > 1) return { status: "duplicated" };
+
+  const [product] = managed;
+
+  if (product.contentLanguage !== EXPECTED_CONTENT_LANGUAGE) {
+    return { status: "unexpected_content_language" };
+  }
+
+  if (product.feedLabel !== EXPECTED_FEED_LABEL) {
+    return { status: "unexpected_feed_label" };
+  }
+
+  return { product, status: "found" };
+}
+
+/**
  * Re-submit ONE existing Merchant product with its current ProductInput.
  *
  * The bootstrap planner deliberately leaves ALREADY_PRESENT offers alone, so
@@ -300,44 +359,39 @@ export async function resyncMerchantProduct(
     accessToken,
   );
 
-  const managed = googleProducts.filter(
-    (product) =>
-      isManagedByDataSource(product, dataSourceName) &&
-      product.offerId === productInput.offerId,
+  const lookup = findManagedMerchantOffer(
+    googleProducts,
+    dataSourceName,
+    productInput.offerId,
   );
 
-  if (managed.length === 0) {
-    throw new GoogleMerchantError(
-      "PRODUCT_NOT_FOUND",
-      "The offer is not present in the configured Merchant data source.",
-      409,
-    );
-  }
-
-  if (managed.length > 1) {
-    throw new GoogleMerchantError(
-      "GOOGLE_REQUEST_FAILED",
-      "The offer is duplicated in the configured Merchant data source.",
-      409,
-    );
-  }
-
-  const [existing] = managed;
-
-  if (existing.contentLanguage !== EXPECTED_CONTENT_LANGUAGE) {
-    throw new GoogleMerchantError(
-      "GOOGLE_REQUEST_FAILED",
-      "The existing offer has an unexpected content language.",
-      409,
-    );
-  }
-
-  if (existing.feedLabel !== EXPECTED_FEED_LABEL) {
-    throw new GoogleMerchantError(
-      "GOOGLE_REQUEST_FAILED",
-      "The existing offer has an unexpected feed label.",
-      409,
-    );
+  switch (lookup.status) {
+    case "absent":
+      throw new GoogleMerchantError(
+        "PRODUCT_NOT_FOUND",
+        "The offer is not present in the configured Merchant data source.",
+        409,
+      );
+    case "duplicated":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The offer is duplicated in the configured Merchant data source.",
+        409,
+      );
+    case "unexpected_content_language":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The existing offer has an unexpected content language.",
+        409,
+      );
+    case "unexpected_feed_label":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The existing offer has an unexpected feed label.",
+        409,
+      );
+    default:
+      break;
   }
 
   // 10. The shared write primitive — one Merchant write, nothing rebuilt.
@@ -357,5 +411,179 @@ export async function resyncMerchantProduct(
     productId,
     productInputName: result.productInputName,
     resynced: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Controlled single-product deletion of an unsupported product type
+// ---------------------------------------------------------------------------
+
+/**
+ * The outcome of a controlled deletion.
+ *
+ * `deleted: false` is NOT a failure and NOT a fabricated success: it means the
+ * offer was already absent from our data source, so no DELETE request was sent.
+ * Every gate had already passed at that point — the desired end state simply
+ * held before we acted.
+ */
+export type MerchantDeleteResult =
+  | {
+      deleted: true;
+      productId: string;
+      offerId: string;
+      productInputName: string;
+    }
+  | {
+      deleted: false;
+      alreadyAbsent: true;
+      productId: string;
+      offerId: string;
+    };
+
+/**
+ * Permanently delete ONE unsupported product's ProductInput. THE ONLY delete.
+ *
+ * This exists for exactly one situation: an offer that reached Google before
+ * the saree-only eligibility gate existed and can never legitimately be
+ * republished. It is not a general cleanup tool.
+ *
+ * Everything is recomputed from CURRENT state immediately before the write — an
+ * earlier browser preview is never trusted — and every gate must pass:
+ *
+ *   A. the product id is a UUID;
+ *   B. the product is in the current published audit;
+ *   C. its readiness is EXACTLY `UNSUPPORTED_PRODUCT_TYPE`. READY, SOLD,
+ *      RESERVED, NO_MERCHANT_SAFE_IMAGE and every other state are refused —
+ *      this is deliberately NOT a "delete any non-ready product" path, so a
+ *      future sold saree can never be permanently removed through it;
+ *   D. the audit carries NO ProductInput, the invariant for an unsupported
+ *      product. A ProductInput here would mean readiness and the mapper
+ *      disagree, so it fails closed as an internal inconsistency;
+ *   E-H. exactly one offer with this offerId exists in OUR configured data
+ *      source, with contentLanguage `en` and feedLabel `IN`. A "Found by
+ *      Google" or supplemental-feed match is never touched; zero matches means
+ *      already absent; more than one is a conflict.
+ *
+ * Google processing is asynchronous, so the processed Product may still appear
+ * in `products.list` for minutes after a successful delete. A second call in
+ * that window sees the offer, deletes it again (harmless and idempotent
+ * upstream); once Google has reconciled, a later call reports `deleted: false,
+ * alreadyAbsent: true` and issues no request.
+ *
+ * @throws {GoogleMerchantError} sanitised, for every refusal. No Google request
+ *   is made unless all gates pass.
+ */
+export async function deleteUnsupportedMerchantProduct(
+  productId: string,
+): Promise<MerchantDeleteResult> {
+  assertServerRuntime();
+
+  // A. Identity.
+  if (!UUID_PATTERN.test(productId)) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_FOUND",
+      "That product id is not a valid product identifier.",
+      400,
+    );
+  }
+
+  const config = getGoogleMerchantConfig();
+  const dataSourceName = getGoogleMerchantDataSourceName(config);
+
+  // B. Current local state, through the SAME readiness logic as everything else.
+  const audit = await runMerchantCatalogueAudit();
+  const entry = audit.audits.find(
+    (candidate) => candidate.report.productId === productId,
+  );
+
+  if (!entry) {
+    throw new GoogleMerchantError(
+      "PRODUCT_NOT_FOUND",
+      "The product is not a published product in this catalogue.",
+      404,
+    );
+  }
+
+  // C. The single permitted readiness state.
+  if (entry.report.merchantReadiness !== "UNSUPPORTED_PRODUCT_TYPE") {
+    throw new GoogleMerchantError(
+      "MERCHANT_DELETE_NOT_PERMITTED",
+      `Only a product whose Merchant readiness is UNSUPPORTED_PRODUCT_TYPE may be deleted (this product is ${entry.report.merchantReadiness}).`,
+      409,
+    );
+  }
+
+  // D. The invariant: an unsupported product has no ProductInput.
+  if (entry.productInput !== null) {
+    log.error("Unsupported product unexpectedly carries a ProductInput", {
+      productId,
+    });
+
+    throw new GoogleMerchantError(
+      "MERCHANT_DELETE_INVARIANT_VIOLATED",
+      "The audit reported an unsupported product type but still produced a Merchant payload. Refusing to delete.",
+      500,
+    );
+  }
+
+  // E. Current Google state. One token for the read and the delete.
+  const accessToken = await getGoogleMerchantAccessToken();
+  const googleProducts = await listGoogleMerchantProducts(
+    config.accountId,
+    accessToken,
+  );
+
+  // F-H. Ownership, uniqueness and identity — the shared resolver.
+  const lookup = findManagedMerchantOffer(
+    googleProducts,
+    dataSourceName,
+    productId,
+  );
+
+  switch (lookup.status) {
+    case "absent":
+      // Nothing to do, and nothing to claim. No DELETE is issued.
+      log.info("Unsupported Merchant offer already absent", { productId });
+
+      return {
+        alreadyAbsent: true,
+        deleted: false,
+        offerId: productId,
+        productId,
+      };
+    case "duplicated":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The offer is duplicated in the configured Merchant data source.",
+        409,
+      );
+    case "unexpected_content_language":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The existing offer has an unexpected content language.",
+        409,
+      );
+    case "unexpected_feed_label":
+      throw new GoogleMerchantError(
+        "GOOGLE_REQUEST_FAILED",
+        "The existing offer has an unexpected feed label.",
+        409,
+      );
+    default:
+      break;
+  }
+
+  // The single delete primitive — one Merchant request, nothing else touched.
+  const result = await deleteGoogleMerchantProductInput(productId, {
+    accessToken,
+  });
+
+  log.info("Unsupported Merchant product deleted", { productId });
+
+  return {
+    deleted: true,
+    offerId: result.offerId,
+    productId,
+    productInputName: result.productInputName,
   };
 }

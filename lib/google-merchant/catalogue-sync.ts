@@ -43,6 +43,10 @@ export const EXPECTED_FEED_LABEL = "IN";
  * our data source is reported as ALREADY_PRESENT and left alone. (A re-submit
  * would be harmless — productInputs:insert upserts on the same identity — but
  * "already present" is the honest description of what the planner knows.)
+ *
+ * DELETE_CANDIDATE is a REPORT, not an instruction. Nothing acts on it: this
+ * module is pure, the apply batch is INSERT-only, and the one delete endpoint
+ * takes an explicit product id and re-derives its own gates from scratch.
  */
 export const SYNC_ACTIONS = [
   "INSERT",
@@ -175,8 +179,12 @@ export function planCatalogueSync(
     }
 
     if (!ready) {
-      // Present in Google but no longer READY (sold, unpublished, incomplete):
-      // a deletion candidate — reported, never deleted in this phase.
+      // Present in Google but not READY (sold, unpublished, incomplete, an
+      // unsupported product type): a deletion CANDIDATE — reported only. The
+      // planner never deletes, and nothing consumes DELETE_CANDIDATE to delete
+      // either. The one delete path in the integration
+      // (`deleteUnsupportedMerchantProduct`) takes a single explicitly named
+      // product id and re-derives its own gates; it never reads this plan.
       actions.push({
         productInput: null,
         report: {
