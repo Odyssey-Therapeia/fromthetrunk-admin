@@ -11,6 +11,9 @@
  *     feedLabel each fail closed as CONFLICT, and are never inserted.
  *   - A managed offer with no READY local product is a DELETE_CANDIDATE and
  *     nothing is ever deleted here.
+ *   - Merchant eligibility is INHERITED, never re-implemented: an
+ *     UNSUPPORTED_PRODUCT_TYPE blouse is not READY, so it can never be an
+ *     INSERT and never reaches the write batch.
  *   - Batch selection takes only INSERT actions, in deterministic offerId
  *     order, so the already-approved Tangerine offer is never re-submitted.
  *   - products.list is paginated, and an unreadable page fails closed.
@@ -448,6 +451,137 @@ describe("selectInsertBatch", () => {
 
     expect(firstBatch).toEqual([uuid(1), uuid(2), uuid(3), uuid(4), uuid(5)]);
     expect(secondBatch).toEqual([uuid(6), uuid(7), uuid(8), uuid(9), uuid(10)]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Merchant eligibility inherited from the audit
+// ---------------------------------------------------------------------------
+
+describe("planCatalogueSync — ineligible product types", () => {
+  /**
+   * The planner holds NO product-type rule of its own. It sees only the audit
+   * result, so an UNSUPPORTED_PRODUCT_TYPE blouse is handled by the same
+   * not-READY branch as SOLD or NOT_PUBLISHED — which is exactly the invariant
+   * these tests pin: fix eligibility once, in readiness, and every consumer
+   * inherits it.
+   */
+  const blouse = (offerId: string) =>
+    mkAudit(offerId, { merchantReadiness: "UNSUPPORTED_PRODUCT_TYPE" });
+
+  it("never plans an INSERT for a blouse Google does not have", () => {
+    const plan = planCatalogueSync([blouse(uuid(1))], [], DATA_SOURCE);
+
+    expect(plan.actions[0].report.action).toBe("BLOCKED_LOCAL");
+    expect(plan.actions[0].report.reason).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(plan.actions[0].productInput).toBeNull();
+    expect(plan.summary.insert).toBe(0);
+  });
+
+  it("still plans an INSERT for a READY saree Google does not have", () => {
+    const plan = planCatalogueSync(
+      [mkAudit(uuid(1)), blouse(uuid(2))],
+      [],
+      DATA_SOURCE,
+    );
+
+    const actions = Object.fromEntries(
+      plan.actions.map((entry) => [entry.report.offerId, entry.report.action]),
+    );
+
+    expect(actions[uuid(1)]).toBe("INSERT");
+    expect(actions[uuid(2)]).toBe("BLOCKED_LOCAL");
+    expect(plan.summary.insert).toBe(1);
+    expect(plan.summary.localReady).toBe(1);
+  });
+
+  it("keeps every blouse out of the controlled write batch", () => {
+    // The production shape: sarees and blouses interleaved by offerId, so a
+    // blouse would be picked up by a naive "first N" selection.
+    const plan = planCatalogueSync(
+      [
+        mkAudit(uuid(1)),
+        blouse(uuid(2)),
+        mkAudit(uuid(3)),
+        blouse(uuid(4)),
+        blouse(uuid(5)),
+        mkAudit(uuid(6)),
+      ],
+      [],
+      DATA_SOURCE,
+    );
+
+    const batch = selectInsertBatch(plan, 5);
+
+    expect(batch.map((entry) => entry.report.offerId)).toEqual([
+      uuid(1),
+      uuid(3),
+      uuid(6),
+    ]);
+    expect(batch.every((entry) => entry.report.action === "INSERT")).toBe(true);
+    expect(batch.every((entry) => entry.productInput !== null)).toBe(true);
+  });
+
+  it("hands no blouse ProductInput to the upsert primitive", () => {
+    const plan = planCatalogueSync(
+      [mkAudit(uuid(1)), blouse(uuid(2)), mkAudit(uuid(3))],
+      [],
+      DATA_SOURCE,
+    );
+
+    const submitted = selectInsertBatch(plan, 5).map(
+      (entry) => entry.productInput?.offerId,
+    );
+
+    expect(submitted).toEqual([uuid(1), uuid(3)]);
+    expect(submitted).not.toContain(uuid(2));
+  });
+
+  it("reports a blouse already in Google as a DELETE_CANDIDATE, never a write", () => {
+    // The blouse inserted before this rule existed: reported, never deleted,
+    // and never re-submitted.
+    const plan = planCatalogueSync(
+      [blouse(uuid(2))],
+      [mkGoogle(uuid(2))],
+      DATA_SOURCE,
+    );
+
+    expect(plan.actions[0].report.action).toBe("DELETE_CANDIDATE");
+    expect(plan.actions[0].report.reason).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(plan.actions[0].productInput).toBeNull();
+    expect(selectInsertBatch(plan, 5)).toEqual([]);
+  });
+
+  it("matches the expected post-fix production shape", () => {
+    // 62 published: 47 READY sarees, 9 blouses, 4 sold, 2 image-blocked.
+    const audits = [
+      ...Array.from({ length: 47 }, (_, i) => mkAudit(uuid(i + 1))),
+      ...Array.from({ length: 9 }, (_, i) => blouse(uuid(100 + i))),
+      ...Array.from({ length: 4 }, (_, i) =>
+        mkAudit(uuid(200 + i), { merchantReadiness: "SOLD" }),
+      ),
+      ...Array.from({ length: 2 }, (_, i) =>
+        mkAudit(uuid(300 + i), { merchantReadiness: "NO_MERCHANT_SAFE_IMAGE" }),
+      ),
+    ];
+
+    const plan = planCatalogueSync(audits, [], DATA_SOURCE);
+
+    expect(plan.summary.localPublished).toBe(62);
+    expect(plan.summary.localReady).toBe(47);
+    expect(plan.summary.insert).toBe(47);
+    expect(
+      plan.actions.filter(
+        (entry) => entry.report.reason === "UNSUPPORTED_PRODUCT_TYPE",
+      ),
+    ).toHaveLength(9);
+    expect(
+      plan.actions.filter(
+        (entry) =>
+          entry.report.action === "INSERT" &&
+          entry.report.reason === "UNSUPPORTED_PRODUCT_TYPE",
+      ),
+    ).toHaveLength(0);
   });
 });
 

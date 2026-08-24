@@ -2,9 +2,12 @@
  * Phase 2A — catalogue readiness service + admin route.
  *
  * What these tests prove:
- *   - The audit is READ-ONLY: exactly two SELECT-shaped calls (listProducts and
- *     ONE batched reservations lookup), no write query of any kind, and no
- *     fetch — so no Merchant API request can happen during an audit.
+ *   - The audit is READ-ONLY: only SELECT-shaped calls (listProducts, ONE
+ *     product-types lookup and ONE batched reservations lookup), no write query
+ *     of any kind, and no fetch — so no Merchant API request can happen during
+ *     an audit.
+ *   - Product types are loaded ONCE for the whole page: never
+ *     `getProductTypeById()` per product, no matter how large the catalogue.
  *   - Reservation counts are batched: one call with every id, never N+1.
  *   - The reservations query is skipped entirely when inventory v2 is off.
  *   - The endpoint is admin-only but has no kill switch and no production gate,
@@ -30,6 +33,14 @@ const writeQueryMocks = vi.hoisted(() => ({
 vi.mock("@/db/queries/products", () => ({
   listProducts: listProductsMock,
   ...writeQueryMocks,
+}));
+
+const listProductTypesMock = vi.hoisted(() => vi.fn());
+vi.mock("@/db/queries/product-types", () => ({
+  getProductTypeById: vi.fn(() => {
+    throw new Error("per-product type lookups are not permitted in the audit");
+  }),
+  listProductTypes: listProductTypesMock,
 }));
 
 const getReservationCountsMock = vi.hoisted(() => vi.fn());
@@ -59,6 +70,13 @@ import { createRouteHarness } from "../helpers/route-harness";
 // ---------------------------------------------------------------------------
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
+const SAREE_TYPE_ID = "512925ba-62e3-4a9c-84b6-53fc4295e635";
+const BLOUSE_TYPE_ID = "8fbf9c1e-9d3a-4f0b-9a7a-5f5d3f2c1b00";
+
+const PRODUCT_TYPES = [
+  { id: SAREE_TYPE_ID, name: "Preloved Saree", slug: "preloved-saree" },
+  { id: BLOUSE_TYPE_ID, name: "Blouse", slug: "blouse" },
+];
 
 const READY_ATTRIBUTES = {
   age_group: "ADULT",
@@ -125,7 +143,7 @@ function mkProduct(
     storyProvenance: null,
     storyTitle: "Story",
     tags: [],
-    typeId: null,
+    typeId: SAREE_TYPE_ID,
     updatedAt: NOW,
     ...overrides,
   } as unknown as ProductWithRelations;
@@ -139,6 +157,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   sequence = 0;
   isInventoryV2Mock.mockReturnValue(false);
+  listProductTypesMock.mockResolvedValue(PRODUCT_TYPES);
   getReservationCountsMock.mockResolvedValue(new Map());
   stubCatalogue([mkProduct()]);
   fetchMock.mockRejectedValue(new Error("no network call is permitted"));
@@ -238,6 +257,26 @@ describe("runMerchantCatalogueAudit — inventory batching", () => {
 
     expect(getReservationCountsMock).toHaveBeenCalledTimes(1);
     expect(listProductsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads the product-type taxonomy exactly once for the whole page", async () => {
+    stubCatalogue(Array.from({ length: 62 }, () => mkProduct()));
+
+    await runMerchantCatalogueAudit();
+
+    expect(listProductTypesMock).toHaveBeenCalledTimes(1);
+    expect(listProductTypesMock).toHaveBeenCalledWith();
+  });
+
+  it("keeps the audit at three queries with inventory v2 on", async () => {
+    isInventoryV2Mock.mockReturnValue(true);
+    stubCatalogue(Array.from({ length: 62 }, () => mkProduct()));
+
+    await runMerchantCatalogueAudit();
+
+    expect(listProductsMock).toHaveBeenCalledTimes(1);
+    expect(listProductTypesMock).toHaveBeenCalledTimes(1);
+    expect(getReservationCountsMock).toHaveBeenCalledTimes(1);
   });
 
   it("applies the batched counts to the right products", async () => {
@@ -343,6 +382,25 @@ describe("GET /catalogue-readiness — body", () => {
     expect(body.summary.byReason.SOLD).toBe(1);
     expect(body.summary.byReason.EXCLUDED_TEST_PRODUCT).toBe(1);
     expect(body.products).toHaveLength(5);
+  });
+
+  it("reports blouses as UNSUPPORTED_PRODUCT_TYPE and never as READY", async () => {
+    stubCatalogue([
+      mkProduct(),
+      mkProduct(),
+      mkProduct({ typeId: BLOUSE_TYPE_ID }),
+      mkProduct({ typeId: BLOUSE_TYPE_ID }),
+      mkProduct({ typeId: null }),
+    ]);
+
+    const body = (await (
+      await makeHarness(ADMIN).request("/catalogue-readiness")
+    ).json()) as ReadinessBody;
+
+    expect(body.summary.publishedProducts).toBe(5);
+    expect(body.summary.ready).toBe(2);
+    expect(body.summary.byReason.UNSUPPORTED_PRODUCT_TYPE).toBe(3);
+    expect(body.summary.byReasonCode.unsupported_product_type).toBe(3);
   });
 
   it("emits exactly the agreed safe keys per product", async () => {

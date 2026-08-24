@@ -350,6 +350,45 @@ describe("applyMerchantCatalogueSyncBatch", () => {
     ).toEqual([uuid(1), uuid(2), uuid(3), uuid(4), uuid(5)]);
   });
 
+  it("never submits a blouse in a mixed batch", async () => {
+    // READY saree / UNSUPPORTED blouse / READY saree — the shape that put a
+    // blouse into Merchant before the eligibility gate existed.
+    stubAudit([
+      mkAudit(uuid(1)),
+      mkAudit(uuid(2), "UNSUPPORTED_PRODUCT_TYPE"),
+      mkAudit(uuid(3)),
+    ]);
+    stubGoogle({ pages: [{ products: [] }] });
+
+    const result = await applyMerchantCatalogueSyncBatch(5);
+    const offerIds = insertCalls().map(
+      ([, init]) => JSON.parse(String((init as RequestInit).body)).offerId,
+    );
+
+    expect(offerIds).toEqual([uuid(1), uuid(3)]);
+    expect(offerIds).not.toContain(uuid(2));
+    expect(result).toMatchObject({ applied: true, attempted: 2, succeeded: 2 });
+  });
+
+  it("writes nothing at all when every product is an ineligible type", async () => {
+    stubAudit(
+      Array.from({ length: 9 }, (_, index) =>
+        mkAudit(uuid(index + 1), "UNSUPPORTED_PRODUCT_TYPE"),
+      ),
+    );
+    stubGoogle({ pages: [{ products: [] }] });
+
+    const result = await applyMerchantCatalogueSyncBatch(5);
+
+    expect(insertCalls()).toHaveLength(0);
+    expect(result).toMatchObject({
+      applied: true,
+      attempted: 0,
+      remainingInsertCandidates: 0,
+      succeeded: 0,
+    });
+  });
+
   it("submits sequentially, not concurrently", async () => {
     tenReady();
     let inFlight = 0;
