@@ -16,6 +16,12 @@ import { sendReservationExpiryReminders } from "@/db/queries/reservation-reminde
 import { products } from "@/db/schema";
 import { emitAnalyticsEvent } from "@/lib/analytics/emit";
 import { composeDashboard } from "@/lib/control-centre/compose-dashboard";
+import {
+  GoogleMerchantError,
+  isGoogleMerchantInventorySyncEnabled,
+} from "@/lib/google-merchant/config";
+import { reconcileMerchantInventory } from "@/lib/google-merchant/reconcile-inventory";
+import { releaseProductReservations } from "@/lib/inventory/release-reservation";
 import { getOrderNotificationRecipients } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/send";
 import { weeklyOpsDigestEmail } from "@/lib/email/templates";
@@ -71,23 +77,10 @@ export const registerCronRoutes = (app: OpenAPIHono<HonoBindings>) => {
           ),
         );
 
-      if (expiredRows.length > 0) {
-        await db
-          .update(products)
-          .set({
-            reservedUntil: null,
-            stockStatus: "available",
-            quantityAvailable: 1,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(products.stockStatus, "reserved"),
-              isNotNull(products.reservedUntil),
-              lt(products.reservedUntil, new Date()),
-            ),
-          );
-      }
+      // Canonical release for exactly the rows the SELECT found expired.
+      await releaseProductReservations({
+        productIds: expiredRows.map((row) => row.id),
+      });
 
       const expiredAt = new Date();
       for (const row of expiredRows) {
@@ -365,6 +358,100 @@ export const registerCronRoutes = (app: OpenAPIHono<HonoBindings>) => {
         },
         200,
       );
+    },
+  );
+
+  /**
+   * Google Merchant inventory reconciliation.
+   *
+   * State-based and idempotent: every run re-derives the desired Merchant state
+   * from CURRENT Neon data, so there is no queue and a missed run costs latency
+   * rather than correctness. It reads local inventory and Google's product
+   * list, and writes ONLY to Google — never to the database.
+   *
+   * Two independent gates: the shared CRON_SECRET bearer, and the dedicated
+   * GOOGLE_MERCHANT_INVENTORY_SYNC_ENABLED switch. With the switch off the run
+   * still reports what it WOULD do and performs zero Merchant writes, matching
+   * how every other cron here answers 200 with a summary.
+   *
+   * Deliberately NOT gated by GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED: that
+   * switch guards the manual bootstrap endpoints and stays off in production.
+   */
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/reconcile-google-merchant-inventory",
+      responses: {
+        200: {
+          description:
+            "Merchant inventory reconciled (or skipped when the switch is off)",
+        },
+        401: {
+          description: "Unauthorized — invalid or missing cron secret",
+        },
+        500: {
+          description: "CRON_SECRET not configured",
+        },
+      },
+      tags: ["Cron"],
+    }),
+    async (c) => {
+      const cronSecret = process.env.CRON_SECRET;
+      if (!cronSecret) {
+        return c.json(
+          {
+            code: "CRON_SECRET_MISSING",
+            message: "CRON_SECRET is not configured.",
+          },
+          500,
+        );
+      }
+
+      const authHeader = c.req.header("authorization") ?? null;
+      if (!verifyBearerSecret(authHeader, cronSecret)) {
+        return c.json(
+          {
+            code: "UNAUTHORIZED",
+            message: "Invalid cron secret.",
+          },
+          401,
+        );
+      }
+
+      const enabled = isGoogleMerchantInventorySyncEnabled();
+
+      try {
+        const result = await reconcileMerchantInventory({ enabled });
+
+        return c.json(
+          {
+            ok: true,
+            ...result,
+            timestamp: new Date().toISOString(),
+          },
+          200,
+        );
+      } catch (error) {
+        // A Google outage must never make the cron look like a platform error,
+        // and nothing local has changed — the next run simply retries.
+        log.error("[merchant-inventory cron] reconciliation failed", {
+          code:
+            error instanceof GoogleMerchantError
+              ? error.code
+              : "RECONCILIATION_FAILED",
+        });
+
+        return c.json(
+          {
+            ok: false,
+            code: "RECONCILIATION_FAILED",
+            enabled,
+            message: "The Merchant inventory reconciliation could not run.",
+            timestamp: new Date().toISOString(),
+          },
+          200,
+        );
+      }
     },
   );
 };
