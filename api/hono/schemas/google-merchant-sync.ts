@@ -4,6 +4,10 @@ import {
   MERCHANT_PRODUCT_STATUSES,
   SYNC_ACTIONS,
 } from "@/lib/google-merchant/catalogue-sync";
+import {
+  INVENTORY_SYNC_ACTIONS,
+  INVENTORY_SYNC_REASONS,
+} from "@/lib/google-merchant/inventory-reconciliation";
 import { MAX_SYNC_BATCH_SIZE } from "@/lib/google-merchant/sync-catalogue";
 
 /**
@@ -155,6 +159,40 @@ export const syncStatusEntrySchema = z.strictObject({
       applicableCountries: z.array(z.string()),
     }),
   ),
+});
+
+/**
+ * The read-only inventory reconciliation preview.
+ *
+ * Shows what the automatic worker would do right now. Strict, like every other
+ * response here: no ProductInput, no image URL, no price, no Google resource
+ * name, no credential — only the local identity, the two states being compared
+ * and the decision.
+ */
+export const inventorySyncActionSchema = z.strictObject({
+  productId: z.string(),
+  offerId: z.string(),
+  slug: z.string().nullable(),
+  name: z.string().nullable(),
+  merchantReadiness: z.string().nullable(),
+  localStockStatus: z.string().nullable(),
+  presentInMerchant: z.boolean(),
+  googleAvailability: z.string().nullable(),
+  action: z.enum(INVENTORY_SYNC_ACTIONS),
+  reason: z.enum(INVENTORY_SYNC_REASONS),
+});
+
+export const inventorySyncPreviewResponseSchema = z.strictObject({
+  summary: z.strictObject({
+    checked: z.number().int(),
+    googleManaged: z.number().int(),
+    pendingWrites: z.number().int(),
+    orphanedOffers: z.number().int(),
+    unsupportedPresent: z.number().int(),
+    writeCeiling: z.number().int(),
+    byAction: z.record(z.enum(INVENTORY_SYNC_ACTIONS), z.number().int()),
+  }),
+  actions: z.array(inventorySyncActionSchema),
 });
 
 export const syncStatusResponseSchema = z.strictObject({

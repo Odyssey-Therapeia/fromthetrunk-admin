@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { addOrderEvent, getOrder } from "@/db/queries/orders";
-import { orders, products } from "@/db/schema";
+import { orders } from "@/db/schema";
+import { releaseProductReservations } from "@/lib/inventory/release-reservation";
 import { completePaidOrder } from "@/lib/orders/complete-paid-order";
 
 type RazorpayWebhookEvent = {
@@ -66,22 +67,18 @@ const findOrderByPaymentId = async (paymentId: string) => {
 
 const releaseOrderReservation = async (orderId: string, eventNote: string) => {
   const order = await getOrder(orderId);
+  // A paid order is never released — its products are sold, not available.
   if (!order || order.paymentStatus === "paid") return;
 
   const productIds = order.items
     .map((item) => item.productId)
     .filter((id): id is string => Boolean(id));
 
-  if (productIds.length > 0) {
-    await db
-      .update(products)
-      .set({
-        reservedUntil: null,
-        stockStatus: "available",
-        updatedAt: new Date(),
-      })
-      .where(and(inArray(products.id, productIds), eq(products.stockStatus, "reserved")));
-  }
+  // The canonical release: stock_status, quantity_available, reserved_until AND
+  // the inventory-v2 reservation rows, together. This used to reset only the
+  // first and third, which left an active reservation row behind and kept the
+  // product "reserved" to every v2 read path.
+  await releaseProductReservations({ orderId: order.id, productIds });
 
   await db
     .update(orders)

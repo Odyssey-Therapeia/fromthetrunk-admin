@@ -16,6 +16,7 @@ import { collections, orders, products } from "@/db/schema";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { GST_RATE } from "@/lib/config/order-pricing";
 import { isInventoryV2 } from "@/lib/config/flags";
+import { releaseProductReservations } from "@/lib/inventory/release-reservation";
 import { createOrderAccessToken } from "@/lib/orders/order-access-token";
 import { completePaidOrder } from "@/lib/orders/complete-paid-order";
 import { emitAnalyticsEvent } from "@/lib/analytics/emit";
@@ -411,21 +412,13 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
 
       if (reservedRows.length !== productIds.length) {
         const reservedProductIds = reservedRows.map((row) => row.id);
-        if (reservedProductIds.length > 0) {
-          await db
-            .update(products)
-            .set({
-              reservedUntil: null,
-              stockStatus: "available",
-              updatedAt: new Date(),
-            })
-            .where(inArray(products.id, reservedProductIds));
-        }
 
-        // Dual-write: release any reservations rows we inserted in the v2 path
-        if (isInventoryV2()) {
-          await releaseReservationsByProducts(productIds);
-        }
+        // Canonical release: stock status, quantity, reservedUntil AND the
+        // inventory-v2 reservation rows. Scoped to the whole request's product
+        // set so a row inserted for a product we failed to claim is cleared too.
+        await releaseProductReservations({
+          productIds: [...new Set([...reservedProductIds, ...productIds])],
+        });
 
         await db
           .update(orders)
@@ -468,19 +461,8 @@ export const registerPaymentRoutes = (app: OpenAPIHono<HonoBindings>) => {
           referenceId: getRazorpayPaymentLinkReferenceId(order.id),
         });
       } catch (error) {
-        await db
-          .update(products)
-          .set({
-            reservedUntil: null,
-            stockStatus: "available",
-            updatedAt: new Date(),
-          })
-          .where(inArray(products.id, productIds));
-
-        // Dual-write: release reservation rows on Razorpay failure
-        if (isInventoryV2()) {
-          await releaseReservationsByProducts(productIds);
-        }
+        // Razorpay never took the order — release everything we just held.
+        await releaseProductReservations({ productIds });
 
         await db
           .update(orders)

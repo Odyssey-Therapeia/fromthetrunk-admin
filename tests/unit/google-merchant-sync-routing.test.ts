@@ -57,6 +57,15 @@ vi.mock("@/lib/google-merchant/sync-catalogue", () => ({
   resyncMerchantProduct: resyncMock,
 }));
 
+const inventoryPreviewMock = vi.hoisted(() => vi.fn());
+const reconcileInventoryMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/google-merchant/reconcile-inventory", () => ({
+  MAX_INVENTORY_SYNC_WRITES: 10,
+  previewMerchantInventorySync: inventoryPreviewMock,
+  reconcileMerchantInventory: reconcileInventoryMock,
+}));
+
 const metadataPreviewMock = vi.hoisted(() => vi.fn());
 const metadataApplyMock = vi.hoisted(() => vi.fn());
 
@@ -147,6 +156,36 @@ beforeEach(() => {
     remainingInsertCandidates: 0,
     requestedLimit: 5,
     succeeded: 0,
+  });
+  inventoryPreviewMock.mockResolvedValue({
+    actions: [],
+    summary: {
+      byAction: {
+        BLOCKED_LOCAL: 0,
+        CONFLICT: 0,
+        DELETE_SOLD: 0,
+        INSERT: 0,
+        NOOP: 0,
+        SET_IN_STOCK: 0,
+        SET_OUT_OF_STOCK: 0,
+      },
+      checked: 0,
+      googleManaged: 0,
+      orphanedOffers: 0,
+      pendingWrites: 0,
+      unsupportedPresent: 0,
+    },
+  });
+  reconcileInventoryMock.mockResolvedValue({
+    byAction: {},
+    checked: 0,
+    enabled: false,
+    failed: 0,
+    failures: [],
+    remaining: 0,
+    stoppedEarly: false,
+    succeeded: 0,
+    writesAttempted: 0,
   });
   deleteUnsupportedMock.mockResolvedValue({
     deleted: true,
@@ -388,6 +427,52 @@ describe("POST /api/v2/integrations/google-merchant/catalogue-sync/delete", () =
 });
 
 // ---------------------------------------------------------------------------
+// Inventory sync preview — read-only, no kill switch
+// ---------------------------------------------------------------------------
+
+describe("GET /api/v2/integrations/google-merchant/inventory-sync/preview", () => {
+  const PATH = `${BASE}/inventory-sync/preview`;
+
+  it("is reachable through the real app and served to an admin", async () => {
+    const app = await loadApp();
+
+    const response = await app.fetch(new Request(PATH, asAdmin));
+
+    expect(response.status).toBe(200);
+    expect(inventoryPreviewMock).toHaveBeenCalledTimes(1);
+    expect((await response.json()) as { actions: unknown[] }).toMatchObject({
+      actions: [],
+    });
+  });
+
+  it("is mounted but gated — unauthenticated is 401, not 404", async () => {
+    const app = await loadApp();
+
+    expect((await app.fetch(new Request(PATH))).status).toBe(401);
+    expect(inventoryPreviewMock).not.toHaveBeenCalled();
+  });
+
+  it("needs no kill switch and no production runtime", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("GOOGLE_MERCHANT_INVENTORY_SYNC_ENABLED", "false");
+    vi.stubEnv("GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED", "false");
+    const app = await loadApp();
+
+    expect((await app.fetch(new Request(PATH, asAdmin))).status).toBe(200);
+  });
+
+  it("404s on a near-miss path, so 200 above really proves mounting", async () => {
+    const app = await loadApp();
+
+    const response = await app.fetch(
+      new Request(`${BASE}/inventory-sync/preveiw`, asAdmin),
+    );
+
+    expect(response.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The router's own view of the mounted tree
 // ---------------------------------------------------------------------------
 
@@ -425,10 +510,13 @@ describe("OpenAPI document", () => {
     ).json()) as { paths: Record<string, Record<string, unknown>> };
 
     const remove = "/api/v2/integrations/google-merchant/catalogue-sync/delete";
+    const inventoryPreview =
+      "/api/v2/integrations/google-merchant/inventory-sync/preview";
     expect(Object.keys(document.paths)).toEqual(
-      expect.arrayContaining([remove]),
+      expect.arrayContaining([remove, inventoryPreview]),
     );
     expect(Object.keys(document.paths[remove])).toEqual(["post"]);
+    expect(Object.keys(document.paths[inventoryPreview])).toEqual(["get"]);
 
     const resync = "/api/v2/integrations/google-merchant/catalogue-sync/resync";
     const metadataPreview =
