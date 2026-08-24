@@ -34,6 +34,7 @@ import {
   applySyncRequestSchema,
   deleteUnsupportedRequestSchema,
   deleteUnsupportedResponseSchema,
+  inventorySyncPreviewResponseSchema,
   resyncRequestSchema,
   resyncResponseSchema,
   syncApplyFailureSchema,
@@ -53,6 +54,11 @@ import {
   isGoogleMerchantCatalogueSyncEnabled,
   isProductionRuntime,
 } from "@/lib/google-merchant/config";
+import type { InventorySyncPlan } from "@/lib/google-merchant/inventory-reconciliation";
+import {
+  MAX_INVENTORY_SYNC_WRITES,
+  previewMerchantInventorySync,
+} from "@/lib/google-merchant/reconcile-inventory";
 import {
   MAX_SYNC_BATCH_SIZE,
   applyMerchantCatalogueSyncBatch,
@@ -77,6 +83,7 @@ export type GoogleMerchantSyncRouteDeps = {
   applySync?: (limit: number) => Promise<MerchantSyncApplyResult>;
   resyncProduct?: (productId: string) => Promise<MerchantResyncResult>;
   deleteUnsupportedProduct?: (productId: string) => Promise<MerchantDeleteResult>;
+  previewInventorySync?: () => Promise<InventorySyncPlan>;
   syncStatus?: () => Promise<MerchantProductStatusReport[]>;
 };
 
@@ -91,6 +98,13 @@ const toPreviewBody = (plan: SyncPlan) =>
   syncPreviewResponseSchema.parse({
     actions: plan.actions.map((action) => action.report),
     summary: plan.summary,
+  });
+
+/** Strip the inventory plan to its publishable shape — ProductInputs never leave. */
+const toInventoryPreviewBody = (plan: InventorySyncPlan) =>
+  inventorySyncPreviewResponseSchema.parse({
+    actions: plan.actions.map((action) => action.report),
+    summary: { ...plan.summary, writeCeiling: MAX_INVENTORY_SYNC_WRITES },
   });
 
 const toStatusBody = (products: MerchantProductStatusReport[]) => {
@@ -116,6 +130,8 @@ export const registerGoogleMerchantSyncRoutes = (
   const resyncProduct = deps.resyncProduct ?? resyncMerchantProduct;
   const deleteUnsupportedProduct =
     deps.deleteUnsupportedProduct ?? deleteUnsupportedMerchantProduct;
+  const previewInventorySync =
+    deps.previewInventorySync ?? previewMerchantInventorySync;
 
   app.openapi(
     createRoute({
@@ -333,6 +349,52 @@ export const registerGoogleMerchantSyncRoutes = (
         });
 
         return failed("The product resync could not be completed.");
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/inventory-sync/preview",
+      description:
+        "Read-only preview of the AUTOMATIC inventory reconciliation: for each " +
+        "published product, its Merchant readiness, its effective local stock " +
+        "status, the availability Google currently holds, and the action the " +
+        "cron worker would take. Performs local SELECTs plus one products.list " +
+        "GET — no Merchant write and no database write, so it needs neither a " +
+        "kill switch nor a production gate. Admin only.",
+      responses: {
+        200: { description: "Inventory reconciliation plan" },
+        401: { description: "Unauthorized" },
+        403: { description: "Forbidden" },
+        500: { description: "Preview failed" },
+      },
+      summary: "Preview the Google Merchant inventory reconciliation",
+      tags: ["Integrations"],
+    }),
+    async (c) => {
+      const adminOrResponse = requireAdmin(c);
+      if (adminOrResponse instanceof Response) return adminOrResponse;
+
+      try {
+        const plan = await previewInventorySync();
+
+        log.info("Inventory sync previewed", {
+          adminId: adminOrResponse.id,
+          pendingWrites: plan.summary.pendingWrites,
+        });
+
+        return c.json(toInventoryPreviewBody(plan), 200);
+      } catch (error) {
+        log.error("Inventory sync preview failed", {
+          code:
+            error instanceof GoogleMerchantError
+              ? error.code
+              : "CATALOGUE_SYNC_FAILED",
+        });
+
+        return failed("The inventory sync preview could not be completed.");
       }
     },
   );

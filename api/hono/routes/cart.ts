@@ -8,6 +8,7 @@ import type { HonoBindings } from "@/api/hono/types";
 import { db } from "@/db";
 import { products } from "@/db/schema";
 import { rateLimitResponse } from "@/lib/http/rate-limit";
+import { releaseProductReservations } from "@/lib/inventory/release-reservation";
 
 const RESERVATION_MINUTES = 30;
 
@@ -139,19 +140,11 @@ export const registerCartRoutes = (app: OpenAPIHono<HonoBindings>) => {
       if (authUserOrResponse instanceof Response) return authUserOrResponse;
 
       const { productId } = c.req.valid("json");
-      await db
-        .update(products)
-        .set({
-          reservedUntil: null,
-          stockStatus: "available",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(products.id, productId),
-            eq(products.stockStatus, "reserved")
-          )
-        );
+
+      // Canonical release — stock status, quantity, reservedUntil AND the
+      // inventory-v2 reservation rows. Still conditional on `reserved`, so a
+      // sold product cannot be resurrected here.
+      await releaseProductReservations({ productIds: [productId] });
 
       return c.json({ productId, released: true }, 200);
     }
@@ -181,20 +174,18 @@ export const registerCartRoutes = (app: OpenAPIHono<HonoBindings>) => {
         );
 
       const expiredIds = expiredRows.map((row) => row.id);
-      if (expiredIds.length > 0) {
-        await db
-          .update(products)
-          .set({
-            reservedUntil: null,
-            stockStatus: "available",
-            updatedAt: new Date(),
-          })
-          .where(eq(products.stockStatus, "reserved"));
-      }
+
+      // Only the products the SELECT above found expired. This previously
+      // updated `WHERE stock_status = 'reserved'` with no expiry predicate,
+      // which released every live hold in the catalogue — including checkouts
+      // still inside their reservation window.
+      const { released } = await releaseProductReservations({
+        productIds: expiredIds,
+      });
 
       return c.json(
         {
-          released: expiredIds.length,
+          released,
         },
         200
       );

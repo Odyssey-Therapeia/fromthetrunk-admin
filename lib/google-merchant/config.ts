@@ -219,6 +219,21 @@ export function isGoogleMerchantCatalogueSyncEnabled(): boolean {
 }
 
 /**
+ * Kill switch for the AUTOMATIC inventory reconciliation worker.
+ *
+ * Deliberately separate from `GOOGLE_MERCHANT_CATALOGUE_SYNC_ENABLED`: that one
+ * gates the manual, human-triggered bootstrap endpoints and is expected to stay
+ * "false" in normal production. This one gates the unattended cron worker that
+ * keeps Merchant availability following Neon inventory, and is the switch that
+ * stays "true" once the rollout is complete.
+ *
+ * When false the cron still answers 200 but performs ZERO Google writes.
+ */
+export function isGoogleMerchantInventorySyncEnabled(): boolean {
+  return process.env.GOOGLE_MERCHANT_INVENTORY_SYNC_ENABLED === "true";
+}
+
+/**
  * Kill switch for the media metadata backfill APPLY endpoint.
  *
  * The preview needs no switch — it only reads. Apply probes remote media and

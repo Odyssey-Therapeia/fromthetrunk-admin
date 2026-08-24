@@ -48,6 +48,18 @@ vi.mock("@/db/queries/orders", () => ({
   addOrderEvent: addOrderEventMock,
 }));
 
+/**
+ * The release now goes through the shared canonical helper, which also clears
+ * the inventory-v2 reservation rows for the order.
+ */
+const releaseReservationsByOrderMock = vi.hoisted(() => vi.fn());
+const releaseReservationsByProductsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/db/queries/reservations", () => ({
+  releaseReservationsByOrder: releaseReservationsByOrderMock,
+  releaseReservationsByProducts: releaseReservationsByProductsMock,
+}));
+
 vi.mock("@/lib/orders/complete-paid-order", () => ({
   completePaidOrder: completePaidOrderMock,
 }));
@@ -345,7 +357,9 @@ describe("webhook payment.failed", () => {
     // getOrder is called once (inside releaseOrderReservation)
     getOrderMock.mockResolvedValue(fullOrder);
 
-    // Capture db.update() calls — including the WHERE predicate — to inspect scoping
+    // Capture db.update() calls — including the WHERE predicate — to inspect
+    // scoping. The products update is now `.where(...).returning(...)`, so the
+    // where step returns a thenable that ALSO exposes returning().
     const updateCalls: Array<{ table: unknown; setArg: unknown; whereArg?: unknown }> = [];
     dbUpdateMock.mockImplementation((table: unknown) => {
       const callIndex = updateCalls.length; // index for the current update call
@@ -353,7 +367,10 @@ describe("webhook payment.failed", () => {
         updateCalls.push({ table, setArg });
         const whereMock = vi.fn((whereArg: unknown) => {
           updateCalls[callIndex].whereArg = whereArg;
-          return Promise.resolve([]);
+          const rows: Array<{ id: string }> = [];
+          return Object.assign(Promise.resolve(rows), {
+            returning: () => Promise.resolve(rows),
+          });
         });
         return { where: whereMock };
       });
@@ -407,6 +424,15 @@ describe("webhook payment.failed", () => {
     expect(whereStrings).toContain(PRODUCT_ID_1);
     expect(whereStrings).toContain(PRODUCT_ID_2);
     expect(whereStrings).toContain("reserved");
+
+    // Canonical release: quantity restored, hold cleared, AND the
+    // inventory-v2 reservation rows deleted for this order.
+    expect(productUpdate!.setArg).toMatchObject({
+      quantityAvailable: 1,
+      reservedUntil: null,
+      stockStatus: "available",
+    });
+    expect(releaseReservationsByOrderMock).toHaveBeenCalledWith(ORDER_ID);
   });
 
   it("does NOT release reservation or call completePaidOrder when order_id is missing", async () => {
@@ -479,7 +505,54 @@ describe("webhook payment.failed", () => {
         "stockStatus" in (c.setArg as object)
     );
     expect(productUpdate).toBeUndefined();
+    // And no reservation rows are cleared either — a paid order's hold became
+    // a sale, and completePaidOrder owns that transition.
+    expect(releaseReservationsByOrderMock).not.toHaveBeenCalled();
   });
+
+  for (const event of ["payment_link.cancelled", "payment_link.expired"]) {
+    it(`releases canonically on ${event}`, async () => {
+      wireSelectToReturn([makeBareOrder()]);
+      getOrderMock.mockResolvedValue(makeOrder());
+
+      const updateCalls: Array<{ setArg: unknown }> = [];
+      dbUpdateMock.mockImplementation(() => ({
+        set: vi.fn((setArg: unknown) => {
+          updateCalls.push({ setArg });
+          const rows: Array<{ id: string }> = [];
+          return {
+            where: vi.fn(() =>
+              Object.assign(Promise.resolve(rows), {
+                returning: () => Promise.resolve(rows),
+              }),
+            ),
+          };
+        }),
+      }));
+
+      const app = createWebhookApp();
+      const response = await postWebhook(app, {
+        event,
+        payload: { payment_link: { entity: { id: RAZORPAY_PL_ID } } },
+      });
+
+      expect(response.status).toBe(200);
+
+      const productUpdate = updateCalls.find(
+        (call) =>
+          call.setArg !== null &&
+          typeof call.setArg === "object" &&
+          "stockStatus" in (call.setArg as object),
+      );
+
+      expect(productUpdate?.setArg).toMatchObject({
+        quantityAvailable: 1,
+        reservedUntil: null,
+        stockStatus: "available",
+      });
+      expect(releaseReservationsByOrderMock).toHaveBeenCalledWith(ORDER_ID);
+    });
+  }
 });
 
 // ===========================================================================
