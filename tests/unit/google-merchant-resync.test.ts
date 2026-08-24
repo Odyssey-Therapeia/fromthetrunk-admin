@@ -267,6 +267,7 @@ describe("resyncMerchantProduct — refusals", () => {
     "NO_MERCHANT_SAFE_IMAGE",
     "MISSING_REQUIRED_ATTRIBUTES",
     "NOT_PUBLISHED",
+    "UNSUPPORTED_PRODUCT_TYPE",
   ];
 
   for (const state of blockedStates) {
@@ -285,6 +286,27 @@ describe("resyncMerchantProduct — refusals", () => {
       expect(error.message).toContain(state);
     });
   }
+
+  it("refuses a blouse even though its offer is already in Merchant", async () => {
+    // The one blouse a batch inserted before the eligibility gate existed:
+    // readiness refuses it, so no corrected payload is ever pushed for it and
+    // no blouse-specific code path exists to maintain.
+    runAuditMock.mockResolvedValue({
+      audits: [mkAudit(MAROON_ID, "UNSUPPORTED_PRODUCT_TYPE")],
+      summary: {},
+      totalPublishedProducts: 1,
+      truncated: false,
+    });
+    stubGoogle({ products: [googleProduct(MAROON_ID)] });
+
+    const error = await expectRefusal(
+      resyncMerchantProduct(MAROON_ID),
+      "PRODUCT_NOT_PURCHASABLE",
+    );
+
+    expect(error.message).toContain("UNSUPPORTED_PRODUCT_TYPE");
+    expect(insertCalls()).toHaveLength(0);
+  });
 
   it("refuses when the offer is absent from our data source", async () => {
     stubGoogle({ products: [] });

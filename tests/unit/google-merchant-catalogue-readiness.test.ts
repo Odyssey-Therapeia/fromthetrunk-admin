@@ -11,6 +11,10 @@
  *   - Inventory v2 derives availability from quantity + batched reservation
  *     counts, and the derived state overrides a stale stockStatus column.
  *   - The excluded test product stays excluded.
+ *   - Merchant publishing is SAREE-ONLY: `preloved-saree` continues through the
+ *     normal checks, while a blouse, a product with no type and an unknown
+ *     future type each fail closed as UNSUPPORTED_PRODUCT_TYPE with no
+ *     ProductInput — an allowlist, not a blouse blacklist.
  *   - Summaries are deterministic: fixed key order, zero-filled counts, and
  *     `ready + blocked === publishedProducts`.
  *   - Reports carry exactly the eight safe keys — no row, no metadata, no
@@ -24,18 +28,31 @@ import {
   MERCHANT_AUDIT_CSV_HEADERS,
   MERCHANT_AUDIT_REASON_CODES,
   MERCHANT_READINESS_STATES,
+  MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS,
   auditMerchantCatalogue,
   auditMerchantProduct,
+  isMerchantEligibleProductType,
   summariseMerchantAudit,
   toMerchantAuditCsv,
 } from "@/lib/google-merchant/catalogue-readiness";
-import type { MerchantInventoryContext } from "@/lib/google-merchant/catalogue-readiness";
+import type { MerchantAuditContext } from "@/lib/google-merchant/catalogue-readiness";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
+
+/** The one Merchant-eligible type, plus the types that must never publish. */
+const SAREE_TYPE_ID = "512925ba-62e3-4a9c-84b6-53fc4295e635";
+const BLOUSE_TYPE_ID = "8fbf9c1e-9d3a-4f0b-9a7a-5f5d3f2c1b00";
+const ACCESSORY_TYPE_ID = "c1a4d5e6-7b8c-4d9e-8f01-2a3b4c5d6e7f";
+
+const PRODUCT_TYPE_SLUGS = new Map([
+  [SAREE_TYPE_ID, "preloved-saree"],
+  [BLOUSE_TYPE_ID, "blouse"],
+  [ACCESSORY_TYPE_ID, "accessory"],
+]);
 
 /** Mirrors the approved Tangerine row's attribute shape (upper-case enums). */
 const READY_ATTRIBUTES = {
@@ -103,22 +120,24 @@ function mkProduct(
     storyProvenance: null,
     storyTitle: "Tangerine Noir",
     tags: [],
-    typeId: null,
+    typeId: SAREE_TYPE_ID,
     updatedAt: NOW,
     ...overrides,
   } as unknown as ProductWithRelations;
 }
 
-const legacyContext: MerchantInventoryContext = {
+const legacyContext: MerchantAuditContext = {
   activeReservationCounts: new Map(),
   inventoryV2: false,
+  productTypeSlugById: PRODUCT_TYPE_SLUGS,
 };
 
 const v2Context = (
   counts: Array<[string, number]> = [],
-): MerchantInventoryContext => ({
+): MerchantAuditContext => ({
   activeReservationCounts: new Map(counts),
   inventoryV2: true,
+  productTypeSlugById: PRODUCT_TYPE_SLUGS,
 });
 
 const auditOne = (overrides: Record<string, unknown> = {}) => {
@@ -367,10 +386,116 @@ describe("auditMerchantProduct — lifecycle", () => {
       },
     });
 
-    const { report } = auditMerchantProduct(product, "available");
+    const { report } = auditMerchantProduct(
+      product,
+      "available",
+      "preloved-saree",
+    );
 
     expect(report.merchantReadiness).toBe("MAPPING_ERROR");
     expect(report.reasons).toEqual(["mapper_rejected"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Merchant eligibility — saree only
+// ---------------------------------------------------------------------------
+
+describe("auditMerchantProduct — product-type eligibility", () => {
+  it("lets an otherwise valid preloved-saree through to READY", () => {
+    const { productInput, report } = auditOne({ typeId: SAREE_TYPE_ID });
+
+    expect(report.merchantReadiness).toBe("READY");
+    expect(report.reasons).toEqual([]);
+    expect(productInput).not.toBeNull();
+    expect(productInput?.offerId).toBe(report.productId);
+  });
+
+  it("blocks a blouse that satisfies every other Merchant rule", () => {
+    // Identical to the READY fixture except for its type — so the ONLY thing
+    // that can be blocking it is the eligibility gate.
+    const { productInput, report } = auditOne({ typeId: BLOUSE_TYPE_ID });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(report.reasons).toEqual(["unsupported_product_type"]);
+    expect(report.missingFields).toEqual([]);
+    expect(productInput).toBeNull();
+  });
+
+  it("blocks a product with no product type at all", () => {
+    const { productInput, report } = auditOne({ typeId: null });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(report.reasons).toEqual(["unsupported_product_type"]);
+    expect(productInput).toBeNull();
+  });
+
+  it("blocks a typeId that does not resolve to a known type", () => {
+    const { productInput, report } = auditOne({
+      typeId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(productInput).toBeNull();
+  });
+
+  it("blocks a future type nobody has reviewed — allowlist, not blacklist", () => {
+    const { productInput, report } = auditOne({ typeId: ACCESSORY_TYPE_ID });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(report.reasons).toEqual(["unsupported_product_type"]);
+    expect(productInput).toBeNull();
+  });
+
+  it("still blocks an ineligible type when the product is also sold", () => {
+    const { report } = auditOne({
+      stockStatus: "sold",
+      typeId: BLOUSE_TYPE_ID,
+    });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
+    expect(report.merchantReadiness).not.toBe("READY");
+  });
+
+  it("keeps blocking sold and reserved sarees", () => {
+    expect(
+      auditOne({ stockStatus: "sold", typeId: SAREE_TYPE_ID }).report
+        .merchantReadiness,
+    ).toBe("SOLD");
+    expect(
+      auditOne({ stockStatus: "reserved", typeId: SAREE_TYPE_ID }).report
+        .merchantReadiness,
+    ).toBe("RESERVED");
+  });
+
+  it("reports an unpublished blouse as NOT_PUBLISHED, not as an eligibility failure", () => {
+    const { report } = auditOne({ status: "draft", typeId: BLOUSE_TYPE_ID });
+
+    expect(report.merchantReadiness).toBe("NOT_PUBLISHED");
+  });
+
+  it("allows exactly one product type today", () => {
+    expect([...MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS]).toEqual([
+      "preloved-saree",
+    ]);
+  });
+
+  it("resolves eligibility from the slug alone, failing closed on null", () => {
+    expect(isMerchantEligibleProductType("preloved-saree")).toBe(true);
+    expect(isMerchantEligibleProductType("blouse")).toBe(false);
+    expect(isMerchantEligibleProductType("accessory")).toBe(false);
+    expect(isMerchantEligibleProductType("Preloved-Saree")).toBe(false);
+    expect(isMerchantEligibleProductType("")).toBe(false);
+    expect(isMerchantEligibleProductType(null)).toBe(false);
+  });
+
+  it("never reads the type from the product name", () => {
+    const { report } = auditOne({
+      name: "Preloved Saree Style Blouse",
+      typeId: BLOUSE_TYPE_ID,
+    });
+
+    expect(report.merchantReadiness).toBe("UNSUPPORTED_PRODUCT_TYPE");
   });
 });
 
@@ -562,6 +687,64 @@ describe("summariseMerchantAudit", () => {
     );
 
     expect(summariseMerchantAudit(audits)).toEqual(summary);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Summary — mixed saree / blouse catalogue
+// ---------------------------------------------------------------------------
+
+describe("summariseMerchantAudit — sarees and blouses", () => {
+  /** Five sarees (one sold) and three blouses, all otherwise Merchant-valid. */
+  const mixedTypes = () => [
+    ...Array.from({ length: 4 }, () => mkProduct({ typeId: SAREE_TYPE_ID })),
+    mkProduct({ stockStatus: "sold", typeId: SAREE_TYPE_ID }),
+    ...Array.from({ length: 3 }, () => mkProduct({ typeId: BLOUSE_TYPE_ID })),
+  ];
+
+  it("counts only the sarees as READY", () => {
+    const { summary } = auditMerchantCatalogue(mixedTypes(), legacyContext);
+
+    expect(summary.publishedProducts).toBe(8);
+    expect(summary.ready).toBe(4);
+    expect(summary.blocked).toBe(4);
+    expect(summary.byReason.READY).toBe(4);
+  });
+
+  it("counts every blouse under UNSUPPORTED_PRODUCT_TYPE", () => {
+    const { summary } = auditMerchantCatalogue(mixedTypes(), legacyContext);
+
+    expect(summary.byReason.UNSUPPORTED_PRODUCT_TYPE).toBe(3);
+    expect(summary.byReason.SOLD).toBe(1);
+  });
+
+  it("represents the blouses in byReasonCode", () => {
+    const { summary } = auditMerchantCatalogue(mixedTypes(), legacyContext);
+
+    expect(summary.byReasonCode.unsupported_product_type).toBe(3);
+    expect(summary.byReasonCode.inventory_sold).toBe(1);
+  });
+
+  it("hands back no ProductInput for any blouse", () => {
+    const { audits } = auditMerchantCatalogue(mixedTypes(), legacyContext);
+
+    const blouses = audits.filter(
+      (entry) => entry.report.merchantReadiness === "UNSUPPORTED_PRODUCT_TYPE",
+    );
+
+    expect(blouses).toHaveLength(3);
+    expect(blouses.every((entry) => entry.productInput === null)).toBe(true);
+  });
+
+  it("blocks every product when the type map is empty — fail closed", () => {
+    const { summary } = auditMerchantCatalogue(mixedTypes(), {
+      activeReservationCounts: new Map(),
+      inventoryV2: false,
+      productTypeSlugById: new Map(),
+    });
+
+    expect(summary.ready).toBe(0);
+    expect(summary.byReason.UNSUPPORTED_PRODUCT_TYPE).toBe(8);
   });
 });
 

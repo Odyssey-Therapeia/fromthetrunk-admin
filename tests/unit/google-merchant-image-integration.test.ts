@@ -207,7 +207,11 @@ describe("buildMerchantProductInput — Merchant-safe images", () => {
 
 describe("auditMerchantProduct — Merchant image readiness", () => {
   it("is READY when at least one image is safe", () => {
-    const { report } = auditMerchantProduct(maroonProduct(), "available");
+    const { report } = auditMerchantProduct(
+      maroonProduct(),
+      "available",
+      "preloved-saree",
+    );
 
     expect(report.merchantReadiness).toBe("READY");
     expect(report.images).toEqual({
@@ -230,6 +234,7 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
         })),
       ]),
       "available",
+      "preloved-saree",
     );
 
     expect(report.merchantReadiness).toBe("READY");
@@ -246,6 +251,7 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
         { media: mkMedia(`${BLOB}/a.jpg`, { filesize: 20_000_000 }), sortOrder: 0 },
       ]),
       "available",
+      "preloved-saree",
     );
 
     expect(report.merchantReadiness).toBe("NO_MERCHANT_SAFE_IMAGE");
@@ -276,6 +282,7 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
       const { report } = auditMerchantProduct(
         mkProduct([{ media: mkMedia(`${BLOB}/a.jpg`, overrides), sortOrder: 0 }]),
         "available",
+        "preloved-saree",
       );
 
       expect(report.merchantReadiness).toBe("NO_MERCHANT_SAFE_IMAGE");
@@ -290,6 +297,7 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
         { media: mkMedia(`${BLOB}/b.jpg`, { width: null }), sortOrder: 1 },
       ]),
       "available",
+      "preloved-saree",
     );
 
     expect(report.reasons).toEqual([
@@ -300,7 +308,11 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
 
   it("attaches the ProductInput that uses exactly the same safe selection", () => {
     const product = maroonProduct();
-    const { productInput } = auditMerchantProduct(product, "available");
+    const { productInput } = auditMerchantProduct(
+      product,
+      "available",
+      "preloved-saree",
+    );
     const selection = selectMerchantImages(product);
 
     expect(productInput?.productAttributes.imageLink).toBe(selection.imageLink);
@@ -313,6 +325,7 @@ describe("auditMerchantProduct — Merchant image readiness", () => {
     const { imageDiagnostics, report } = auditMerchantProduct(
       maroonProduct(),
       "available",
+      "preloved-saree",
     );
 
     expect(imageDiagnostics.ignored).toEqual([

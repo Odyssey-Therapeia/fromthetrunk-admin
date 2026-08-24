@@ -5,9 +5,16 @@
  * ProductInput mapper accept this today, and if not, exactly why?*
  *
  * READ-ONLY BY CONSTRUCTION. This module performs no network I/O, no database
- * access and no Google call — it is a function of the product rows plus an
- * inventory context supplied by the caller. Nothing here inserts, updates or
- * deletes anything, in Neon or in Merchant Center.
+ * access and no Google call — it is a function of the product rows plus the
+ * batch context supplied by the caller (inventory facts and the product-type
+ * slug lookup). Nothing here inserts, updates or deletes anything, in Neon or
+ * in Merchant Center.
+ *
+ * ELIGIBILITY: Google Merchant publishing currently supports ONE product type,
+ * `preloved-saree`. The allowlist gate in `auditMerchantProduct` is the single
+ * place that rule lives, so a blouse — or any type added later — can never be
+ * READY and therefore can never be selected by the sync planner, the controlled
+ * apply batch or the single-product resync.
  *
  * THE INVARIANT: a product reported READY is one that
  * `buildMerchantProductInput` has ALREADY accepted — the audit literally runs
@@ -53,11 +60,10 @@ import type { MerchantProductInput } from "@/lib/google-merchant/product-input";
  * Readiness states, in the fixed order used for every summary breakdown so the
  * response shape is byte-stable across runs.
  *
- * UNSUPPORTED_PRODUCT_TYPE is declared for Phase 2B completeness but is not
- * currently assignable: the repository has no reviewed product-type → Merchant
- * category mapping, so every published product is audited against the single
- * validated apparel rule set. Inventing a "this type is unsupported" rule here
- * would be exactly the second rule set this module exists to avoid.
+ * UNSUPPORTED_PRODUCT_TYPE is assigned by the Merchant eligibility gate: only
+ * the product types in `MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS` may be published
+ * to Google, and every other type — including a missing or unresolvable one —
+ * is blocked here.
  */
 export const MERCHANT_READINESS_STATES = [
   "READY",
@@ -76,10 +82,39 @@ export const MERCHANT_READINESS_STATES = [
 
 export type MerchantReadiness = (typeof MERCHANT_READINESS_STATES)[number];
 
+/**
+ * The ONLY product types eligible for Google Merchant publishing.
+ *
+ * An ALLOWLIST, deliberately — not a blacklist of the types we happen to know
+ * about today. Blouses, accessories and every product type added in future are
+ * ineligible until they are reviewed and added here, so a new type can never
+ * reach Google by default.
+ */
+export const MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS = ["preloved-saree"] as const;
+
+export type MerchantEligibleProductTypeSlug =
+  (typeof MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS)[number];
+
+/**
+ * Merchant eligibility by product type. Fails closed: a null slug — the product
+ * has no type, or its `typeId` did not resolve — is never eligible.
+ */
+export function isMerchantEligibleProductType(
+  productTypeSlug: null | string,
+): productTypeSlug is MerchantEligibleProductTypeSlug {
+  return (
+    productTypeSlug !== null &&
+    (MERCHANT_ELIGIBLE_PRODUCT_TYPE_SLUGS as readonly string[]).includes(
+      productTypeSlug,
+    )
+  );
+}
+
 /** Machine-readable reasons. Stable identifiers, never free text. */
 export const MERCHANT_AUDIT_REASON_CODES = [
   "product_not_published",
   "excluded_test_product",
+  "unsupported_product_type",
   "inventory_reserved",
   "inventory_sold",
   "stock_status_disagreement",
@@ -179,12 +214,21 @@ export type MerchantCatalogueAudit = {
   summary: MerchantAuditSummary;
 };
 
-/** Inventory facts the caller resolved once for the whole batch. */
-export type MerchantInventoryContext = {
+/**
+ * Facts the caller resolved ONCE for the whole batch, so this module stays pure
+ * and no per-product query is ever needed.
+ */
+export type MerchantAuditContext = {
   /** `isInventoryV2()` — decided once, not per product. */
   inventoryV2: boolean;
   /** productId → active reservation count, from ONE batch query. */
   activeReservationCounts: ReadonlyMap<string, number>;
+  /**
+   * product TYPE id → type slug, from ONE `listProductTypes()` call. A product
+   * whose `typeId` is null or absent from this map resolves to `null` and is
+   * therefore ineligible.
+   */
+  productTypeSlugById: ReadonlyMap<string, string>;
 };
 
 // ---------------------------------------------------------------------------
@@ -347,10 +391,15 @@ function classifyMapperError(
  *
  * @param effectiveStockStatus the inventory-v2 derived status when that flag is
  *   on, otherwise the product's own `stockStatus`.
+ * @param productTypeSlug the slug the caller resolved for `product.typeId`, or
+ *   null when the product has no type or the id does not resolve. Required, not
+ *   optional: every caller must decide it explicitly, and TypeScript enforces
+ *   that rather than letting a forgotten argument silently pick a default.
  */
 export function auditMerchantProduct(
   product: ProductWithRelations,
   effectiveStockStatus: StockStatus,
+  productTypeSlug: null | string,
 ): MerchantProductAudit {
   if (product.status !== "published") {
     return blocked(product, effectiveStockStatus, "NOT_PUBLISHED", [
@@ -361,6 +410,17 @@ export function auditMerchantProduct(
   if (isExcludedTestProduct(product)) {
     return blocked(product, effectiveStockStatus, "EXCLUDED_TEST_PRODUCT", [
       "excluded_test_product",
+    ]);
+  }
+
+  // Merchant eligibility. Google publishing currently supports preloved sarees
+  // only, so everything else — a blouse, a product with no type at all, or a
+  // type added after this line was written — fails closed here and can never
+  // become READY. Placed before the inventory checks because eligibility is a
+  // property of the product, not of its current stock.
+  if (!isMerchantEligibleProductType(productTypeSlug)) {
+    return blocked(product, effectiveStockStatus, "UNSUPPORTED_PRODUCT_TYPE", [
+      "unsupported_product_type",
     ]);
   }
 
@@ -437,7 +497,7 @@ export function auditMerchantProduct(
  */
 function resolveEffectiveStockStatus(
   product: ProductWithRelations,
-  context: MerchantInventoryContext,
+  context: MerchantAuditContext,
 ): StockStatus {
   if (!context.inventoryV2) return product.stockStatus;
 
@@ -445,6 +505,19 @@ function resolveEffectiveStockStatus(
     activeReservationsCount: context.activeReservationCounts.get(product.id) ?? 0,
     quantityAvailable: product.quantityAvailable,
   });
+}
+
+/**
+ * The product's type slug, from the batch map. No database access: an id the
+ * caller did not supply resolves to null, which the eligibility gate blocks.
+ */
+function resolveProductTypeSlug(
+  product: ProductWithRelations,
+  context: MerchantAuditContext,
+): null | string {
+  if (!product.typeId) return null;
+
+  return context.productTypeSlugById.get(product.typeId) ?? null;
 }
 
 const zeroFilled = <K extends string>(keys: readonly K[]): Record<K, number> =>
@@ -476,20 +549,22 @@ export function summariseMerchantAudit(
 }
 
 /**
- * Audit a whole catalogue. Pure: the caller supplies the products and the
- * inventory context (one batch reservation query, never one per product).
+ * Audit a whole catalogue. Pure: the caller supplies the products and the batch
+ * context (one reservations query and one product-types query for the whole
+ * page, never one per product).
  *
  * Output order mirrors input order, so repeated runs over the same rows produce
  * an identical response.
  */
 export function auditMerchantCatalogue(
   products: ProductWithRelations[],
-  context: MerchantInventoryContext,
+  context: MerchantAuditContext,
 ): MerchantCatalogueAudit {
   const audits = products.map((product) =>
     auditMerchantProduct(
       product,
       resolveEffectiveStockStatus(product, context),
+      resolveProductTypeSlug(product, context),
     ),
   );
 
